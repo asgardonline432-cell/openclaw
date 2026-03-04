@@ -50,7 +50,6 @@ import { isAnnounceSkip } from "./tools/sessions-send-helpers.js";
 
 const FAST_TEST_MODE = process.env.OPENCLAW_TEST_FAST === "1";
 const FAST_TEST_RETRY_INTERVAL_MS = 8;
-const FAST_TEST_REPLY_CHANGE_WAIT_MS = 20;
 const DEFAULT_SUBAGENT_ANNOUNCE_TIMEOUT_MS = 60_000;
 const MAX_TIMER_SAFE_TIMEOUT_MS = 2_147_000_000;
 let subagentRegistryRuntimePromise: Promise<
@@ -328,29 +327,63 @@ export async function captureSubagentCompletionReply(
   });
 }
 
-async function waitForSubagentOutputChange(params: {
-  sessionKey: string;
-  baselineReply: string;
-  maxWaitMs: number;
-}): Promise<string> {
-  const baseline = params.baselineReply.trim();
-  if (!baseline) {
-    return params.baselineReply;
+function describeSubagentOutcome(outcome?: SubagentRunOutcome): string {
+  if (!outcome) {
+    return "unknown";
   }
-  const RETRY_INTERVAL_MS = FAST_TEST_MODE ? FAST_TEST_RETRY_INTERVAL_MS : 100;
-  const deadline = Date.now() + Math.max(0, Math.min(params.maxWaitMs, 5_000));
-  let latest = params.baselineReply;
-  while (Date.now() < deadline) {
-    const next = await readLatestSubagentOutput(params.sessionKey);
-    if (next?.trim()) {
-      latest = next;
-      if (next.trim() !== baseline) {
-        return next;
-      }
+  if (outcome.status === "ok") {
+    return "ok";
+  }
+  if (outcome.status === "timeout") {
+    return "timeout";
+  }
+  if (outcome.status === "error") {
+    return outcome.error?.trim() ? `error: ${outcome.error.trim()}` : "error";
+  }
+  return "unknown";
+}
+
+function buildChildCompletionFindings(
+  children: Array<{
+    childSessionKey: string;
+    task: string;
+    label?: string;
+    createdAt: number;
+    endedAt?: number;
+    frozenResultText?: string | null;
+    outcome?: SubagentRunOutcome;
+  }>,
+): string | undefined {
+  const sorted = [...children].toSorted((a, b) => {
+    if (a.createdAt !== b.createdAt) {
+      return a.createdAt - b.createdAt;
     }
-    await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+    const aEnded = typeof a.endedAt === "number" ? a.endedAt : Number.MAX_SAFE_INTEGER;
+    const bEnded = typeof b.endedAt === "number" ? b.endedAt : Number.MAX_SAFE_INTEGER;
+    return aEnded - bEnded;
+  });
+
+  const sections: string[] = [];
+  for (const [index, child] of sorted.entries()) {
+    const title =
+      child.label?.trim() ||
+      child.task.trim() ||
+      child.childSessionKey.trim() ||
+      `child ${index + 1}`;
+    const resultText = child.frozenResultText?.trim();
+    const outcome = describeSubagentOutcome(child.outcome);
+    sections.push(
+      [`${index + 1}. ${title}`, `status: ${outcome}`, "result:", resultText || "(no output)"].join(
+        "\n",
+      ),
+    );
   }
-  return latest;
+
+  if (sections.length === 0) {
+    return undefined;
+  }
+
+  return ["Child completion results:", "", ...sections].join("\n\n");
 }
 
 function formatDurationShort(valueMs?: number) {
@@ -1116,36 +1149,6 @@ export async function runSubagentAnnounceFlow(params: {
           outcome = { status: "timeout" };
         }
       }
-      reply = await readLatestSubagentOutput(params.childSessionKey);
-    }
-
-    if (!reply) {
-      reply = await readLatestSubagentOutput(params.childSessionKey);
-    }
-
-    if (!reply?.trim()) {
-      reply = await readLatestSubagentOutputWithRetry({
-        sessionKey: params.childSessionKey,
-        maxWaitMs: params.timeoutMs,
-      });
-    }
-
-    if (
-      !expectsCompletionMessage &&
-      !reply?.trim() &&
-      childSessionId &&
-      isEmbeddedPiRunActive(childSessionId)
-    ) {
-      // Avoid announcing "(no output)" while the child run is still producing output.
-      shouldDeleteChildSession = false;
-      return false;
-    }
-
-    if (isAnnounceSkip(reply)) {
-      return true;
-    }
-    if (isSilentReplyText(reply, SILENT_REPLY_TOKEN)) {
-      return true;
     }
 
     if (!outcome) {
@@ -1155,30 +1158,68 @@ export async function runSubagentAnnounceFlow(params: {
     let requesterDepth = getSubagentDepthFromSessionStore(targetRequesterSessionKey);
 
     let pendingChildDescendantRuns = 0;
+    let childCompletionFindings: string | undefined;
     try {
-      const { countPendingDescendantRuns, countActiveDescendantRuns } =
+      const { countPendingDescendantRuns, listSubagentRunsForRequester } =
         await loadSubagentRegistryRuntime();
-      const pending = Math.max(0, countPendingDescendantRuns(params.childSessionKey));
-      const active = Math.max(0, countActiveDescendantRuns(params.childSessionKey));
-      pendingChildDescendantRuns = Math.max(pending, active);
+      pendingChildDescendantRuns = Math.max(0, countPendingDescendantRuns(params.childSessionKey));
+      if (pendingChildDescendantRuns > 0) {
+        // Deterministic nested announce policy: if this run still has unfinished
+        // descendants, do not announce yet. Wait for descendant cleanup retries
+        // to re-trigger this announce check once everything is complete.
+        shouldDeleteChildSession = false;
+        return false;
+      }
+
+      if (typeof listSubagentRunsForRequester === "function") {
+        const directChildren = listSubagentRunsForRequester(params.childSessionKey);
+        if (Array.isArray(directChildren) && directChildren.length > 0) {
+          childCompletionFindings = buildChildCompletionFindings(
+            directChildren.map((child) => ({
+              childSessionKey: child.childSessionKey,
+              task: child.task,
+              label: child.label,
+              createdAt: child.createdAt,
+              endedAt: child.endedAt,
+              frozenResultText: child.frozenResultText,
+              outcome: child.outcome,
+            })),
+          );
+        }
+      }
     } catch {
-      // Best-effort only; fall back to direct announce behavior when unavailable.
-    }
-    if (pendingChildDescendantRuns > 0) {
-      // The finished run still has pending descendant subagents (either active,
-      // or ended but still finishing their own announce and cleanup flow). Defer
-      // announcing this run until descendants fully settle.
-      shouldDeleteChildSession = false;
-      return false;
+      // Best-effort only; fall back to current-run reply extraction.
     }
 
-    if (requesterDepth >= 1 && reply?.trim()) {
-      const minReplyChangeWaitMs = FAST_TEST_MODE ? FAST_TEST_REPLY_CHANGE_WAIT_MS : 250;
-      reply = await waitForSubagentOutputChange({
-        sessionKey: params.childSessionKey,
-        baselineReply: reply,
-        maxWaitMs: Math.max(minReplyChangeWaitMs, Math.min(params.timeoutMs, 2_000)),
-      });
+    if (!childCompletionFindings) {
+      if (!reply) {
+        reply = await readLatestSubagentOutput(params.childSessionKey);
+      }
+
+      if (!reply?.trim()) {
+        reply = await readLatestSubagentOutputWithRetry({
+          sessionKey: params.childSessionKey,
+          maxWaitMs: params.timeoutMs,
+        });
+      }
+
+      if (
+        !expectsCompletionMessage &&
+        !reply?.trim() &&
+        childSessionId &&
+        isEmbeddedPiRunActive(childSessionId)
+      ) {
+        // Avoid announcing "(no output)" while the child run is still producing output.
+        shouldDeleteChildSession = false;
+        return false;
+      }
+
+      if (isAnnounceSkip(reply)) {
+        return true;
+      }
+      if (isSilentReplyText(reply, SILENT_REPLY_TOKEN)) {
+        return true;
+      }
     }
 
     // Build status label
@@ -1195,7 +1236,7 @@ export async function runSubagentAnnounceFlow(params: {
     const announceType = params.announceType ?? "subagent task";
     const taskLabel = params.label || params.task || "task";
     const announceSessionId = childSessionId || "unknown";
-    const findings = reply || "(no output)";
+    const findings = childCompletionFindings || reply || "(no output)";
     let triggerMessage = "";
     let steerMessage = "";
     let internalEvents: AgentInternalEvent[] = [];

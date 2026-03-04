@@ -37,6 +37,7 @@ const subagentRegistryMock = {
   countActiveDescendantRuns: vi.fn((_sessionKey: string) => 0),
   countPendingDescendantRuns: vi.fn((_sessionKey: string) => 0),
   countPendingDescendantRunsExcludingRun: vi.fn((_sessionKey: string, _runId: string) => 0),
+  listSubagentRunsForRequester: vi.fn((_sessionKey: string) => []),
   resolveRequesterForChildSession: vi.fn((_sessionKey: string): RequesterResolution => null),
 };
 const subagentDeliveryTargetHookMock = vi.fn(
@@ -198,6 +199,7 @@ describe("subagent announce formatting", () => {
       .mockImplementation((sessionKey: string, _runId: string) =>
         subagentRegistryMock.countPendingDescendantRuns(sessionKey),
       );
+    subagentRegistryMock.listSubagentRunsForRequester.mockClear().mockReturnValue([]);
     subagentRegistryMock.resolveRequesterForChildSession.mockClear().mockReturnValue(null);
     hasSubagentDeliveryTargetHook = false;
     hookRunnerMock.hasHooks.mockClear();
@@ -1774,9 +1776,8 @@ describe("subagent announce formatting", () => {
     );
   });
 
-  it("defers nested parent announce when active descendants exist even if pending snapshot is stale", async () => {
-    subagentRegistryMock.countPendingDescendantRuns.mockReturnValue(0);
-    subagentRegistryMock.countActiveDescendantRuns.mockImplementation((sessionKey: string) =>
+  it("defers nested parent announce while pending descendants still exist", async () => {
+    subagentRegistryMock.countPendingDescendantRuns.mockImplementation((sessionKey: string) =>
       sessionKey === "agent:main:subagent:parent" ? 1 : 0,
     );
 
@@ -1809,7 +1810,7 @@ describe("subagent announce formatting", () => {
     expect(msg).not.toContain("wait for the remaining results");
   });
 
-  it("defers announce while finished runs still have active descendants", async () => {
+  it("defers announce while finished runs still have pending descendants", async () => {
     const cases = [
       {
         childRunId: "run-parent",
@@ -1824,7 +1825,7 @@ describe("subagent announce formatting", () => {
     for (const testCase of cases) {
       agentSpy.mockClear();
       sendSpy.mockClear();
-      subagentRegistryMock.countActiveDescendantRuns.mockImplementation((sessionKey: string) =>
+      subagentRegistryMock.countPendingDescendantRuns.mockImplementation((sessionKey: string) =>
         sessionKey === "agent:main:subagent:parent" ? 1 : 0,
       );
 
@@ -1843,35 +1844,214 @@ describe("subagent announce formatting", () => {
     }
   });
 
-  it("waits for updated synthesized output before announcing nested subagent completion", async () => {
-    let historyReads = 0;
-    chatHistoryMock.mockImplementation(async () => {
-      historyReads += 1;
-      if (historyReads < 3) {
-        return {
-          messages: [{ role: "assistant", content: "Waiting for child output..." }],
-        };
-      }
-      return {
-        messages: [{ role: "assistant", content: "Final synthesized answer." }],
-      };
-    });
-    readLatestAssistantReplyMock.mockResolvedValue(undefined);
+  it("defers completion announce when one descendant child is still pending", async () => {
+    subagentRegistryMock.countPendingDescendantRuns.mockImplementation((sessionKey: string) =>
+      sessionKey === "agent:main:subagent:parent" ? 1 : 0,
+    );
 
     const didAnnounce = await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:parent",
-      childRunId: "run-parent-synth",
-      requesterSessionKey: "agent:main:subagent:orchestrator",
-      requesterDisplayKey: "agent:main:subagent:orchestrator",
+      childRunId: "run-parent-one-child-pending",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
       ...defaultOutcomeAnnounce,
-      timeoutMs: 100,
+      expectsCompletionMessage: true,
+      roundOneReply: "waiting for one child completion",
+    });
+
+    expect(didAnnounce).toBe(false);
+    expect(agentSpy).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("defers completion announce when two descendant children are still pending", async () => {
+    subagentRegistryMock.countPendingDescendantRuns.mockImplementation((sessionKey: string) =>
+      sessionKey === "agent:main:subagent:parent" ? 2 : 0,
+    );
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:parent",
+      childRunId: "run-parent-two-children-pending",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+      roundOneReply: "waiting for both completion events",
+    });
+
+    expect(didAnnounce).toBe(false);
+    expect(agentSpy).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("announces completion immediately when no descendants are pending", async () => {
+    subagentRegistryMock.countPendingDescendantRuns.mockReturnValue(0);
+    subagentRegistryMock.countActiveDescendantRuns.mockReturnValue(0);
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:leaf",
+      childRunId: "run-leaf-no-children",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+      roundOneReply: "single leaf result",
     });
 
     expect(didAnnounce).toBe(true);
+    expect(agentSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy).not.toHaveBeenCalled();
     const call = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
     const msg = call?.params?.message ?? "";
-    expect(msg).toContain("Final synthesized answer.");
-    expect(msg).not.toContain("Waiting for child output...");
+    expect(msg).toContain("single leaf result");
+  });
+
+  it("announces with direct child completion outputs once all descendants are settled", async () => {
+    subagentRegistryMock.countPendingDescendantRuns.mockReturnValue(0);
+    subagentRegistryMock.listSubagentRunsForRequester.mockImplementation((sessionKey: string) =>
+      sessionKey === "agent:main:subagent:parent"
+        ? [
+            {
+              runId: "run-child-a",
+              childSessionKey: "agent:main:subagent:parent:subagent:a",
+              requesterSessionKey: "agent:main:subagent:parent",
+              requesterDisplayKey: "parent",
+              task: "child task a",
+              label: "child-a",
+              cleanup: "keep",
+              createdAt: 10,
+              endedAt: 20,
+              cleanupCompletedAt: 21,
+              frozenResultText: "result from child a",
+              outcome: { status: "ok" },
+            },
+            {
+              runId: "run-child-b",
+              childSessionKey: "agent:main:subagent:parent:subagent:b",
+              requesterSessionKey: "agent:main:subagent:parent",
+              requesterDisplayKey: "parent",
+              task: "child task b",
+              label: "child-b",
+              cleanup: "keep",
+              createdAt: 11,
+              endedAt: 21,
+              cleanupCompletedAt: 22,
+              frozenResultText: "result from child b",
+              outcome: { status: "ok" },
+            },
+          ]
+        : [],
+    );
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:parent",
+      childRunId: "run-parent-settled",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+      roundOneReply: "placeholder waiting text that should be ignored",
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(agentSpy).toHaveBeenCalledTimes(1);
+    const call = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
+    const msg = call?.params?.message ?? "";
+    expect(msg).toContain("Child completion results:");
+    expect(msg).toContain("result from child a");
+    expect(msg).toContain("result from child b");
+    expect(msg).not.toContain("placeholder waiting text that should be ignored");
+  });
+
+  it("nested completion chains re-check child then parent deterministically", async () => {
+    const parentSessionKey = "agent:main:subagent:parent";
+    const childSessionKey = "agent:main:subagent:parent:subagent:child";
+    let parentPending = 1;
+
+    subagentRegistryMock.countPendingDescendantRuns.mockImplementation((sessionKey: string) => {
+      if (sessionKey === parentSessionKey) {
+        return parentPending;
+      }
+      return 0;
+    });
+    subagentRegistryMock.listSubagentRunsForRequester.mockImplementation((sessionKey: string) => {
+      if (sessionKey === childSessionKey) {
+        return [
+          {
+            runId: "run-grandchild",
+            childSessionKey: `${childSessionKey}:subagent:grandchild`,
+            requesterSessionKey: childSessionKey,
+            requesterDisplayKey: "child",
+            task: "grandchild task",
+            label: "grandchild",
+            cleanup: "keep",
+            createdAt: 10,
+            endedAt: 20,
+            cleanupCompletedAt: 21,
+            frozenResultText: "grandchild final output",
+            outcome: { status: "ok" },
+          },
+        ];
+      }
+      if (sessionKey === parentSessionKey && parentPending === 0) {
+        return [
+          {
+            runId: "run-child",
+            childSessionKey,
+            requesterSessionKey: parentSessionKey,
+            requesterDisplayKey: "parent",
+            task: "child task",
+            label: "child",
+            cleanup: "keep",
+            createdAt: 11,
+            endedAt: 21,
+            cleanupCompletedAt: 22,
+            frozenResultText: "child synthesized output from grandchild",
+            outcome: { status: "ok" },
+          },
+        ];
+      }
+      return [];
+    });
+
+    const parentDeferred = await runSubagentAnnounceFlow({
+      childSessionKey: parentSessionKey,
+      childRunId: "run-parent",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+    });
+    expect(parentDeferred).toBe(false);
+    expect(agentSpy).not.toHaveBeenCalled();
+
+    const childAnnounced = await runSubagentAnnounceFlow({
+      childSessionKey,
+      childRunId: "run-child",
+      requesterSessionKey: parentSessionKey,
+      requesterDisplayKey: parentSessionKey,
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+    });
+    expect(childAnnounced).toBe(true);
+
+    parentPending = 0;
+    const parentAnnounced = await runSubagentAnnounceFlow({
+      childSessionKey: parentSessionKey,
+      childRunId: "run-parent",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+    });
+    expect(parentAnnounced).toBe(true);
+    expect(agentSpy).toHaveBeenCalledTimes(2);
+
+    const childCall = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
+    expect(childCall?.params?.message ?? "").toContain("grandchild final output");
+
+    const parentCall = agentSpy.mock.calls[1]?.[0] as { params?: { message?: string } };
+    expect(parentCall?.params?.message ?? "").toContain("child synthesized output from grandchild");
   });
 
   it("ignores post-completion announce traffic for completed run-mode requester sessions", async () => {
