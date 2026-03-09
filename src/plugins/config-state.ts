@@ -186,37 +186,123 @@ export function isTestDefaultMemorySlotDisabled(
   return true;
 }
 
+type EnableStateCode =
+  | "plugins_disabled"
+  | "blocked_by_denylist"
+  | "disabled_in_config"
+  | "selected_memory_slot"
+  | "not_in_allowlist"
+  | "enabled_in_config"
+  | "bundled_enabled_by_default"
+  | "bundled_disabled_by_default"
+  | "enabled";
+
+type EnableStateDecision = {
+  enabled: boolean;
+  code: EnableStateCode;
+};
+
+const ENABLE_STATE_REASON_BY_CODE: Partial<Record<EnableStateCode, string>> = {
+  plugins_disabled: "plugins disabled",
+  blocked_by_denylist: "blocked by denylist",
+  disabled_in_config: "disabled in config",
+  not_in_allowlist: "not in allowlist",
+  bundled_disabled_by_default: "bundled (disabled by default)",
+};
+
+function finalizeEnableState(decision: EnableStateDecision): { enabled: boolean; reason?: string } {
+  return {
+    enabled: decision.enabled,
+    reason: ENABLE_STATE_REASON_BY_CODE[decision.code],
+  };
+}
+
+function resolveExplicitEnableStateDecision(params: {
+  id: string;
+  config: NormalizedPluginsConfig;
+}): EnableStateDecision | undefined {
+  if (!params.config.enabled) {
+    return { enabled: false, code: "plugins_disabled" };
+  }
+  if (params.config.deny.includes(params.id)) {
+    return { enabled: false, code: "blocked_by_denylist" };
+  }
+  if (params.config.entries[params.id]?.enabled === false) {
+    return { enabled: false, code: "disabled_in_config" };
+  }
+  return undefined;
+}
+
+function resolveSlotEnableStateDecision(params: {
+  id: string;
+  config: NormalizedPluginsConfig;
+}): EnableStateDecision | undefined {
+  if (params.config.slots.memory === params.id) {
+    return { enabled: true, code: "selected_memory_slot" };
+  }
+  return undefined;
+}
+
+function resolveAllowlistEnableStateDecision(params: {
+  id: string;
+  config: NormalizedPluginsConfig;
+}): EnableStateDecision | undefined {
+  if (params.config.allow.length > 0 && !params.config.allow.includes(params.id)) {
+    return { enabled: false, code: "not_in_allowlist" };
+  }
+  if (params.config.entries[params.id]?.enabled === true) {
+    return { enabled: true, code: "enabled_in_config" };
+  }
+  return undefined;
+}
+
+function resolveBundledDefaultEnableStateDecision(
+  id: string,
+  origin: PluginRecord["origin"],
+): EnableStateDecision {
+  if (origin === "bundled" && BUNDLED_ENABLED_BY_DEFAULT.has(id)) {
+    return { enabled: true, code: "bundled_enabled_by_default" };
+  }
+  if (origin === "bundled") {
+    return { enabled: false, code: "bundled_disabled_by_default" };
+  }
+  return { enabled: true, code: "enabled" };
+}
+
+function resolveEnableStateDecision(
+  id: string,
+  origin: PluginRecord["origin"],
+  config: NormalizedPluginsConfig,
+): EnableStateDecision {
+  return (
+    resolveExplicitEnableStateDecision({ id, config }) ??
+    resolveSlotEnableStateDecision({ id, config }) ??
+    resolveAllowlistEnableStateDecision({ id, config }) ??
+    resolveBundledDefaultEnableStateDecision(id, origin)
+  );
+}
+
+function applyBundledChannelOverride(params: {
+  id: string;
+  rootConfig?: OpenClawConfig;
+  decision: EnableStateDecision;
+}): EnableStateDecision {
+  if (
+    !params.decision.enabled &&
+    params.decision.code === "bundled_disabled_by_default" &&
+    isBundledChannelEnabledByChannelConfig(params.rootConfig, params.id)
+  ) {
+    return { enabled: true, code: "enabled" };
+  }
+  return params.decision;
+}
+
 export function resolveEnableState(
   id: string,
   origin: PluginRecord["origin"],
   config: NormalizedPluginsConfig,
 ): { enabled: boolean; reason?: string } {
-  if (!config.enabled) {
-    return { enabled: false, reason: "plugins disabled" };
-  }
-  if (config.deny.includes(id)) {
-    return { enabled: false, reason: "blocked by denylist" };
-  }
-  const entry = config.entries[id];
-  if (entry?.enabled === false) {
-    return { enabled: false, reason: "disabled in config" };
-  }
-  if (config.slots.memory === id) {
-    return { enabled: true };
-  }
-  if (config.allow.length > 0 && !config.allow.includes(id)) {
-    return { enabled: false, reason: "not in allowlist" };
-  }
-  if (entry?.enabled === true) {
-    return { enabled: true };
-  }
-  if (origin === "bundled" && BUNDLED_ENABLED_BY_DEFAULT.has(id)) {
-    return { enabled: true };
-  }
-  if (origin === "bundled") {
-    return { enabled: false, reason: "bundled (disabled by default)" };
-  }
-  return { enabled: true };
+  return finalizeEnableState(resolveEnableStateDecision(id, origin, config));
 }
 
 export function isBundledChannelEnabledByChannelConfig(
@@ -244,15 +330,13 @@ export function resolveEffectiveEnableState(params: {
   config: NormalizedPluginsConfig;
   rootConfig?: OpenClawConfig;
 }): { enabled: boolean; reason?: string } {
-  const base = resolveEnableState(params.id, params.origin, params.config);
-  if (
-    !base.enabled &&
-    base.reason === "bundled (disabled by default)" &&
-    isBundledChannelEnabledByChannelConfig(params.rootConfig, params.id)
-  ) {
-    return { enabled: true };
-  }
-  return base;
+  return finalizeEnableState(
+    applyBundledChannelOverride({
+      id: params.id,
+      rootConfig: params.rootConfig,
+      decision: resolveEnableStateDecision(params.id, params.origin, params.config),
+    }),
+  );
 }
 
 export function resolveMemorySlotDecision(params: {

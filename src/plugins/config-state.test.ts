@@ -5,14 +5,37 @@ import {
   resolveEnableState,
 } from "./config-state.js";
 
+function normalizedPlugins(config: Parameters<typeof normalizePluginsConfig>[0]) {
+  return normalizePluginsConfig(config);
+}
+
+function resolveBundledState(id: string, config: Parameters<typeof normalizePluginsConfig>[0]) {
+  return resolveEnableState(id, "bundled", normalizedPlugins(config));
+}
+
+function resolveBundledEffectiveState(config: Parameters<typeof normalizePluginsConfig>[0]) {
+  return resolveEffectiveEnableState({
+    id: "telegram",
+    origin: "bundled",
+    config: normalizedPlugins(config),
+    rootConfig: {
+      channels: {
+        telegram: {
+          enabled: true,
+        },
+      },
+    },
+  });
+}
+
 describe("normalizePluginsConfig", () => {
   it("uses default memory slot when not specified", () => {
-    const result = normalizePluginsConfig({});
+    const result = normalizedPlugins({});
     expect(result.slots.memory).toBe("memory-core");
   });
 
   it("respects explicit memory slot value", () => {
-    const result = normalizePluginsConfig({
+    const result = normalizedPlugins({
       slots: { memory: "custom-memory" },
     });
     expect(result.slots.memory).toBe("custom-memory");
@@ -20,40 +43,40 @@ describe("normalizePluginsConfig", () => {
 
   it("disables memory slot when set to 'none' (case insensitive)", () => {
     expect(
-      normalizePluginsConfig({
+      normalizedPlugins({
         slots: { memory: "none" },
       }).slots.memory,
     ).toBeNull();
     expect(
-      normalizePluginsConfig({
+      normalizedPlugins({
         slots: { memory: "None" },
       }).slots.memory,
     ).toBeNull();
   });
 
   it("trims whitespace from memory slot value", () => {
-    const result = normalizePluginsConfig({
+    const result = normalizedPlugins({
       slots: { memory: "  custom-memory  " },
     });
     expect(result.slots.memory).toBe("custom-memory");
   });
 
   it("uses default when memory slot is empty string", () => {
-    const result = normalizePluginsConfig({
+    const result = normalizedPlugins({
       slots: { memory: "" },
     });
     expect(result.slots.memory).toBe("memory-core");
   });
 
   it("uses default when memory slot is whitespace only", () => {
-    const result = normalizePluginsConfig({
+    const result = normalizedPlugins({
       slots: { memory: "   " },
     });
     expect(result.slots.memory).toBe("memory-core");
   });
 
   it("normalizes plugin hook policy flags", () => {
-    const result = normalizePluginsConfig({
+    const result = normalizedPlugins({
       entries: {
         "voice-call": {
           hooks: {
@@ -66,7 +89,7 @@ describe("normalizePluginsConfig", () => {
   });
 
   it("drops invalid plugin hook policy values", () => {
-    const result = normalizePluginsConfig({
+    const result = normalizedPlugins({
       entries: {
         "voice-call": {
           hooks: {
@@ -80,31 +103,15 @@ describe("normalizePluginsConfig", () => {
 });
 
 describe("resolveEffectiveEnableState", () => {
-  function resolveBundledTelegramState(config: Parameters<typeof normalizePluginsConfig>[0]) {
-    const normalized = normalizePluginsConfig(config);
-    return resolveEffectiveEnableState({
-      id: "telegram",
-      origin: "bundled",
-      config: normalized,
-      rootConfig: {
-        channels: {
-          telegram: {
-            enabled: true,
-          },
-        },
-      },
-    });
-  }
-
   it("enables bundled channels when channels.<id>.enabled=true", () => {
-    const state = resolveBundledTelegramState({
+    const state = resolveBundledEffectiveState({
       enabled: true,
     });
     expect(state).toEqual({ enabled: true });
   });
 
   it("keeps explicit plugin-level disable authoritative", () => {
-    const state = resolveBundledTelegramState({
+    const state = resolveBundledEffectiveState({
       enabled: true,
       entries: {
         telegram: {
@@ -114,35 +121,35 @@ describe("resolveEffectiveEnableState", () => {
     });
     expect(state).toEqual({ enabled: false, reason: "disabled in config" });
   });
+
+  it("does not let channel enablement bypass allowlist misses", () => {
+    const state = resolveBundledEffectiveState({
+      enabled: true,
+      allow: ["discord"],
+    });
+    expect(state).toEqual({ enabled: false, reason: "not in allowlist" });
+  });
 });
 
 describe("resolveEnableState", () => {
   it("keeps the selected memory slot plugin enabled even when omitted from plugins.allow", () => {
-    const state = resolveEnableState(
-      "memory-core",
-      "bundled",
-      normalizePluginsConfig({
-        allow: ["telegram"],
-        slots: { memory: "memory-core" },
-      }),
-    );
+    const state = resolveBundledState("memory-core", {
+      allow: ["telegram"],
+      slots: { memory: "memory-core" },
+    });
     expect(state).toEqual({ enabled: true });
   });
 
   it("keeps explicit disable authoritative for the selected memory slot plugin", () => {
-    const state = resolveEnableState(
-      "memory-core",
-      "bundled",
-      normalizePluginsConfig({
-        allow: ["telegram"],
-        slots: { memory: "memory-core" },
-        entries: {
-          "memory-core": {
-            enabled: false,
-          },
+    const state = resolveBundledState("memory-core", {
+      allow: ["telegram"],
+      slots: { memory: "memory-core" },
+      entries: {
+        "memory-core": {
+          enabled: false,
         },
-      }),
-    );
+      },
+    });
     expect(state).toEqual({ enabled: false, reason: "disabled in config" });
   });
 });
