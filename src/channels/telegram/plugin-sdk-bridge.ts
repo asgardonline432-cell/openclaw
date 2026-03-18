@@ -28,6 +28,7 @@ export {
   normalizeTelegramMessagingTarget,
   parseTelegramReplyToMessageId,
   parseTelegramThreadId,
+  resolveTelegramAccount,
   resolveDefaultTelegramAccountId,
   resolveTelegramGroupRequireMention,
   resolveTelegramGroupToolPolicy,

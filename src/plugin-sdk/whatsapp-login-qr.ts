@@ -1,1 +1,1 @@
-export { startWebLoginWithQr, waitForWebLogin } from "../../extensions/whatsapp/login-qr-api.js";
+export { startWebLoginWithQr, waitForWebLogin } from "../channels/whatsapp/login-qr-bridge.js";

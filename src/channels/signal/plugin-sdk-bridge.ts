@@ -3,6 +3,7 @@ export type { ResolvedSignalAccount } from "../../../extensions/signal/api.js";
 export {
   listEnabledSignalAccounts,
   listSignalAccountIds,
+  resolveSignalAccount,
   resolveDefaultSignalAccountId,
 } from "../../../extensions/signal/api.js";
 export { signalMessageActions } from "../../../extensions/signal/src/message-actions.js";

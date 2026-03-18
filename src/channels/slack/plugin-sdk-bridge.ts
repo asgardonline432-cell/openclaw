@@ -1,5 +1,6 @@
 export type { InspectedSlackAccount, ResolvedSlackAccount } from "../../../extensions/slack/api.js";
 export type { SlackActionContext } from "../../../extensions/slack/runtime-api.js";
+export type { SlackTarget, SlackTargetKind } from "../../../extensions/slack/src/targets.js";
 
 export {
   buildSlackThreadingToolContext,
@@ -18,12 +19,15 @@ export {
   listSlackPins,
   listSlackReactions,
   parseSlackBlocksInput,
+  parseSlackTarget,
   pinSlackMessage,
   reactSlackMessage,
   readSlackMessages,
   recordSlackThreadParticipation,
   removeOwnSlackReactions,
   removeSlackReaction,
+  resolveSlackAccount,
+  resolveSlackChannelId,
   resolveDefaultSlackAccountId,
   resolveSlackGroupRequireMention,
   resolveSlackGroupToolPolicy,

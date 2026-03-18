@@ -20,6 +20,7 @@ export {
   normalizeDiscordMessagingTarget,
   normalizeDiscordOutboundTarget,
   readDiscordComponentSpec,
+  resolveDiscordAccount,
   resolveDefaultDiscordAccountId,
   resolveDiscordChannelId,
   resolveDiscordGroupRequireMention,

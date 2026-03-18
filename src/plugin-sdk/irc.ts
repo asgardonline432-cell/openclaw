@@ -62,7 +62,7 @@ export {
   listIrcAccountIds,
   resolveDefaultIrcAccountId,
   resolveIrcAccount,
-} from "../../extensions/irc/api.js";
+} from "../channels/irc/plugin-sdk-bridge.js";
 export {
   readStoreAllowFromForDmPolicy,
   resolveEffectiveAllowFromLists,
@@ -72,7 +72,7 @@ export type { WizardPrompter } from "../wizard/prompts.js";
 export { createScopedPairingAccess } from "./pairing-access.js";
 export { issuePairingChallenge } from "../pairing/pairing-challenge.js";
 export { dispatchInboundReplyWithBase } from "./inbound-reply-dispatch.js";
-export { ircSetupAdapter, ircSetupWizard } from "../../extensions/irc/api.js";
+export { ircSetupAdapter, ircSetupWizard } from "../channels/irc/plugin-sdk-bridge.js";
 export type { OutboundReplyPayload } from "./reply-payload.js";
 export {
   createNormalizedOutboundDeliverer,
