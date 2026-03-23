@@ -49,11 +49,58 @@ describe("createChannelInboundDebouncer", () => {
 
       expect(debounceMs).toBe(25);
 
-      await debouncer.enqueue({ id: "a" });
-      await debouncer.enqueue({ id: "a" });
+      const first = debouncer.enqueue({ id: "a" });
+      const second = debouncer.enqueue({ id: "a" });
       await vi.advanceTimersByTimeAsync(30);
+      await Promise.all([first, second]);
 
       expect(flushed).toEqual([["a", "a"]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps enqueue pending until the debounced flush finishes", async () => {
+    vi.useFakeTimers();
+    try {
+      const flushed = vi.fn();
+      let releaseFlush!: () => void;
+      const flushGate = new Promise<void>((resolve) => {
+        releaseFlush = resolve;
+      });
+      const cfg = {
+        messages: {
+          inbound: {
+            debounceMs: 25,
+          },
+        },
+      } as Parameters<typeof createChannelInboundDebouncer<{ id: string }>>[0]["cfg"];
+
+      const { debouncer } = createChannelInboundDebouncer<{ id: string }>({
+        cfg,
+        channel: "telegram",
+        buildKey: (item) => item.id,
+        onFlush: async (items) => {
+          flushed(items.map((entry) => entry.id));
+          await flushGate;
+        },
+      });
+
+      let settled = false;
+      const pending = debouncer.enqueue({ id: "a" }).then(() => {
+        settled = true;
+      });
+
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(25);
+      expect(flushed).toHaveBeenCalledWith(["a"]);
+      expect(settled).toBe(false);
+
+      releaseFlush();
+      await pending;
+      expect(settled).toBe(true);
     } finally {
       vi.useRealTimers();
     }

@@ -37,6 +37,8 @@ type DebounceBuffer<T> = {
   items: T[];
   timeout: ReturnType<typeof setTimeout> | null;
   debounceMs: number;
+  pending: Promise<void>;
+  resolvePending: () => void;
 };
 
 export type InboundDebounceCreateParams<T> = {
@@ -51,6 +53,14 @@ export type InboundDebounceCreateParams<T> = {
 export function createInboundDebouncer<T>(params: InboundDebounceCreateParams<T>) {
   const buffers = new Map<string, DebounceBuffer<T>>();
   const defaultDebounceMs = Math.max(0, Math.trunc(params.debounceMs));
+
+  const createPending = () => {
+    let resolvePending!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      resolvePending = resolve;
+    });
+    return { pending, resolvePending };
+  };
 
   const resolveDebounceMs = (item: T) => {
     const resolved = params.resolveDebounceMs?.(item);
@@ -73,6 +83,8 @@ export function createInboundDebouncer<T>(params: InboundDebounceCreateParams<T>
       await params.onFlush(buffer.items);
     } catch (err) {
       params.onError?.(err, buffer.items);
+    } finally {
+      buffer.resolvePending();
     }
   };
 
@@ -116,12 +128,21 @@ export function createInboundDebouncer<T>(params: InboundDebounceCreateParams<T>
       existing.items.push(item);
       existing.debounceMs = debounceMs;
       scheduleFlush(key, existing);
+      await existing.pending;
       return;
     }
 
-    const buffer: DebounceBuffer<T> = { items: [item], timeout: null, debounceMs };
+    const { pending, resolvePending } = createPending();
+    const buffer: DebounceBuffer<T> = {
+      items: [item],
+      timeout: null,
+      debounceMs,
+      pending,
+      resolvePending,
+    };
     buffers.set(key, buffer);
     scheduleFlush(key, buffer);
+    await buffer.pending;
   };
 
   return { enqueue, flushKey };

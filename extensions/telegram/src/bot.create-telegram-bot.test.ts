@@ -165,6 +165,57 @@ describe("createTelegramBot", () => {
     expect(middlewareUseSpy).toHaveBeenCalledWith(sequentializeSpy.mock.results[0]?.value);
     expect(harness.sequentializeKey).toBe(getTelegramSequentialKey);
   });
+  it("keeps the message handler pending until inbound debounce flush completes", async () => {
+    vi.useFakeTimers();
+    try {
+      loadConfig.mockReturnValue({
+        channels: {
+          telegram: { dmPolicy: "open", allowFrom: ["*"] },
+        },
+        messages: {
+          inbound: {
+            debounceMs: 50,
+          },
+        },
+      });
+      replySpy.mockImplementation(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
+        await opts?.onReplyStart?.();
+        return undefined;
+      });
+
+      createTelegramBot({ token: "tok" });
+      const handler = getOnHandler("message") as (ctx: Record<string, unknown>) => Promise<void>;
+
+      let settled = false;
+      const pending = handler({
+        message: {
+          chat: { id: 1234, type: "private" },
+          text: "hello world",
+          date: 1736380800,
+          message_id: 42,
+          from: { id: 99, username: "ada_bot" },
+        },
+        me: { username: "openclaw_bot" },
+        getFile: async () => ({ download: async () => new Uint8Array() }),
+      }).then(() => {
+        settled = true;
+      });
+
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(49);
+      expect(settled).toBe(false);
+      expect(replySpy).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      await pending;
+      expect(replySpy).toHaveBeenCalledTimes(1);
+      expect(settled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("routes callback_query payloads as messages and answers callbacks", async () => {
     createTelegramBot({ token: "tok" });
     const callbackHandler = onSpy.mock.calls.find((call) => call[0] === "callback_query")?.[1] as (
