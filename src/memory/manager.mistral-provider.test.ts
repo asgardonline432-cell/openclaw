@@ -30,6 +30,14 @@ type MemoryIndexModule = typeof import("./index.js");
 let getMemorySearchManager: MemoryIndexModule["getMemorySearchManager"];
 let closeAllMemorySearchManagers: MemoryIndexModule["closeAllMemorySearchManagers"];
 
+async function ensureProviderInitialized(manager: MemoryIndexManager): Promise<void> {
+  await (
+    manager as unknown as {
+      ensureProviderInitialized: () => Promise<void>;
+    }
+  ).ensureProviderInitialized();
+}
+
 function createProvider(id: string): EmbeddingProvider {
   return {
     id,
@@ -111,6 +119,7 @@ describe("memory manager mistral provider wiring", () => {
       throw new Error(`manager missing: ${result.error ?? "no error provided"}`);
     }
     manager = result.manager as unknown as MemoryIndexManager;
+    await ensureProviderInitialized(manager);
 
     const internal = manager as unknown as { mistral?: MistralEmbeddingClient };
     expect(internal.mistral).toBe(mistralClient);
@@ -144,6 +153,7 @@ describe("memory manager mistral provider wiring", () => {
       throw new Error(`manager missing: ${result.error ?? "no error provided"}`);
     }
     manager = result.manager as unknown as MemoryIndexManager;
+    await ensureProviderInitialized(manager);
     const internal = manager as unknown as {
       activateFallbackProvider: (reason: string) => Promise<boolean>;
       openAi?: OpenAiEmbeddingClient;
@@ -185,6 +195,7 @@ describe("memory manager mistral provider wiring", () => {
       throw new Error(`manager missing: ${result.error ?? "no error provided"}`);
     }
     manager = result.manager as unknown as MemoryIndexManager;
+    await ensureProviderInitialized(manager);
     const internal = manager as unknown as {
       activateFallbackProvider: (reason: string) => Promise<boolean>;
       openAi?: OpenAiEmbeddingClient;
