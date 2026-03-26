@@ -1,0 +1,108 @@
+name: Thread Expansion Experiment
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.event.pull_request.number) || format('{0}-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  compare:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux
+            runner: blacksmith-16vcpu-ubuntu-2404
+            mode: forks
+          - label: linux
+            runner: blacksmith-16vcpu-ubuntu-2404
+            mode: threads
+          - label: macos
+            runner: macos-latest
+            mode: forks
+          - label: macos
+            runner: macos-latest
+            mode: threads
+    name: compare (${{ matrix.label }}, ${{ matrix.mode }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      EXPERIMENT_MODE: ${{ matrix.mode }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          install-bun: "false"
+          use-sticky-disk: "false"
+
+      - name: Show runtime info
+        run: |
+          node -v
+          pnpm -v
+          node -e 'const os=require("node:os"); console.log(JSON.stringify({ platform: process.platform, cpuCount: os.cpus().length, totalMemGiB: Math.round((os.totalmem() / 1024 / 1024 / 1024) * 10) / 10, loadavg: os.loadavg() }, null, 2));'
+
+      - name: Run thread expansion experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$EXPERIMENT_MODE" in
+            forks)
+              export OPENCLAW_TEST_FORCE_FORKS=1
+              POOL="forks"
+              ;;
+            threads)
+              export OPENCLAW_TEST_FORCE_THREADS=1
+              POOL="threads"
+              ;;
+            *)
+              echo "Unsupported EXPERIMENT_MODE=$EXPERIMENT_MODE" >&2
+              exit 1
+              ;;
+          esac
+
+          POLICY_FILES=(
+            src/commands/agents.test.ts
+            src/commands/text-format.test.ts
+            src/auto-reply/chunk.test.ts
+          )
+          EVIDENCE_FILES=(
+            src/commands/backup.test.ts
+            src/auto-reply/reply/commands-acp/install-hints.test.ts
+            src/agents/pi-extensions/compaction-safeguard.test.ts
+          )
+
+          echo "## ${RUNNER_OS} / ${EXPERIMENT_MODE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Wrapper policy sample files: \`${POLICY_FILES[*]}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Direct evidence sample files: \`${EVIDENCE_FILES[*]}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "=== Wrapper policy sample (${EXPERIMENT_MODE}) ==="
+          SECONDS=0
+          OPENCLAW_TEST_SHOW_POOL_DECISION=1 node scripts/test-parallel.mjs "${POLICY_FILES[@]}"
+          wrapper_elapsed=$SECONDS
+          echo "- wrapper policy sample (${EXPERIMENT_MODE}): ${wrapper_elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "=== Direct vitest evidence sample (${POOL}) ==="
+          SECONDS=0
+          pnpm vitest run --config vitest.config.ts "--pool=${POOL}" "${EVIDENCE_FILES[@]}"
+          direct_elapsed=$SECONDS
+          echo "- direct evidence sample (${POOL}): ${direct_elapsed}s" >> "$GITHUB_STEP_SUMMARY"

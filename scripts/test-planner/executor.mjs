@@ -109,7 +109,7 @@ const getShardLabel = (args) => {
 
 export function formatPlanOutput(plan) {
   return [
-    `runtime=${plan.runtimeCapabilities.runtimeProfileName} mode=${plan.runtimeCapabilities.mode} intent=${plan.runtimeCapabilities.intentProfile} memoryBand=${plan.runtimeCapabilities.memoryBand} loadBand=${plan.runtimeCapabilities.loadBand} vitestMaxWorkers=${String(plan.executionBudget.vitestMaxWorkers ?? "default")} topLevelParallel=${plan.topLevelParallelEnabled ? String(plan.topLevelParallelLimit) : "off"}`,
+    `runtime=${plan.runtimeCapabilities.runtimeProfileName} mode=${plan.runtimeCapabilities.mode} intent=${plan.runtimeCapabilities.intentProfile} memoryBand=${plan.runtimeCapabilities.memoryBand} loadBand=${plan.runtimeCapabilities.loadBand} vitestMaxWorkers=${String(plan.executionBudget.vitestMaxWorkers ?? "default")} topLevelParallel=${plan.topLevelParallelEnabled ? String(plan.topLevelParallelLimit) : "off"} unitPool=${plan.executionBudget.defaultUnitPool} basePool=${plan.executionBudget.defaultBasePool} threadExpansion=${String(plan.executionBudget.threadExpansionEnabled)} threadPolicy=${plan.executionBudget.threadPoolReason}`,
     ...plan.selectedUnits.map(
       (unit) =>
         `${unit.id} filters=${String(countExplicitEntryFilters(unit.args) ?? "all")} maxWorkers=${String(
@@ -123,6 +123,7 @@ export function formatExplanation(explanation) {
   return [
     `file=${explanation.file}`,
     `runtime=${explanation.runtimeProfile} intent=${explanation.intentProfile} memoryBand=${explanation.memoryBand} loadBand=${explanation.loadBand}`,
+    `threadExpansion=${String(explanation.threadExpansionEnabled)} threadPolicy=${explanation.threadPoolReason}`,
     `surface=${explanation.surface}`,
     `isolate=${explanation.isolate ? "yes" : "no"}`,
     `pool=${explanation.pool}`,

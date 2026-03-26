@@ -265,12 +265,33 @@ const formatPerFileEntryName = (owner, file) => {
   return `${owner}-${baseName}`;
 };
 
+const resolvePoolForUnit = (config) => {
+  if (config.pool) {
+    return config.pool;
+  }
+  const explicitPoolArg = config.args?.find(
+    (arg) => typeof arg === "string" && arg.startsWith("--pool="),
+  );
+  if (explicitPoolArg) {
+    return explicitPoolArg.slice("--pool=".length);
+  }
+  const configIndex = config.args?.findIndex((arg) => arg === "--config") ?? -1;
+  const vitestConfig = configIndex >= 0 ? (config.args?.[configIndex + 1] ?? "") : "";
+  if (
+    vitestConfig === "vitest.extensions.config.ts" ||
+    vitestConfig === "vitest.channels.config.ts"
+  ) {
+    return "threads";
+  }
+  return "forks";
+};
+
 const createExecutionUnit = (context, config) => {
   const unit = {
     id: config.id,
     surface: config.surface,
     isolate: Boolean(config.isolate),
-    pool: config.pool ?? "forks",
+    pool: resolvePoolForUnit(config),
     args: config.args,
     env: config.env,
     includeFiles: config.includeFiles,
@@ -437,7 +458,7 @@ const buildDefaultUnits = (context, request) => {
               "run",
               "--config",
               "vitest.unit.config.ts",
-              "--pool=forks",
+              `--pool=${executionBudget.defaultUnitPool}`,
               ...noIsolateArgs,
             ],
             reasons: ["unit-fast-shared"],
@@ -522,7 +543,7 @@ const buildDefaultUnits = (context, request) => {
             "run",
             "--config",
             "vitest.unit.config.ts",
-            "--pool=forks",
+            "--pool=threads",
             ...noIsolateArgs,
             ...catalog.unitThreadPinnedFiles,
           ],
@@ -666,12 +687,15 @@ const createTargetedUnit = (context, classification, filters) => {
         : owner;
   const args = (() => {
     if (owner === "unit") {
+      const pool = classification.reasons.includes("unit-pinned-manifest")
+        ? "threads"
+        : context.executionBudget.defaultUnitPool;
       return [
         "vitest",
         "run",
         "--config",
         "vitest.unit.config.ts",
-        "--pool=forks",
+        `--pool=${pool}`,
         ...context.noIsolateArgs,
         ...filters,
       ];
@@ -682,7 +706,7 @@ const createTargetedUnit = (context, classification, filters) => {
         "run",
         "--config",
         "vitest.config.ts",
-        "--pool=forks",
+        "--pool=threads",
         ...context.noIsolateArgs,
         ...filters,
       ];
@@ -745,15 +769,15 @@ const createTargetedUnit = (context, classification, filters) => {
       "run",
       "--config",
       "vitest.config.ts",
+      `--pool=${classification.isolated ? "forks" : context.executionBudget.defaultBasePool}`,
       ...context.noIsolateArgs,
-      ...(classification.isolated ? ["--pool=forks"] : []),
       ...filters,
     ];
   })();
   return createExecutionUnit(context, {
     id: unitId,
     surface: classification.legacyBasePinned ? "base" : classification.surface,
-    isolate: classification.isolated || owner === "base-pinned",
+    isolate: classification.isolated,
     args,
     reasons: classification.reasons,
   });
@@ -1191,6 +1215,8 @@ export function explainExecutionTarget(request, options = {}) {
     intentProfile: context.runtime.intentProfile,
     memoryBand: context.runtime.memoryBand,
     loadBand: context.runtime.loadBand,
+    threadExpansionEnabled: context.executionBudget.threadExpansionEnabled,
+    threadPoolReason: context.executionBudget.threadPoolReason,
     file: classification.file,
     surface: classification.legacyBasePinned ? "base" : classification.surface,
     isolate: targetedUnit.isolate,

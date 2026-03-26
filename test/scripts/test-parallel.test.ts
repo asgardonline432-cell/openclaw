@@ -195,8 +195,35 @@ describe("scripts/test-parallel lane planning", () => {
     );
 
     expect(output).toContain("mode=local intent=normal memoryBand=mid");
+    expect(output).toContain("unitPool=threads");
+    expect(output).toContain("basePool=threads");
     expect(output).toContain("unit-fast filters=all maxWorkers=");
     expect(output).toContain("extensions filters=all maxWorkers=");
+  });
+
+  it("keeps constrained local hosts on forks in plan output", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+    const output = execFileSync(
+      "node",
+      ["scripts/test-parallel.mjs", "--plan", "--surface", "unit"],
+      {
+        cwd: repoRoot,
+        env: {
+          ...clearPlannerShardEnv(process.env),
+          CI: "",
+          GITHUB_ACTIONS: "",
+          RUNNER_OS: "macOS",
+          OPENCLAW_TEST_HOST_CPU_COUNT: "10",
+          OPENCLAW_TEST_HOST_MEMORY_GIB: "16",
+          OPENCLAW_TEST_LOAD_AWARE: "0",
+        },
+        encoding: "utf8",
+      },
+    );
+
+    expect(output).toContain("unitPool=forks");
+    expect(output).toContain("basePool=forks");
+    expect(output).toContain("threadPolicy=memory-below-thread-threshold");
   });
 
   it("explains targeted file ownership and execution policy", () => {
@@ -213,7 +240,8 @@ describe("scripts/test-parallel lane planning", () => {
 
     expect(output).toContain("surface=base");
     expect(output).toContain("reasons=base-surface,base-pinned-manifest");
-    expect(output).toContain("pool=forks");
+    expect(output).toContain("pool=threads");
+    expect(output).toContain("threadPolicy=memory-below-thread-threshold");
   });
 
   it("prints the planner-backed CI manifest as JSON", () => {

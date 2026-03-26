@@ -87,6 +87,14 @@ const scaleConcurrencyForLoad = (value, loadBand) => {
   return Math.max(1, Math.floor(value * scale));
 };
 
+const parseTruthyEnv = (value) => {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true";
+};
+
 const LOCAL_MEMORY_BUDGETS = {
   constrained: {
     vitestCap: 2,
@@ -197,6 +205,106 @@ const withIntentBudgetAdjustments = (budget, intentProfile, cpuCount) => {
   return budget;
 };
 
+export function resolveThreadPoolPolicy(runtimeCapabilities) {
+  const runtime = runtimeCapabilities;
+  const forceThreads = runtime.forceThreads;
+  const forceForks = runtime.forceForks;
+
+  if (runtime.isCI) {
+    return {
+      threadExpansionEnabled: false,
+      defaultUnitPool: "forks",
+      defaultBasePool: "forks",
+      unitFastLaneCount: runtime.isWindows ? 1 : 3,
+      reason: "ci-preserves-current-policy",
+    };
+  }
+
+  if (forceForks) {
+    return {
+      threadExpansionEnabled: false,
+      defaultUnitPool: "forks",
+      defaultBasePool: "forks",
+      unitFastLaneCount: 1,
+      reason: "forced-forks",
+    };
+  }
+
+  if (forceThreads) {
+    return {
+      threadExpansionEnabled: true,
+      defaultUnitPool: "threads",
+      defaultBasePool: "threads",
+      unitFastLaneCount:
+        runtime.hostCpuCount >= 12 && runtime.hostMemoryGiB >= 96 && runtime.loadBand === "idle"
+          ? 2
+          : 1,
+      reason: "forced-threads",
+    };
+  }
+
+  if (runtime.isWindows) {
+    return {
+      threadExpansionEnabled: false,
+      defaultUnitPool: "forks",
+      defaultBasePool: "forks",
+      unitFastLaneCount: 1,
+      reason: "windows-local-conservative",
+    };
+  }
+
+  if (runtime.intentProfile === "serial") {
+    return {
+      threadExpansionEnabled: false,
+      defaultUnitPool: "forks",
+      defaultBasePool: "forks",
+      unitFastLaneCount: 1,
+      reason: "profile-conservative",
+    };
+  }
+
+  if (runtime.hostMemoryGiB < 64) {
+    return {
+      threadExpansionEnabled: false,
+      defaultUnitPool: "forks",
+      defaultBasePool: "forks",
+      unitFastLaneCount: 1,
+      reason: "memory-below-thread-threshold",
+    };
+  }
+
+  if (runtime.hostCpuCount < 10) {
+    return {
+      threadExpansionEnabled: false,
+      defaultUnitPool: "forks",
+      defaultBasePool: "forks",
+      unitFastLaneCount: 1,
+      reason: "cpu-below-thread-threshold",
+    };
+  }
+
+  if (runtime.loadBand === "busy" || runtime.loadBand === "saturated") {
+    return {
+      threadExpansionEnabled: false,
+      defaultUnitPool: "forks",
+      defaultBasePool: "forks",
+      unitFastLaneCount: 1,
+      reason: "host-under-load",
+    };
+  }
+
+  return {
+    threadExpansionEnabled: true,
+    defaultUnitPool: "threads",
+    defaultBasePool: "threads",
+    unitFastLaneCount:
+      runtime.hostCpuCount >= 12 && runtime.hostMemoryGiB >= 96 && runtime.loadBand === "idle"
+        ? 2
+        : 1,
+    reason: "strong-local-host",
+  };
+}
+
 export function resolveRuntimeCapabilities(env = process.env, options = {}) {
   const mode = resolveVitestMode(env, options.mode ?? null);
   const isCI = mode === "ci";
@@ -219,6 +327,10 @@ export function resolveRuntimeCapabilities(env = process.env, options = {}) {
   const loadAware = !isCI && platform !== "win32";
   const memoryBand = resolveMemoryBand(hostMemoryGiB);
   const loadBand = resolveLoadBand(loadAware, loadRatio);
+  const forceThreads = parseTruthyEnv(env.OPENCLAW_TEST_FORCE_THREADS);
+  const forceForks =
+    parseTruthyEnv(env.OPENCLAW_TEST_FORCE_FORKS) ||
+    parseTruthyEnv(env.OPENCLAW_TEST_DISABLE_THREAD_EXPANSION);
   const runtimeProfileName = isCI
     ? isWindows
       ? "ci-windows"
@@ -247,12 +359,15 @@ export function resolveRuntimeCapabilities(env = process.env, options = {}) {
     loadAware,
     loadRatio,
     loadBand,
+    forceThreads,
+    forceForks,
   };
 }
 
 export function resolveExecutionBudget(runtimeCapabilities) {
   const runtime = runtimeCapabilities;
   const cpuCount = clamp(runtime.hostCpuCount, 1, 16);
+  const threadPoolPolicy = resolveThreadPoolPolicy(runtime);
 
   if (runtime.isCI) {
     const macCiWorkers = runtime.isMacOS ? 1 : null;
@@ -271,10 +386,14 @@ export function resolveExecutionBudget(runtimeCapabilities) {
       heavyUnitFileLimit: 64,
       heavyUnitLaneCount: 4,
       memoryHeavyUnitFileLimit: 64,
-      unitFastLaneCount: runtime.isWindows ? 1 : 3,
+      unitFastLaneCount: threadPoolPolicy.unitFastLaneCount,
       unitFastBatchTargetMs: runtime.isWindows ? 0 : 45_000,
       channelsBatchTargetMs: runtime.isWindows ? 0 : 30_000,
       extensionsBatchTargetMs: runtime.isWindows ? 0 : 30_000,
+      threadExpansionEnabled: threadPoolPolicy.threadExpansionEnabled,
+      defaultUnitPool: threadPoolPolicy.defaultUnitPool,
+      defaultBasePool: threadPoolPolicy.defaultBasePool,
+      threadPoolReason: threadPoolPolicy.reason,
     };
   }
 
@@ -294,10 +413,14 @@ export function resolveExecutionBudget(runtimeCapabilities) {
     heavyUnitFileLimit: bandBudget.heavyFileLimit,
     heavyUnitLaneCount: bandBudget.heavyLaneCount,
     memoryHeavyUnitFileLimit: bandBudget.memoryHeavyFileLimit,
-    unitFastLaneCount: 1,
+    unitFastLaneCount: threadPoolPolicy.unitFastLaneCount,
     unitFastBatchTargetMs: bandBudget.unitFastBatchTargetMs,
     channelsBatchTargetMs: 0,
     extensionsBatchTargetMs: 0,
+    threadExpansionEnabled: threadPoolPolicy.threadExpansionEnabled,
+    defaultUnitPool: threadPoolPolicy.defaultUnitPool,
+    defaultBasePool: threadPoolPolicy.defaultBasePool,
+    threadPoolReason: threadPoolPolicy.reason,
   };
 
   const loadAdjustedBudget = {

@@ -41,6 +41,8 @@ describe("test planner", () => {
     expect(plan.runtimeCapabilities.runtimeProfileName).toBe("local-darwin");
     expect(plan.runtimeCapabilities.memoryBand).toBe("mid");
     expect(plan.executionBudget.unitSharedWorkers).toBe(4);
+    expect(plan.executionBudget.defaultUnitPool).toBe("threads");
+    expect(plan.executionBudget.defaultBasePool).toBe("threads");
     expect(plan.executionBudget.topLevelParallelLimitNoIsolate).toBe(8);
     expect(plan.executionBudget.topLevelParallelLimitIsolated).toBe(3);
     expect(plan.selectedUnits.some((unit) => unit.id.startsWith("unit-fast"))).toBe(true);
@@ -76,6 +78,8 @@ describe("test planner", () => {
 
     expect(plan.runtimeCapabilities.memoryBand).toBe("mid");
     expect(plan.runtimeCapabilities.loadBand).toBe("saturated");
+    expect(plan.executionBudget.defaultUnitPool).toBe("forks");
+    expect(plan.executionBudget.defaultBasePool).toBe("forks");
     expect(plan.executionBudget.unitSharedWorkers).toBe(2);
     expect(plan.executionBudget.topLevelParallelLimitNoIsolate).toBe(4);
     expect(plan.executionBudget.topLevelParallelLimitIsolated).toBe(1);
@@ -156,8 +160,11 @@ describe("test planner", () => {
     );
 
     expect(explanation.surface).toBe("base");
-    expect(explanation.pool).toBe("forks");
+    expect(explanation.pool).toBe("threads");
+    expect(explanation.isolate).toBe(false);
     expect(explanation.reasons).toContain("base-pinned-manifest");
+    expect(explanation.threadExpansionEnabled).toBe(false);
+    expect(explanation.threadPoolReason).toBe("memory-below-thread-threshold");
     expect(explanation.intentProfile).toBe("normal");
   });
 
