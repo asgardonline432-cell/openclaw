@@ -99,7 +99,7 @@ export function acquireLocalHeavyCheckLockSync(params) {
         createdAt: new Date().toISOString(),
       });
       return () => {
-        fs.rmSync(lockDir, { recursive: true, force: true });
+        releaseOwnedLock(lockDir, process.pid);
       };
     } catch (error) {
       if (!isAlreadyExistsError(error)) {
@@ -245,6 +245,14 @@ function cleanupWaiterState(lockDir, pid) {
   } catch {
     // Ignore cleanup failures for concurrent waiters.
   }
+}
+
+function releaseOwnedLock(lockDir, pid) {
+  const owner = readOwnerFile(path.join(lockDir, "owner.json"));
+  if (!owner || typeof owner.pid !== "number" || owner.pid !== pid) {
+    return;
+  }
+  fs.rmSync(lockDir, { recursive: true, force: true });
 }
 
 function readOwnerFile(ownerPath) {
