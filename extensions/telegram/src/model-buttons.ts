@@ -9,6 +9,7 @@
  * - mdl_back              - back to providers list
  */
 import { fitsTelegramCallbackData } from "./approval-callback-data.js";
+import { isCurrentModelSelection } from "./model-selection.js";
 
 export type ButtonRow = Array<{ text: string; callback_data: string }>;
 
@@ -142,20 +143,6 @@ export function resolveModelSelection(params: {
     model: params.callback.model,
     matchingProviders,
   };
-}
-
-function isCurrentModelSelection(params: {
-  currentModel?: string;
-  provider: string;
-  model: string;
-}): boolean {
-  const currentModel = params.currentModel?.trim();
-  if (!currentModel) {
-    return false;
-  }
-  return currentModel.includes("/")
-    ? currentModel === `${params.provider}/${params.model}`
-    : currentModel === params.model;
 }
 
 /**
