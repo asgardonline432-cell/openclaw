@@ -15,7 +15,6 @@ import { type ActiveWebSendOptions, requireActiveWebListener } from "./active-li
 import type { QuotedMessageKey } from "./quoted-message.js";
 import { loadOutboundMediaFromUrl } from "./runtime-api.js";
 import { markdownToWhatsApp, toWhatsappJid } from "./text-runtime.js";
-import type { QuotedMessageKey } from "./quoted-message.js";
 
 const outboundLog = createSubsystemLogger("gateway/channels/whatsapp").child("outbound");
 
