@@ -108,6 +108,7 @@ export function renderRunHelp() {
     ]),
     notesBlock([
       "QA uses the host backend by default.",
+      "If the QA host lane blocks on a clean checkout, run `pnpm build` first.",
       "Character eval uses the host backend and live-frontier model lanes.",
       "Multipass without --scenario runs the curated QA core subset.",
       "If Multipass is missing, Kova prints install guidance in the blocked run output.",

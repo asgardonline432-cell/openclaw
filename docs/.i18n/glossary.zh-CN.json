@@ -4,6 +4,14 @@
     "target": "OpenClaw"
   },
   {
+    "source": "Kova",
+    "target": "Kova"
+  },
+  {
+    "source": "QA E2E Automation",
+    "target": "QA E2E 自动化"
+  },
+  {
     "source": "Gateway",
     "target": "Gateway 网关"
   },

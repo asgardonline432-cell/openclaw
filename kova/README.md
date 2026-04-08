@@ -48,6 +48,9 @@ pnpm kova run qa --scenario channel-chat-baseline
 
 That gives you a real Kova run immediately, writes the result under `.artifacts/kova/runs/`, and gives you something real to inspect with `report` and `diff`.
 
+If the QA host lane blocks on a clean checkout because `dist/index.js` is missing, run
+`pnpm build` once, then rerun the same Kova command.
+
 ## Common Workflows
 
 Run a single QA scenario on the default host backend:
@@ -55,6 +58,9 @@ Run a single QA scenario on the default host backend:
 ```bash
 pnpm kova run qa --scenario channel-chat-baseline
 ```
+
+On a clean checkout, run `pnpm build` first if Kova tells you the QA gateway build
+output is missing.
 
 Run QA inside Multipass:
 

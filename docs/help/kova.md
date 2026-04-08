@@ -111,6 +111,9 @@ Example:
 pnpm kova run qa --scenario channel-chat-baseline
 ```
 
+If the host QA lane blocks on a clean checkout because `dist/index.js` is missing,
+run `pnpm build`, then rerun the same Kova command.
+
 ### `character-eval`
 
 Judged vibe and persona evaluation across candidate models.
