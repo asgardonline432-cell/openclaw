@@ -239,104 +239,79 @@ if (updated !== original) {
 EOF_NODE
 }
 
+resolve_changelog_diff_range() {
+  local env_file
+  for env_file in .local/prep.env .local/prep-context.env; do
+    [ -s "$env_file" ] || continue
+
+    local candidate
+    candidate=$(
+      (
+        set +u
+        # shellcheck disable=SC1090
+        source "$env_file" >/dev/null 2>&1 || exit 0
+        printf '%s' "${PR_HEAD_SHA_BEFORE:-}"
+      )
+    )
+
+    if [ -n "$candidate" ] \
+      && git cat-file -e "${candidate}^{commit}" 2>/dev/null \
+      && git merge-base --is-ancestor "$candidate" HEAD 2>/dev/null; then
+      printf '%s\n' "${candidate}..HEAD"
+      return 0
+    fi
+  done
+
+  printf '%s\n' 'origin/main...HEAD'
+}
+
 validate_changelog_entry_for_pr() {
   local pr="$1"
   local contrib="$2"
 
-  local added_lines
-  added_lines=$(git diff --unified=0 origin/main...HEAD -- CHANGELOG.md | awk '
-    /^\+\+\+/ { next }
-    /^\+/ { print substr($0, 2) }
-  ')
-
-  if [ -z "$added_lines" ]; then
-    echo "CHANGELOG.md is in diff but no added lines were detected."
-    exit 1
-  fi
-
   local pr_pattern
   pr_pattern="(#$pr|openclaw#$pr)"
 
-  local with_pr
-  with_pr=$(printf '%s\n' "$added_lines" | rg -in "$pr_pattern" || true)
-  if [ -z "$with_pr" ]; then
-    echo "CHANGELOG.md update must reference PR #$pr (for example, (#$pr))."
-    exit 1
-  fi
-
-  local diff_file
-  diff_file=$(mktemp)
-  git diff --unified=0 origin/main...HEAD -- CHANGELOG.md > "$diff_file"
-
-  if ! awk -v pr_pattern="$pr_pattern" '
+  local validation_output
+  if ! validation_output=$(awk -v pr_pattern="$pr_pattern" '
 BEGIN {
-  line_no = 0
+  current_release = ""
+  current_section = ""
   file_line_count = 0
   issue_count = 0
-}
-FNR == NR {
-  if ($0 ~ /^@@ /) {
-    if (match($0, /\+[0-9]+/)) {
-      line_no = substr($0, RSTART + 1, RLENGTH - 1) + 0
-    } else {
-      line_no = 0
-    }
-    next
-  }
-  if ($0 ~ /^\+\+\+/) {
-    next
-  }
-  if ($0 ~ /^\+/) {
-    if (line_no > 0) {
-      added[line_no] = 1
-      added_text = substr($0, 2)
-      if (added_text ~ pr_pattern) {
-        pr_added_lines[++pr_added_count] = line_no
-        pr_added_text[line_no] = added_text
-      }
-      line_no++
-    }
-    next
-  }
-  if ($0 ~ /^-/) {
-    next
-  }
-  if (line_no > 0) {
-    line_no++
-  }
-  next
 }
 {
   changelog[FNR] = $0
   file_line_count = FNR
+
+  if ($0 ~ /^## /) {
+    current_release = $0
+    current_section = ""
+  } else if ($0 ~ /^### /) {
+    current_section = $0
+  }
+
+  if ($0 ~ pr_pattern && current_release == "## Unreleased") {
+    pr_lines[++pr_count] = FNR
+    pr_text[FNR] = $0
+    pr_sections[FNR] = current_section
+  }
 }
 END {
-  for (idx = 1; idx <= pr_added_count; idx++) {
-    entry_line = pr_added_lines[idx]
-    release_line = 0
-    section_line = 0
-    for (i = entry_line; i >= 1; i--) {
-      if (section_line == 0 && changelog[i] ~ /^### /) {
-        section_line = i
-        continue
-      }
-      if (changelog[i] ~ /^## /) {
-        release_line = i
-        break
-      }
-    }
-    if (release_line == 0 || changelog[release_line] != "## Unreleased") {
-      printf "CHANGELOG.md PR-linked entry must be in ## Unreleased: line %d: %s\n", entry_line, pr_added_text[entry_line]
-      issue_count++
-      continue
-    }
-    if (section_line == 0) {
-      printf "CHANGELOG.md entry must be inside a subsection (### ...): line %d: %s\n", entry_line, pr_added_text[entry_line]
+  if (pr_count == 0) {
+    printf "CHANGELOG.md update must reference PR pattern %s inside ## Unreleased.\n", pr_pattern
+    exit 1
+  }
+
+  for (idx = 1; idx <= pr_count; idx++) {
+    entry_line = pr_lines[idx]
+    if (pr_sections[entry_line] == "") {
+      printf "CHANGELOG.md entry must be inside a subsection (### ...): line %d: %s\n", entry_line, pr_text[entry_line]
       issue_count++
       continue
     }
 
-    section_name = changelog[section_line]
+    section_name = pr_sections[entry_line]
     next_heading = file_line_count + 1
     for (i = entry_line + 1; i <= file_line_count; i++) {
       if (changelog[i] ~ /^### / || changelog[i] ~ /^## /) {
@@ -350,11 +325,8 @@ END {
       if (line_text ~ /^[[:space:]]*$/) {
         continue
       }
-      if (i in added) {
-        continue
-      }
-      printf "CHANGELOG.md PR-linked entry must be appended at the end of section %s: line %d: %s\n", section_name, entry_line, pr_added_text[entry_line]
-      printf "Found existing non-added line below it at line %d: %s\n", i, line_text
+      printf "CHANGELOG.md PR-linked entry must be appended at the end of section %s: line %d: %s\n", section_name, entry_line, pr_text[entry_line]
+      printf "Found existing line below it at line %d: %s\n", i, line_text
       issue_count++
       break
     }
@@ -364,17 +336,21 @@ END {
     print "Move this PR changelog entry to the end of its section (just before the next heading)."
     exit 1
   }
+
+  print "changelog placement validated: PR-linked entries are appended at section tail"
 }
-' "$diff_file" CHANGELOG.md; then
-    rm -f "$diff_file"
+' CHANGELOG.md); then
+    printf '%s\n' "$validation_output"
     exit 1
   fi
-  rm -f "$diff_file"
-  echo "changelog placement validated: PR-linked entries are appended at section tail"
+  printf '%s\n' "$validation_output"
 
   if [ -n "$contrib" ] && [ "$contrib" != "null" ]; then
     local with_pr_and_thanks
-    with_pr_and_thanks=$(printf '%s\n' "$added_lines" | rg -in "$pr_pattern" | rg -i "thanks @$contrib" || true)
+    with_pr_and_thanks=$(awk -v pr_pattern="$pr_pattern" '
+/^## / { current_release = $0 }
+current_release == "## Unreleased" && $0 ~ pr_pattern { print }
+' CHANGELOG.md | rg -i "thanks @$contrib" || true)
     if [ -z "$with_pr_and_thanks" ]; then
       echo "CHANGELOG.md update must include both PR #$pr and thanks @$contrib on the changelog entry line."
       exit 1
@@ -387,8 +363,11 @@ END {
 }
 
 validate_changelog_merge_hygiene() {
+  local diff_range
+  diff_range=$(resolve_changelog_diff_range)
+
   local diff
-  diff=$(git diff --unified=0 origin/main...HEAD -- CHANGELOG.md)
+  diff=$(git diff --unified=0 "$diff_range" -- CHANGELOG.md)
 
   local removed_lines
   removed_lines=$(printf '%s\n' "$diff" | awk '
