@@ -2,22 +2,24 @@
 
 import path from "node:path";
 /**
- * Lint: 运行时代码不得导入 config redact/restore 模块
+ * Lint: runtime code must not import config redact/restore helpers.
  *
- * OpenClaw 的配置读写存在两条独立路径，不可混用：
+ * OpenClaw has two separate config flows that must never be mixed:
  *
- * 1. Runtime path: loadConfig() → 直接使用原始值（浏览器连接、embedding 调用等）
- * 2. API/Display path: readConfigFileSnapshot() → redactConfigSnapshot() → 返回给 UI
- *    写入时: restoreRedactedValues() 还原 __OPENCLAW_REDACTED__ 占位符
+ * 1. Runtime path: loadConfig() -> consume raw values directly for browser
+ *    connections, embedding calls, and other live execution.
+ * 2. API/display path: readConfigFileSnapshot() -> redactConfigSnapshot() ->
+ *    return a safe snapshot to the UI. Writes use restoreRedactedValues() to
+ *    turn the __OPENCLAW_REDACTED__ placeholder back into the original value.
  *
- * 运行时代码如果意外使用了 redacted 值（如浏览器连接拿到 __OPENCLAW_REDACTED__），
- * 会导致连接失败；展示代码如果漏做 redact，会泄露凭据。
+ * If runtime code accidentally consumes redacted values, live behavior can
+ * fail. If display code skips redaction, credentials can leak.
  *
- * 此规则确保运行时目录不导入 redact-snapshot 中的 redact/restore 函数，
- * 防止两条路径被意外混用。
+ * This guard keeps redact-snapshot redact/restore helpers out of runtime code
+ * so those two flows stay isolated.
  *
- * 注意：redactSensitiveUrl() / redactSensitiveUrlLikeString() 在运行时代码中
- * 用于日志/错误消息的 URL 脱敏是合理使用，不被此规则禁止。
+ * redactSensitiveUrl() / redactSensitiveUrlLikeString() remain allowed in
+ * runtime code because they only sanitize log and error output strings.
  */
 import ts from "typescript";
 import { runCallsiteGuard } from "./lib/callsite-guard.mjs";
@@ -50,24 +52,26 @@ const ALLOWED_REDACT_SENSITIVE_URL_CALLSITES = new Set([
 const REPO_ROOT = resolveRepoRoot(import.meta.url);
 
 const BANNED_FROM_REDACT_SNAPSHOT = new Set([
-  "redactConfigSnapshot", // 替换整个 snapshot 中的敏感字段
-  "redactConfigObject", // 替换 config 对象中的敏感字段
-  "restoreRedactedValues", // 将 __OPENCLAW_REDACTED__ 还原为原始值
-  "REDACTED_SENTINEL", // sentinel 常量
+  "redactConfigSnapshot", // Replaces sensitive fields across a full config snapshot.
+  "redactConfigObject", // Replaces sensitive fields on a config object.
+  "restoreRedactedValues", // Restores the __OPENCLAW_REDACTED__ placeholder.
+  "REDACTED_SENTINEL", // Redaction sentinel constant.
 ]);
 
 /**
- * 从 redact-sensitive-url 导入时，被禁止的符号。
+ * Symbols from redact-sensitive-url that runtime code must not use.
  *
- * redactSensitiveUrl() / redactSensitiveUrlLikeString() 不在禁止列表中 —
- * 它们在运行时代码中用于日志/错误消息的 URL 脱敏，是合理的。
+ * redactSensitiveUrl() / redactSensitiveUrlLikeString() are intentionally not
+ * in the banned set because they are valid for runtime log and error
+ * sanitization.
  *
- * 以下函数仅用于 config redact 框架内部，运行时代码不应依赖：
+ * The following helpers belong to the config-redaction framework itself and
+ * should not be imported from runtime code.
  */
 const BANNED_FROM_REDACT_SENSITIVE_URL = new Set([
-  "isSensitiveUrlConfigPath", // 判断配置路径是否为敏感 URL — 仅 config redact 框架需要
-  "hasSensitiveUrlHintTag", // 检查 url-secret 标签 — 仅 config redact 框架需要
-  "SENSITIVE_URL_HINT_TAG", // url-secret 常量 — 仅 config redact 框架需要
+  "isSensitiveUrlConfigPath", // Checks whether a config path is a sensitive URL.
+  "hasSensitiveUrlHintTag", // Checks for the url-secret schema tag.
+  "SENSITIVE_URL_HINT_TAG", // url-secret tag constant.
 ]);
 
 function findViolations(content, filePath) {
@@ -118,7 +122,8 @@ function findViolations(content, filePath) {
       // Named imports: import { a, b } from "..."
       if (importClause.namedBindings && ts.isNamedImports(importClause.namedBindings)) {
         for (const element of importClause.namedBindings.elements) {
-          if (bannedImports.has(element.name.text)) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (bannedImports.has(importedName)) {
             const line = sourceFile.getLineAndCharacterOfPosition(element.getStart(sourceFile));
             violations.push(line.line + 1);
           }
@@ -163,9 +168,6 @@ runAsScript(import.meta.url, async () => {
       "",
       "Violations:",
     ].join("\n"),
-    footer: ["", "See: my_docs/04-cases/2026-04-18-config-read-write-dual-path/00-README.md"].join(
-      "\n",
-    ),
     findCallLines: findViolations,
     importMetaUrl: import.meta.url,
     sortViolations: true,
