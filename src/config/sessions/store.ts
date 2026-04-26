@@ -151,6 +151,67 @@ type SaveSessionStoreOptions = {
   maintenanceConfig?: ResolvedSessionMaintenanceConfig;
 };
 
+function compactSessionSkillSnapshotForPersistence(
+  snapshot: SessionEntry["skillsSnapshot"],
+): SessionEntry["skillsSnapshot"] {
+  if (!snapshot) {
+    return snapshot;
+  }
+  const compacted = { ...snapshot, prompt: "" };
+  delete compacted.resolvedSkills;
+  return compacted;
+}
+
+function compactSessionSystemPromptReportForPersistence(
+  report: SessionEntry["systemPromptReport"],
+): SessionEntry["systemPromptReport"] {
+  if (!report) {
+    return report;
+  }
+  return {
+    ...report,
+    injectedWorkspaceFiles: [],
+    skills: {
+      ...report.skills,
+      entries: [],
+    },
+    tools: {
+      ...report.tools,
+      entries: [],
+    },
+  };
+}
+
+function compactSessionEntryForPersistence(entry: SessionEntry): SessionEntry {
+  const skillsSnapshot = compactSessionSkillSnapshotForPersistence(entry.skillsSnapshot);
+  const systemPromptReport = compactSessionSystemPromptReportForPersistence(
+    entry.systemPromptReport,
+  );
+  if (skillsSnapshot === entry.skillsSnapshot && systemPromptReport === entry.systemPromptReport) {
+    return entry;
+  }
+  return {
+    ...entry,
+    skillsSnapshot,
+    systemPromptReport,
+  };
+}
+
+function compactSessionStoreForPersistence(
+  store: Record<string, SessionEntry>,
+): Record<string, SessionEntry> {
+  let compacted: Record<string, SessionEntry> | undefined;
+  for (const [key, entry] of Object.entries(store)) {
+    const nextEntry = compactSessionEntryForPersistence(entry);
+    if (nextEntry === entry) {
+      continue;
+    }
+    compacted ??= { ...store };
+    compacted[key] = nextEntry;
+  }
+  return compacted ?? store;
+}
+
 function updateSessionStoreWriteCaches(params: {
   storePath: string;
   store: Record<string, SessionEntry>;
@@ -355,7 +416,8 @@ async function saveSessionStoreUnlocked(
   }
 
   await fs.promises.mkdir(path.dirname(storePath), { recursive: true });
-  const json = JSON.stringify(store, null, 2);
+  const persistedStore = compactSessionStoreForPersistence(store);
+  const json = JSON.stringify(persistedStore, null, 2);
   if (getSerializedSessionStore(storePath) === json) {
     updateSessionStoreWriteCaches({ storePath, store, serialized: json });
     return;
