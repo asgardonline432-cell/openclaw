@@ -194,6 +194,12 @@ openclaw plugins list --json
 `plugins list` reads the persisted local plugin registry first, with a manifest-only derived fallback when the registry is missing or invalid. It is useful for checking whether a plugin is installed, enabled, and visible to cold startup planning, but it is not a live runtime probe of an already-running Gateway process. After changing plugin code, enablement, hook policy, or `plugins.load.paths`, restart the Gateway that serves the channel before expecting new `register(api)` code or hooks to run. For remote/container deployments, verify you are restarting the actual `openclaw gateway run` child, not only a wrapper process.
 </Note>
 
+For bundled plugin work inside a packaged Docker image, bind-mount the plugin
+source directory over the matching packaged source path, such as
+`/app/extensions/synology-chat`. OpenClaw will discover that mounted source
+overlay before `/app/dist/extensions/synology-chat`; a plain copied source
+directory remains inert so normal packaged installs still use compiled dist.
+
 For runtime hook debugging:
 
 - `openclaw plugins inspect <id> --json` shows registered hooks and diagnostics from a module-loaded inspection pass.
@@ -226,7 +232,7 @@ openclaw plugins uninstall <id> --dry-run
 openclaw plugins uninstall <id> --keep-files
 ```
 
-`uninstall` removes plugin records from `plugins.entries`, the persisted plugin index, the plugin allowlist, and linked `plugins.load.paths` entries when applicable. Unless `--keep-files` is set, uninstall also removes the tracked managed install directory when it is inside OpenClaw's plugin extensions root. For active memory plugins, the memory slot resets to `memory-core`.
+`uninstall` removes plugin records from `plugins.entries`, the persisted plugin index, plugin allow/deny list entries, and linked `plugins.load.paths` entries when applicable. Unless `--keep-files` is set, uninstall also removes the tracked managed install directory when it is inside OpenClaw's plugin extensions root. For active memory plugins, the memory slot resets to `memory-core`.
 
 <Note>
 `--keep-config` is supported as a deprecated alias for `--keep-files`.
