@@ -13,25 +13,6 @@ import {
 
 export { resolveAssistantEventPhase } from "../shared/chat-message-content.js";
 
-function appendUniqueSuffix(base: string, suffix: string): string {
-  if (!suffix) {
-    return base;
-  }
-  if (!base) {
-    return suffix;
-  }
-  if (base.endsWith(suffix)) {
-    return base;
-  }
-  const maxOverlap = Math.min(base.length, suffix.length);
-  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
-    if (base.slice(-overlap) === suffix.slice(0, overlap)) {
-      return base + suffix.slice(overlap);
-    }
-  }
-  return base + suffix;
-}
-
 export function resolveMergedAssistantText(params: {
   previousText: string;
   nextText: string;
@@ -42,12 +23,12 @@ export function resolveMergedAssistantText(params: {
     if (nextText.startsWith(previousText)) {
       return nextText;
     }
-    if (previousText.startsWith(nextText) && !nextDelta) {
+    if (previousText === nextText || (previousText.startsWith(nextText) && !nextDelta)) {
       return previousText;
     }
   }
   if (nextDelta) {
-    return appendUniqueSuffix(previousText, nextDelta);
+    return previousText + nextDelta;
   }
   if (nextText) {
     return nextText;
