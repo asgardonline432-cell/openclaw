@@ -2,17 +2,18 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { fetchWithSsrFGuard } from "../infra/net/fetch-guard.js";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import { logWarn } from "../logger.js";
+import type { DocumentExtractedImage } from "../plugins/document-extractor-types.js";
 import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
 } from "../shared/string-coerce.js";
 import { canonicalizeBase64, estimateBase64DecodedBytes } from "./base64.js";
+import { extractDocumentContent } from "./document-extractors.runtime.js";
 import { convertHeicToJpeg } from "./image-ops.js";
 import { detectMime } from "./mime.js";
-import { extractPdfContent, type PdfExtractedImage } from "./pdf-extract.js";
 import { readResponseWithLimit } from "./read-response-with-limit.js";
 
-export type InputImageContent = PdfExtractedImage;
+export type InputImageContent = DocumentExtractedImage;
 
 export type InputFileExtractResult = {
   filename: string;
@@ -107,6 +108,8 @@ export const DEFAULT_INPUT_FILE_MIMES = [
   "text/csv",
   "application/json",
   "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 export const DEFAULT_INPUT_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const DEFAULT_INPUT_FILE_MAX_BYTES = 5 * 1024 * 1024;
@@ -118,6 +121,11 @@ export const DEFAULT_INPUT_PDF_MAX_PIXELS = 4_000_000;
 export const DEFAULT_INPUT_PDF_MIN_TEXT_CHARS = 200;
 const NORMALIZED_INPUT_IMAGE_MIME = "image/jpeg";
 const HEIC_INPUT_IMAGE_MIMES = new Set(["image/heic", "image/heif"]);
+const EXTRACTABLE_DOCUMENT_MIMES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+const LEGACY_WORD_MIME = "application/msword";
 
 function rejectOversizedBase64Payload(params: {
   data: string;
@@ -374,17 +382,30 @@ export async function extractFileContentFromSource(params: {
     throw new Error(`Unsupported file MIME type: ${mimeType}`);
   }
 
-  if (mimeType === "application/pdf") {
-    const extracted = await extractPdfContent({
+  if (mimeType === LEGACY_WORD_MIME) {
+    return {
+      filename,
+      text: "[Unsupported legacy Word .doc file. Save or export the document as DOCX or PDF for text extraction.]",
+    };
+  }
+
+  if (EXTRACTABLE_DOCUMENT_MIMES.has(mimeType)) {
+    const extracted = await extractDocumentContent({
       buffer,
+      mimeType,
       maxPages: limits.pdf.maxPages,
       maxPixels: limits.pdf.maxPixels,
       minTextChars: limits.pdf.minTextChars,
       ...(params.config ? { config: params.config } : {}),
       onImageExtractionError: (err) => {
-        logWarn(`media: PDF image extraction skipped, ${String(err)}`);
+        logWarn(`media: document image extraction skipped, ${String(err)}`);
       },
     });
+    if (!extracted) {
+      throw new Error(
+        `Document extraction disabled or unavailable: enable the document-extract plugin to process ${mimeType} files.`,
+      );
+    }
     const text = extracted.text ? clampText(extracted.text, limits.maxChars) : "";
     return {
       filename,

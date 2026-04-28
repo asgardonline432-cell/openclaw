@@ -60,6 +60,11 @@ const EXTRA_TEXT_MIMES = [
   "text/javascript",
   "text/tab-separated-values",
 ];
+const EXTRACTABLE_BINARY_DOCUMENT_MIMES = new Set([
+  "application/msword",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
 const TEXT_EXT_MIME = new Map<string, string>([
   [".csv", "text/csv"],
   [".tsv", "text/tab-separated-values"],
@@ -427,17 +432,25 @@ async function extractFileBlocks(params: {
     const forcedTextMimeResolved = forcedTextMime ?? resolveTextMimeFromName(nameHint ?? "");
     const rawMime = bufferResult?.mime ?? attachment.mime;
     const normalizedRawMime = normalizeMimeType(rawMime);
-    if (!forcedTextMimeResolved && isBinaryMediaMime(normalizedRawMime)) {
+    if (
+      !forcedTextMimeResolved &&
+      isBinaryMediaMime(normalizedRawMime) &&
+      !EXTRACTABLE_BINARY_DOCUMENT_MIMES.has(normalizedRawMime ?? "")
+    ) {
       continue;
     }
-    if (hasSuspiciousBinarySignal(bufferResult?.buffer)) {
+    if (
+      hasSuspiciousBinarySignal(bufferResult?.buffer) &&
+      !EXTRACTABLE_BINARY_DOCUMENT_MIMES.has(normalizedRawMime ?? "")
+    ) {
       continue;
     }
     const utf16Charset = resolveUtf16Charset(bufferResult?.buffer);
     const textSample = decodeTextSample(bufferResult?.buffer);
-    // Do not coerce real PDFs into text/plain via printable-byte heuristics.
-    // PDFs have a dedicated extraction path in extractFileContentFromSource.
-    const allowTextHeuristic = normalizedRawMime !== "application/pdf";
+    // Do not coerce extractable binary documents into text/plain via byte
+    // heuristics. They have dedicated extraction paths in
+    // extractFileContentFromSource.
+    const allowTextHeuristic = !EXTRACTABLE_BINARY_DOCUMENT_MIMES.has(normalizedRawMime ?? "");
     const textLike =
       allowTextHeuristic && (Boolean(utf16Charset) || looksLikeUtf8Text(bufferResult?.buffer));
     const guessedDelimited = textLike ? guessDelimitedMime(textSample) : undefined;

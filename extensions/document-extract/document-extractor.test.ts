@@ -1,3 +1,4 @@
+import JSZip from "jszip";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { canvasSizes, pdfDocument } = vi.hoisted(() => ({
@@ -28,7 +29,17 @@ vi.mock("@napi-rs/canvas", () => ({
   }),
 }));
 
-import { createPdfDocumentExtractor } from "./document-extractor.js";
+import { createDocxDocumentExtractor, createPdfDocumentExtractor } from "./document-extractor.js";
+
+async function createDocxBuffer(documentXml: string): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    '<Types><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+  );
+  zip.file("word/document.xml", documentXml);
+  return await zip.generateAsync({ type: "nodebuffer" });
+}
 
 describe("PDF document extractor", () => {
   beforeEach(() => {
@@ -58,5 +69,31 @@ describe("PDF document extractor", () => {
 
     expect(result?.images).toHaveLength(1);
     expect(canvasSizes).toEqual([{ width: 10, height: 10 }]);
+  });
+
+  it("extracts paragraph text from DOCX documents", async () => {
+    const extractor = createDocxDocumentExtractor();
+    expect(extractor).toMatchObject({
+      id: "docx",
+      label: "DOCX",
+      mimeTypes: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    });
+
+    const result = await extractor.extract({
+      buffer: await createDocxBuffer(`<?xml version="1.0" encoding="UTF-8"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:p><w:r><w:t>Quarterly</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>Report</w:t></w:r></w:p>
+            <w:p><w:r><w:t>Action item</w:t></w:r><w:r><w:br/></w:r><w:r><w:t>Ship DOCX extraction</w:t></w:r></w:p>
+          </w:body>
+        </w:document>`),
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      maxPages: 4,
+      maxPixels: 100,
+      minTextChars: 1,
+    });
+
+    expect(result?.text).toBe("Quarterly\tReport\n\nAction item\nShip DOCX extraction");
+    expect(result?.images).toEqual([]);
   });
 });

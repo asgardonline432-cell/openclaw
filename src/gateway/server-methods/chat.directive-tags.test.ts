@@ -2633,6 +2633,61 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     expect(mockState.lastDispatchCtx?.MediaStaged).toBe(true);
   });
 
+  it("routes DOCX WebChat attachments with a document MIME for media-understanding", async () => {
+    createTranscriptFixture("openclaw-chat-send-docx-media-paths-");
+    mockState.finalText = "ok";
+    mockState.sessionEntry = {
+      modelProvider: "test-provider",
+      model: "vision-model",
+    };
+    mockState.modelCatalog = [
+      {
+        provider: "test-provider",
+        id: "vision-model",
+        name: "Vision model",
+        input: ["text", "image"],
+      },
+    ];
+    mockState.savedMediaResults = [
+      {
+        path: "/home/user/.openclaw/media/inbound/brief.docx",
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      },
+    ];
+    const respond = vi.fn();
+    const context = createChatContext();
+    const docx = Buffer.from("PK\u0003\u0004fake-docx-content").toString("base64");
+
+    await runNonStreamingChatSend({
+      context,
+      respond,
+      idempotencyKey: "idem-docx-ctx-media",
+      message: "summarize this",
+      requestParams: {
+        attachments: [
+          {
+            type: "file",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            fileName: "brief.docx",
+            content: docx,
+          },
+        ],
+      },
+      expectBroadcast: false,
+    });
+
+    expect(mockState.lastDispatchCtx?.MediaPaths).toEqual([
+      "/home/user/.openclaw/media/inbound/brief.docx",
+    ]);
+    expect(mockState.lastDispatchCtx?.MediaTypes).toEqual([
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]);
+    expect(mockState.lastDispatchCtx?.Body).toBe("summarize this");
+    expect(mockState.lastDispatchCtx?.Body).not.toContain("media://");
+    expect(mockState.lastDispatchImages).toBeUndefined();
+    expect(mockState.lastDispatchCtx?.MediaStaged).toBe(true);
+  });
+
   it("preserves sandbox-relative MediaPaths and stores workspace context for media-understanding", async () => {
     createTranscriptFixture("openclaw-chat-send-non-image-absolutize-");
     mockState.finalText = "ok";

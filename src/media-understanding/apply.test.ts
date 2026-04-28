@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import JSZip from "jszip";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MsgContext } from "../auto-reply/templating.js";
 import type { OpenClawConfig } from "../config/types.js";
@@ -149,6 +150,22 @@ async function createTempMediaFile(params: { fileName: string; content: Buffer |
   await fs.writeFile(mediaPath, params.content);
   tempMediaFileCache.set(cacheKey, mediaPath);
   return mediaPath;
+}
+
+async function createDocxFixture(text: string): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    '<Types><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+  );
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body>
+    </w:document>`,
+  );
+  return await zip.generateAsync({ type: "nodebuffer" });
 }
 
 async function createMockExecutable(dir: string, name: string) {
@@ -1446,6 +1463,44 @@ describe("applyMediaUnderstanding", () => {
     });
 
     expectFileNotApplied({ ctx, result, body: "<media:file>" });
+  });
+
+  it("extracts DOCX attachments through document extraction", async () => {
+    const filePath = await createTempMediaFile({
+      fileName: "brief.docx",
+      content: await createDocxFixture("DOCX text from WebChat"),
+    });
+
+    const { ctx, result } = await applyWithDisabledMedia({
+      body: "summarize this",
+      mediaPath: filePath,
+      mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    expect(result.appliedFile).toBe(true);
+    expect(ctx.Body).toContain('<file name="brief.docx"');
+    expect(ctx.Body).toContain(
+      'mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"',
+    );
+    expect(ctx.Body).toContain("DOCX text from WebChat");
+  });
+
+  it("surfaces legacy DOC attachments as explicitly unsupported", async () => {
+    const filePath = await createTempMediaFile({
+      fileName: "legacy.doc",
+      content: Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+    });
+
+    const { ctx, result } = await applyWithDisabledMedia({
+      body: "summarize this",
+      mediaPath: filePath,
+      mediaType: "application/msword",
+    });
+
+    expect(result.appliedFile).toBe(true);
+    expect(ctx.Body).toContain('<file name="legacy.doc" mime="application/msword">');
+    expect(ctx.Body).toContain("Unsupported legacy Word .doc file");
+    expect(ctx.Body).toContain("DOCX or PDF");
   });
 
   it("respects configured allowedMimes for text-like attachments", async () => {

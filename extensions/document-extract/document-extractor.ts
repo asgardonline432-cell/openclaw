@@ -1,3 +1,4 @@
+import { XMLParser } from "fast-xml-parser";
 import type {
   DocumentExtractedImage,
   DocumentExtractionRequest,
@@ -45,11 +46,14 @@ type PdfJsModule = {
 
 const CANVAS_MODULE = "@napi-rs/canvas";
 const PDFJS_MODULE = "pdfjs-dist/legacy/build/pdf.mjs";
+const JSZIP_MODULE = "jszip";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const MAX_EXTRACTED_TEXT_CHARS = 200_000;
 const MAX_RENDER_DIMENSION = 10_000;
 
 let canvasModulePromise: Promise<CanvasModule> | null = null;
 let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
+let jsZipModulePromise: Promise<typeof import("jszip").default> | null = null;
 
 async function loadCanvasModule(): Promise<CanvasModule> {
   if (!canvasModulePromise) {
@@ -73,6 +77,20 @@ async function loadPdfJsModule(): Promise<PdfJsModule> {
     });
   }
   return pdfJsModulePromise;
+}
+
+async function loadJsZipModule(): Promise<typeof import("jszip").default> {
+  if (!jsZipModulePromise) {
+    jsZipModulePromise = import(JSZIP_MODULE)
+      .then((mod) => mod.default)
+      .catch((err) => {
+        jsZipModulePromise = null;
+        throw new Error("Optional dependency jszip is required for DOCX extraction", {
+          cause: err,
+        });
+      });
+  }
+  return jsZipModulePromise;
 }
 
 function appendTextWithinLimit(parts: string[], pageText: string, currentLength: number): number {
@@ -205,6 +223,102 @@ async function extractPdfContent(
   return { text, images };
 }
 
+function normalizeDocxText(text: string): string {
+  return text
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function localName(name: string): string {
+  return name.includes(":") ? (name.split(":").pop() ?? name) : name;
+}
+
+function pushDocxRunText(value: unknown, parts: string[]): void {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    parts.push(String(value));
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      pushDocxRunText(item, parts);
+    }
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    switch (localName(key)) {
+      case "t":
+        pushDocxRunText(child, parts);
+        break;
+      case "tab":
+        parts.push("\t");
+        break;
+      case "br":
+      case "cr":
+        parts.push("\n");
+        break;
+      default:
+        pushDocxRunText(child, parts);
+        break;
+    }
+  }
+}
+
+function collectDocxParagraphs(value: unknown, paragraphs: string[]): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectDocxParagraphs(item, paragraphs);
+    }
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (localName(key) === "p") {
+      const paragraphNodes = Array.isArray(child) ? child : [child];
+      for (const paragraphNode of paragraphNodes) {
+        const parts: string[] = [];
+        pushDocxRunText(paragraphNode, parts);
+        const paragraph = normalizeDocxText(parts.join(""));
+        if (paragraph) {
+          paragraphs.push(paragraph);
+        }
+      }
+      continue;
+    }
+    collectDocxParagraphs(child, paragraphs);
+  }
+}
+
+async function extractDocxContent(
+  request: DocumentExtractionRequest,
+): Promise<DocumentExtractionResult> {
+  const JSZip = await loadJsZipModule();
+  const zip = await JSZip.loadAsync(request.buffer);
+  const documentXml = zip.file("word/document.xml");
+  if (!documentXml) {
+    throw new Error("DOCX missing word/document.xml");
+  }
+
+  const xml = await documentXml.async("string");
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    parseTagValue: false,
+    parseAttributeValue: false,
+    trimValues: false,
+  });
+  const parsed = parser.parse(xml);
+  const paragraphs: string[] = [];
+  collectDocxParagraphs(parsed, paragraphs);
+  const text = normalizeDocxText(paragraphs.join("\n\n"));
+  return { text: text.slice(0, MAX_EXTRACTED_TEXT_CHARS), images: [] };
+}
+
 export function createPdfDocumentExtractor(): DocumentExtractorPlugin {
   return {
     id: "pdf",
@@ -212,5 +326,15 @@ export function createPdfDocumentExtractor(): DocumentExtractorPlugin {
     mimeTypes: ["application/pdf"],
     autoDetectOrder: 10,
     extract: extractPdfContent,
+  };
+}
+
+export function createDocxDocumentExtractor(): DocumentExtractorPlugin {
+  return {
+    id: "docx",
+    label: "DOCX",
+    mimeTypes: [DOCX_MIME],
+    autoDetectOrder: 20,
+    extract: extractDocxContent,
   };
 }
