@@ -4,10 +4,6 @@ Docs: https://docs.openclaw.ai
 
 ## Unreleased
 
-### Changes
-
-- Channels: add Yuanbao channel docs entrance so the Tencent Yuanbao bot appears in the channel listing and sidebar navigation. (#73443) Thanks @loongfay.
-
 ## 2026.4.27
 
 ### Changes
@@ -29,6 +25,7 @@ Docs: https://docs.openclaw.ai
 - Plugin SDK/models: move BytePlus and Volcano Engine standard and plan-provider catalogs into plugin manifest `modelCatalog` rows and remove the now-unused Volcengine-family shared catalog SDK subpath. Thanks @shakkernerd.
 - CLI/models: move Fireworks and Together AI fixed provider catalogs into plugin manifest `modelCatalog` rows so provider-filtered listing can use manifest-backed static rows. Thanks @shakkernerd.
 - Channels/Yuanbao: register the Tencent Yuanbao external channel plugin (`openclaw-plugin-yuanbao`) in the official channel catalog, contract suites, and community plugin docs, with a new `docs/channels/yuanbao.md` quick-start guide for WebSocket bot DMs and group chats. (#72756) Thanks @loongfay.
+- Channels/Yuanbao: add a channel docs entrance so the Tencent Yuanbao bot appears in the channel listing and sidebar navigation. (#73443) Thanks @loongfay.
 - Channels/QQBot: add full group chat support (history tracking, @-mention gating, activation modes, per-group config, FIFO message queue with deliver debounce), C2C `stream_messages` streaming with a `StreamingController` lifecycle manager, unified `sendMedia` with chunked upload for large files, and refactor the engine into pipeline stages, focused outbound submodules, builtin slash-command modules, and explicit DI ports via `createEngineAdapters()`. (#70624) Thanks @cxyhhhhh.
 - Plugins/startup: migrate bundled plugin manifests to explicit `activation.onStartup` declarations so Gateway startup imports only the bundled plugins that intentionally register startup-time runtime surfaces. Thanks @shakkernerd.
 - Plugins/startup: add an opt-in future-mode gate for disabling deprecated implicit startup sidecar loading while preserving explicit startup and narrower activation triggers. Thanks @shakkernerd.
