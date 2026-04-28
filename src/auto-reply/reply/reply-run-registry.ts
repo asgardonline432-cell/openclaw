@@ -1,6 +1,6 @@
 import { resolveGlobalSingleton } from "../../shared/global-singleton.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { validateSteerMessageInjection } from "../../shared/steer-message-injection-policy.js";
+import { normalizeOptionalString } from "../../shared/string-coerce.js";
 
 export type ReplyRunKey = string;
 

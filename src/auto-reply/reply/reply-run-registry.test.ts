@@ -106,10 +106,7 @@ describe("reply run registry", () => {
     operation.setPhase("running");
 
     expect(
-      queueReplyRunMessage(
-        "session-running",
-        "x".repeat(MAX_INJECTED_STEER_MESSAGE_CHARS + 1),
-      ),
+      queueReplyRunMessage("session-running", "x".repeat(MAX_INJECTED_STEER_MESSAGE_CHARS + 1)),
     ).toBe(false);
     expect(queueMessage).not.toHaveBeenCalled();
   });

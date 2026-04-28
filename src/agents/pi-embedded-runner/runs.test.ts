@@ -102,10 +102,7 @@ describe("pi-embedded runner run registry", () => {
     );
 
     expect(
-      queueEmbeddedPiMessage(
-        "session-too-large",
-        "x".repeat(MAX_INJECTED_STEER_MESSAGE_CHARS + 1),
-      ),
+      queueEmbeddedPiMessage("session-too-large", "x".repeat(MAX_INJECTED_STEER_MESSAGE_CHARS + 1)),
     ).toBe(false);
     expect(queueMessage).not.toHaveBeenCalled();
   });
