@@ -174,6 +174,15 @@ describe("tools.effective handler", () => {
     );
   });
 
+  it("resolves cold cache misses synchronously", async () => {
+    const { invoke } = createInvokeParams({ sessionKey: "main:abc" });
+
+    const pending = invoke();
+
+    expect(runtimeMocks.resolveEffectiveToolInventory).toHaveBeenCalledTimes(1);
+    await pending;
+  });
+
   it("serves repeated requests from the fresh inventory cache", async () => {
     const first = createInvokeParams({ sessionKey: "main:abc" });
     await first.invoke();
@@ -271,6 +280,76 @@ describe("tools.effective handler", () => {
     const fresh = createInvokeParams({ sessionKey: "main:abc" });
     await fresh.invoke();
     expect((fresh.respond.mock.calls[0] as RespondCall | undefined)?.[1]).toBe(refreshedPayload);
+  });
+
+  it("uses the stale refresh timeout fallback when setImmediate is delayed", async () => {
+    let now = 1_000;
+    __testing.setToolsEffectiveNowForTest(() => now);
+    const initialPayload = {
+      agentId: "main",
+      profile: "coding",
+      groups: [
+        {
+          id: "core",
+          label: "Built-in tools",
+          source: "core",
+          tools: [
+            {
+              id: "read",
+              label: "Read",
+              description: "Read files",
+              rawDescription: "Read files",
+              source: "core",
+            },
+          ],
+        },
+      ],
+    };
+    const refreshedPayload = {
+      agentId: "main",
+      profile: "coding",
+      groups: [
+        {
+          id: "core",
+          label: "Built-in tools",
+          source: "core",
+          tools: [
+            {
+              id: "exec",
+              label: "Exec",
+              description: "Run shell commands",
+              rawDescription: "Run shell commands",
+              source: "core",
+            },
+          ],
+        },
+      ],
+    };
+    runtimeMocks.resolveEffectiveToolInventory
+      .mockReturnValueOnce(initialPayload)
+      .mockReturnValueOnce(refreshedPayload);
+    const immediateSpy = vi
+      .spyOn(globalThis, "setImmediate")
+      .mockImplementation(
+        (() => undefined as unknown as NodeJS.Immediate) as unknown as typeof setImmediate,
+      );
+
+    try {
+      const initial = createInvokeParams({ sessionKey: "main:abc" });
+      await initial.invoke();
+      now += 11_000;
+
+      const stale = createInvokeParams({ sessionKey: "main:abc" });
+      await stale.invoke();
+
+      expect((stale.respond.mock.calls[0] as RespondCall | undefined)?.[1]).toBe(initialPayload);
+      expect(runtimeMocks.resolveEffectiveToolInventory).toHaveBeenCalledTimes(1);
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(runtimeMocks.resolveEffectiveToolInventory).toHaveBeenCalledTimes(2);
+    } finally {
+      immediateSpy.mockRestore();
+    }
   });
 
   it("falls back to origin.threadId when delivery context omits thread metadata", async () => {

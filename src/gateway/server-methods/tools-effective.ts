@@ -1,6 +1,8 @@
 import type { EffectiveToolInventoryResult } from "../../agents/tools-effective-inventory.types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { formatErrorMessage } from "../../infra/errors.js";
 import { logDebug, logWarn } from "../../logger.js";
+import { redactIdentifier } from "../../logging/redact-identifier.js";
 import { stringifyRouteThreadId } from "../../plugin-sdk/channel-route.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { ADMIN_SCOPE } from "../method-scopes.js";
@@ -28,6 +30,7 @@ const TOOLS_EFFECTIVE_FRESH_TTL_MS = 10_000;
 const TOOLS_EFFECTIVE_STALE_TTL_MS = 120_000;
 const TOOLS_EFFECTIVE_SLOW_LOG_MS = 250;
 const TOOLS_EFFECTIVE_CACHE_LIMIT = 128;
+const TOOLS_EFFECTIVE_REFRESH_FALLBACK_MS = 100;
 
 let nowForToolsEffectiveCache = () => Date.now();
 
@@ -123,50 +126,99 @@ function cacheToolsEffectiveResult(key: string, value: EffectiveToolInventoryRes
   trimToolsEffectiveCache();
 }
 
+function resolveAndCacheToolsEffectiveResult(params: {
+  key: string;
+  context: TrustedToolsEffectiveContext;
+  startedAt: number;
+}): EffectiveToolInventoryResult {
+  const value = resolveEffectiveToolInventory({
+    cfg: params.context.cfg,
+    agentId: params.context.agentId,
+    sessionKey: params.context.sessionKey,
+    messageProvider: params.context.messageProvider,
+    modelProvider: params.context.modelProvider,
+    modelId: params.context.modelId,
+    senderIsOwner: params.context.senderIsOwner,
+    currentChannelId: params.context.currentChannelId,
+    currentThreadTs: params.context.currentThreadTs,
+    accountId: params.context.accountId,
+    groupId: params.context.groupId,
+    groupChannel: params.context.groupChannel,
+    groupSpace: params.context.groupSpace,
+    replyToMode: params.context.replyToMode,
+  });
+  cacheToolsEffectiveResult(params.key, value);
+  const durationMs = nowForToolsEffectiveCache() - params.startedAt;
+  if (durationMs >= TOOLS_EFFECTIVE_SLOW_LOG_MS) {
+    const toolCount = value.groups.reduce((sum, group) => sum + group.tools.length, 0);
+    logDebug(
+      `tools-effective: refresh durationMs=${durationMs} agent=${params.context.agentId} session=${redactIdentifier(params.context.sessionKey)} tools=${toolCount}`,
+    );
+  }
+  return value;
+}
+
 function scheduleToolsEffectiveRefresh(
   key: string,
   context: TrustedToolsEffectiveContext,
+  options: { defer?: boolean } = {},
 ): Promise<EffectiveToolInventoryResult> {
   const existing = toolsEffectiveInflight.get(key);
   if (existing) {
     return existing;
   }
   const startedAt = nowForToolsEffectiveCache();
+  let completed = false;
+  let resolveTask!: (value: EffectiveToolInventoryResult) => void;
+  let rejectTask!: (reason: unknown) => void;
   const task = new Promise<EffectiveToolInventoryResult>((resolve, reject) => {
-    setImmediate(() => {
-      try {
-        const value = resolveEffectiveToolInventory({
-          cfg: context.cfg,
-          agentId: context.agentId,
-          sessionKey: context.sessionKey,
-          messageProvider: context.messageProvider,
-          modelProvider: context.modelProvider,
-          modelId: context.modelId,
-          senderIsOwner: context.senderIsOwner,
-          currentChannelId: context.currentChannelId,
-          currentThreadTs: context.currentThreadTs,
-          accountId: context.accountId,
-          groupId: context.groupId,
-          groupChannel: context.groupChannel,
-          groupSpace: context.groupSpace,
-          replyToMode: context.replyToMode,
-        });
-        cacheToolsEffectiveResult(key, value);
-        const durationMs = nowForToolsEffectiveCache() - startedAt;
-        if (durationMs >= TOOLS_EFFECTIVE_SLOW_LOG_MS) {
-          logDebug(
-            `tools-effective: refresh durationMs=${durationMs} agent=${context.agentId} session=${context.sessionKey} tools=${value.groups.reduce((sum, group) => sum + group.tools.length, 0)}`,
-          );
-        }
-        resolve(value);
-      } catch (err) {
-        reject(err);
-      } finally {
-        toolsEffectiveInflight.delete(key);
-      }
-    });
+    resolveTask = resolve;
+    rejectTask = reject;
   });
   toolsEffectiveInflight.set(key, task);
+
+  const run = () => {
+    if (completed) {
+      return;
+    }
+    completed = true;
+    try {
+      resolveTask(resolveAndCacheToolsEffectiveResult({ key, context, startedAt }));
+    } catch (err) {
+      rejectTask(err);
+    } finally {
+      toolsEffectiveInflight.delete(key);
+    }
+  };
+
+  if (options.defer === false) {
+    run();
+    return task;
+  }
+
+  let immediateHandle: ReturnType<typeof setImmediate> | undefined;
+  let fallbackHandle: ReturnType<typeof setTimeout> | undefined;
+  const runAndCleanup = () => {
+    if (completed) {
+      return;
+    }
+    if (immediateHandle) {
+      clearImmediate(immediateHandle);
+    }
+    if (fallbackHandle) {
+      clearTimeout(fallbackHandle);
+    }
+    run();
+  };
+
+  try {
+    immediateHandle = setImmediate(runAndCleanup);
+    fallbackHandle = setTimeout(runAndCleanup, TOOLS_EFFECTIVE_REFRESH_FALLBACK_MS);
+    fallbackHandle.unref?.();
+  } catch {
+    run();
+  }
+
   return task;
 }
 
@@ -175,7 +227,7 @@ function refreshToolsEffectiveInBackground(
   context: TrustedToolsEffectiveContext,
 ): void {
   void scheduleToolsEffectiveRefresh(key, context).catch((err) => {
-    logWarn(`tools-effective: background refresh failed: ${String(err)}`);
+    logWarn(`tools-effective: background refresh failed: ${formatErrorMessage(err)}`);
   });
 }
 
@@ -196,7 +248,7 @@ async function resolveCachedToolsEffective(params: {
       return cached.value;
     }
   }
-  return scheduleToolsEffectiveRefresh(key, params.context);
+  return scheduleToolsEffectiveRefresh(key, params.context, { defer: false });
 }
 
 function resolveTrustedToolsEffectiveContext(params: {
