@@ -6,6 +6,7 @@ const LIVE_E2E_WORKFLOW = ".github/workflows/openclaw-live-and-e2e-checks-reusab
 const NPM_TELEGRAM_WORKFLOW = ".github/workflows/npm-telegram-beta-e2e.yml";
 const RELEASE_CHECKS_WORKFLOW = ".github/workflows/openclaw-release-checks.yml";
 const FULL_RELEASE_VALIDATION_WORKFLOW = ".github/workflows/full-release-validation.yml";
+const OPENWEBUI_DOCKER_SCRIPT = "scripts/e2e/openwebui-docker.sh";
 
 describe("package acceptance workflow", () => {
   it("resolves candidate package sources before reusing Docker E2E lanes", () => {
@@ -108,6 +109,20 @@ describe("package artifact reuse", () => {
     expect(workflow).toContain("uses: useblacksmith/build-push-action@");
     expect(workflow).not.toContain("cache-from: type=gha,scope=docker-e2e");
     expect(workflow).not.toContain("cache-to: type=gha,mode=max,scope=docker-e2e");
+  });
+
+  it("keeps release Docker live and Open WebUI checks patient in CI", () => {
+    const workflow = readFileSync(LIVE_E2E_WORKFLOW, "utf8");
+    const openwebui = readFileSync(OPENWEBUI_DOCKER_SCRIPT, "utf8");
+
+    expect(workflow).toContain("OPENCLAW_LIVE_CLI_BACKEND_AUTH=api-key");
+    expect(workflow).not.toContain(
+      'OPENCLAW_LIVE_CLI_BACKEND_CLEAR_ENV=["OPENAI_API_KEY","OPENAI_BASE_URL"]',
+    );
+    expect(openwebui).toContain(
+      'OPENWEBUI_READY_ATTEMPTS="${OPENCLAW_OPENWEBUI_READY_ATTEMPTS:-420}"',
+    );
+    expect(openwebui).toContain('seq 1 "$OPENWEBUI_READY_ATTEMPTS"');
   });
 
   it("shards broad native live tests instead of one serial live-all job", () => {
