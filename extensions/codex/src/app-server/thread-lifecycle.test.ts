@@ -80,5 +80,8 @@ describe("buildDeveloperInstructions", () => {
     expect(prompt).toContain(
       "If the turn says source channel delivery is private or message-tool-only, use the messaging tool for visible output.",
     );
+    expect(prompt).not.toContain(
+      "If sending a channel reply, use the OpenClaw messaging tool instead of describing that you would reply",
+    );
   });
 });
