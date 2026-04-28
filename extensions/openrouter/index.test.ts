@@ -57,6 +57,29 @@ describe("openrouter provider hooks", () => {
     });
   });
 
+  it("uses strict9 tool-call ids only for Mistral-family routed models", async () => {
+    const provider = await registerSingleProviderPlugin(openrouterPlugin);
+
+    expect(
+      provider.buildReplayPolicy?.({
+        provider: "openrouter",
+        modelApi: "openai-completions",
+        modelId: "mistralai/mistral-large-latest",
+      } as never),
+    ).toMatchObject({
+      sanitizeToolCallIds: true,
+      toolCallIdMode: "strict9",
+    });
+
+    const nonMistralPolicy = provider.buildReplayPolicy?.({
+      provider: "openrouter",
+      modelApi: "openai-completions",
+      modelId: "openai/gpt-5.4",
+    } as never);
+    expect(nonMistralPolicy).not.toHaveProperty("sanitizeToolCallIds");
+    expect(nonMistralPolicy).not.toHaveProperty("toolCallIdMode");
+  });
+
   it("owns native reasoning output mode", async () => {
     const provider = await registerSingleProviderPlugin(openrouterPlugin);
 

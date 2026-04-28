@@ -2,16 +2,28 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 
 vi.mock("../plugins/provider-hook-runtime.js", () => ({
-  resolveProviderRuntimePlugin: vi.fn(({ provider }: { provider?: string }) =>
-    provider === "mistral"
-      ? {
-          buildReplayPolicy: () => ({
-            sanitizeToolCallIds: true,
-            toolCallIdMode: "strict9",
-          }),
-        }
-      : undefined,
-  ),
+  resolveProviderRuntimePlugin: vi.fn(({ provider }: { provider?: string }) => {
+    if (provider === "mistral") {
+      return {
+        buildReplayPolicy: () => ({
+          sanitizeToolCallIds: true,
+          toolCallIdMode: "strict9",
+        }),
+      };
+    }
+    if (provider === "openrouter") {
+      return {
+        buildReplayPolicy: ({ modelId }: { modelId?: string }) =>
+          modelId?.startsWith("mistralai/")
+            ? {
+                sanitizeToolCallIds: true,
+                toolCallIdMode: "strict9",
+              }
+            : undefined,
+      };
+    }
+    return undefined;
+  }),
 }));
 
 let resolveTranscriptPolicy: typeof import("./transcript-policy.js").resolveTranscriptPolicy;
@@ -67,5 +79,27 @@ describe("resolveTranscriptPolicy provider replay policy", () => {
     });
     expect(policy.sanitizeToolCallIds).toBe(true);
     expect(policy.toolCallIdMode).toBe("strict9");
+  });
+
+  it("uses strict9 tool-call sanitization for Mistral-family models routed through OpenRouter", () => {
+    const policy = resolveTranscriptPolicy({
+      ...createProviderRuntimeSmokeContext(),
+      provider: "openrouter",
+      modelId: "mistralai/mistral-large-latest",
+      modelApi: "openai-completions",
+    });
+    expect(policy.sanitizeToolCallIds).toBe(true);
+    expect(policy.toolCallIdMode).toBe("strict9");
+  });
+
+  it("keeps non-Mistral OpenRouter models on default tool-call id handling", () => {
+    const policy = resolveTranscriptPolicy({
+      ...createProviderRuntimeSmokeContext(),
+      provider: "openrouter",
+      modelId: "openai/gpt-5.4",
+      modelApi: "openai-completions",
+    });
+    expect(policy.sanitizeToolCallIds).toBe(false);
+    expect(policy.toolCallIdMode).toBeUndefined();
   });
 });

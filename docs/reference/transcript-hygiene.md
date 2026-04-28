@@ -161,7 +161,7 @@ external end-user instructions.
 - Replay filters OpenClaw delivery-mirror and gateway-injected assistant turns.
 - Image sanitization applies through the global rule.
 
-**Mistral (including model-id based detection)**
+**Mistral (including OpenRouter-routed Mistral-family model IDs)**
 
 - Tool call id sanitization: strict9 (alphanumeric length 9).
 

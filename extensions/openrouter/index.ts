@@ -5,8 +5,8 @@ import {
 } from "openclaw/plugin-sdk/plugin-entry";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
 import {
+  buildPassthroughGeminiSanitizingReplayPolicy,
   DEFAULT_CONTEXT_TOKENS,
-  PASSTHROUGH_GEMINI_REPLAY_HOOKS,
 } from "openclaw/plugin-sdk/provider-model-shared";
 import {
   getOpenRouterModelCapabilities,
@@ -26,6 +26,7 @@ import { wrapOpenRouterProviderStream } from "./stream.js";
 
 const PROVIDER_ID = "openrouter";
 const OPENROUTER_DEFAULT_MAX_TOKENS = 8192;
+const OPENROUTER_MISTRAL_MODEL_PREFIXES = ["mistral-", "mistral/", "mistralai/"] as const;
 const OPENROUTER_CACHE_TTL_MODEL_PREFIXES = [
   "anthropic/",
   "deepseek/",
@@ -48,6 +49,14 @@ function normalizeOpenRouterResolvedModel<T extends ProviderRuntimeModel>(model:
     ...(normalizedBaseUrl ? { baseUrl: normalizedBaseUrl } : {}),
     reasoning,
   };
+}
+
+function isOpenRouterMistralFamilyModel(modelId: string | undefined): boolean {
+  const normalizedModelId = modelId?.trim().toLowerCase();
+  return Boolean(
+    normalizedModelId &&
+    OPENROUTER_MISTRAL_MODEL_PREFIXES.some((prefix) => normalizedModelId.startsWith(prefix)),
+  );
 }
 
 export default definePluginEntry({
@@ -147,7 +156,15 @@ export default definePluginEntry({
             }
           : undefined;
       },
-      ...PASSTHROUGH_GEMINI_REPLAY_HOOKS,
+      buildReplayPolicy: ({ modelId }) => ({
+        ...buildPassthroughGeminiSanitizingReplayPolicy(modelId),
+        ...(isOpenRouterMistralFamilyModel(modelId)
+          ? {
+              sanitizeToolCallIds: true,
+              toolCallIdMode: "strict9" as const,
+            }
+          : {}),
+      }),
       resolveReasoningOutputMode: () => "native",
       isModernModelRef: () => true,
       wrapStreamFn: wrapOpenRouterProviderStream,
