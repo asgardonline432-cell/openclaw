@@ -72,6 +72,67 @@ describe("buildOfficialChannelCatalog", () => {
     expect(buildOfficialChannelCatalog({ repoRoot }).entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: "@dingtalk-real-ai/dingtalk-connector",
+          openclaw: expect.objectContaining({
+            channel: expect.objectContaining({
+              id: "dingtalk-connector",
+              label: "DingTalk",
+            }),
+            install: {
+              npmSpec: "@dingtalk-real-ai/dingtalk-connector@0.8.7",
+              defaultChoice: "npm",
+              expectedIntegrity:
+                "sha512-Anv+cTITBLMcl0hMk9pn7Z5/bKJjK8zPh1jufVUm5doODp9/MiWe99igb/EDtRfFcAtnSIdH7XrNSq7+ip6h3w==",
+            },
+          }),
+        }),
+        expect.objectContaining({
+          name: "@larksuite/openclaw-lark",
+          openclaw: expect.objectContaining({
+            channel: expect.objectContaining({
+              id: "openclaw-lark",
+              label: "Lark",
+            }),
+            install: {
+              npmSpec: "@larksuite/openclaw-lark@2026.4.7",
+              defaultChoice: "npm",
+              expectedIntegrity:
+                "sha512-oiS7hHwJpoOQCHjgAT2xPTO9zmmUKEje2kgsYC+Q8ZMu0gn/sI+FE2NYnQ3dVcgqw7z+2rdajgcTP6kkisFxNw==",
+            },
+          }),
+        }),
+        expect.objectContaining({
+          name: "@tencent-connect/openclaw-qqbot",
+          openclaw: expect.objectContaining({
+            channel: expect.objectContaining({
+              id: "qqbot",
+              label: "QQ Bot",
+            }),
+            install: {
+              npmSpec: "@tencent-connect/openclaw-qqbot@1.7.1",
+              defaultChoice: "npm",
+              expectedIntegrity:
+                "sha512-h7rQFxsDpfBIQG8eGkQixSdSQB05eqF9waCWo8bKI/5K+v53dh+jiJr8va1pqVIpCTYPXFw0VaVNfOtlnjE/DQ==",
+            },
+          }),
+        }),
+        expect.objectContaining({
+          name: "@tencent-weixin/openclaw-weixin",
+          openclaw: expect.objectContaining({
+            channel: expect.objectContaining({
+              id: "openclaw-weixin",
+              label: "Weixin",
+            }),
+            install: {
+              npmSpec: "@tencent-weixin/openclaw-weixin@2.1.7",
+              defaultChoice: "npm",
+              minHostVersion: ">=2026.3.22",
+              expectedIntegrity:
+                "sha512-2x5/mbO2IVAsN4aUA41g6i8O84WIJCeFj8kwmB2pGjuxIBVy5FnEI5n52Pc5xroOLbxzW5FXN4cDtc/PvvKghg==",
+            },
+          }),
+        }),
+        expect.objectContaining({
           name: "@wecom/wecom-openclaw-plugin",
           openclaw: expect.objectContaining({
             channel: expect.objectContaining({
@@ -79,10 +140,41 @@ describe("buildOfficialChannelCatalog", () => {
               label: "WeCom",
             }),
             install: {
-              npmSpec: "@wecom/wecom-openclaw-plugin@2026.4.23",
+              npmSpec: "@wecom/wecom-openclaw-plugin@2026.4.8",
               defaultChoice: "npm",
               expectedIntegrity:
-                "sha512-bnzfdIEEu1/LFvcdyjaTkyxt27w6c7dqhkPezU62OWaqmcdFsUGR3T55USK/O9pIKsNcnL1Tnu1pqKYCWHFgWQ==",
+                "sha512-bGbS8493sHT34FAYaugep2OLjb4dvYfLXMSfZguK/4s8i5PM//2iy4XPUsniacl8LNSUxiF/FuQGM/LJxNwrFg==",
+            },
+          }),
+        }),
+        expect.objectContaining({
+          name: "@wecode-ai/weibo-openclaw-plugin",
+          openclaw: expect.objectContaining({
+            channel: expect.objectContaining({
+              id: "weibo",
+              label: "Weibo",
+            }),
+            install: {
+              npmSpec: "@wecode-ai/weibo-openclaw-plugin@2.2.0",
+              defaultChoice: "npm",
+              expectedIntegrity:
+                "sha512-nNBk+QVNm41z6p1WjhJ6LKJ6+bmMtXxLeKjTpb5uHkvCLNS1WpoXf3wO+58accBy/ByvuVBt9XGI1/HsHH4UZA==",
+            },
+          }),
+        }),
+        expect.objectContaining({
+          name: "openclaw-xiaodu",
+          openclaw: expect.objectContaining({
+            channel: expect.objectContaining({
+              id: "xiaodu",
+              label: "Xiaodu",
+            }),
+            install: {
+              npmSpec: "openclaw-xiaodu@0.0.18",
+              defaultChoice: "npm",
+              minHostVersion: ">=2026.4.5",
+              expectedIntegrity:
+                "sha512-Usbh/kiRKOFXe2kaCMuJPZRnupmSVZJZGGvvcUP5fPJUhGTylAO17coyef7yIcfcT59XJWObWk9XJgn8T8dwUA==",
             },
           }),
         }),
@@ -166,7 +258,25 @@ describe("buildOfficialChannelCatalog", () => {
     expect(JSON.parse(fs.readFileSync(outputPath, "utf8")).entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: "@dingtalk-real-ai/dingtalk-connector",
+        }),
+        expect.objectContaining({
+          name: "@larksuite/openclaw-lark",
+        }),
+        expect.objectContaining({
+          name: "@tencent-connect/openclaw-qqbot",
+        }),
+        expect.objectContaining({
+          name: "@tencent-weixin/openclaw-weixin",
+        }),
+        expect.objectContaining({
           name: "@wecom/wecom-openclaw-plugin",
+        }),
+        expect.objectContaining({
+          name: "@wecode-ai/weibo-openclaw-plugin",
+        }),
+        expect.objectContaining({
+          name: "openclaw-xiaodu",
         }),
         expect.objectContaining({
           name: "openclaw-plugin-yuanbao",

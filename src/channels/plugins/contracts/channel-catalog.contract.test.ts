@@ -38,9 +38,39 @@ describeOfficialFallbackChannelCatalogContract({
 });
 
 describeChannelCatalogEntryContract({
+  channelId: "dingtalk-connector",
+  npmSpec: "@dingtalk-real-ai/dingtalk-connector@0.8.7",
+  alias: "dingtalk",
+});
+
+describeChannelCatalogEntryContract({
+  channelId: "openclaw-lark",
+  npmSpec: "@larksuite/openclaw-lark@2026.4.7",
+  alias: "lark",
+});
+
+describeChannelCatalogEntryContract({
+  channelId: "openclaw-weixin",
+  npmSpec: "@tencent-weixin/openclaw-weixin@2.1.7",
+  alias: "wechat",
+});
+
+describeChannelCatalogEntryContract({
   channelId: "wecom",
-  npmSpec: "@wecom/wecom-openclaw-plugin@2026.4.23",
+  npmSpec: "@wecom/wecom-openclaw-plugin@2026.4.8",
   alias: "wework",
+});
+
+describeChannelCatalogEntryContract({
+  channelId: "weibo",
+  npmSpec: "@wecode-ai/weibo-openclaw-plugin@2.2.0",
+  alias: "微博",
+});
+
+describeChannelCatalogEntryContract({
+  channelId: "xiaodu",
+  npmSpec: "openclaw-xiaodu@0.0.18",
+  alias: "小度",
 });
 
 describeChannelCatalogEntryContract({
