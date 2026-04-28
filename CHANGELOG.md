@@ -12,6 +12,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Gateway/sessions: durably backfill accepted `chat.send` user turns before WebChat, Feishu, or Lark reconnects rebuild history, so processed messages do not disappear when the normal agent transcript path skips or races the append. Fixes #51497; refs #59563 and #61304. Thanks @mydaisg, @yanUEd, and @wdmywm3.
 - CLI/plugins: use plugin metadata snapshots for install slot selection and add opt-in plugin lifecycle timing traces, so plugin install avoids runtime-loading the plugin registry for metadata-only decisions. Thanks @shakkernerd.
 - fix(plugins): restrict bundled plugin dir resolution to trusted package roots. (#73275) Thanks @pgondhi987.
 - fix(security): prevent workspace PATH injection via service env and trash helpers. (#73264) Thanks @pgondhi987.
