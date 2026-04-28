@@ -263,15 +263,17 @@ const LAZY_RUNTIME_REFLECTION_KEYS = [
 function createPluginCandidatesFromManifestRegistry(
   manifestRegistry: PluginManifestRegistry,
 ): PluginCandidate[] {
-  return manifestRegistry.plugins.map((record) => ({
-    idHint: record.id,
-    rootDir: record.rootDir,
-    source: record.source,
-    origin: record.origin,
-    ...(record.workspaceDir !== undefined ? { workspaceDir: record.workspaceDir } : {}),
-    ...(record.format !== undefined ? { format: record.format } : {}),
-    ...(record.bundleFormat !== undefined ? { bundleFormat: record.bundleFormat } : {}),
-  }));
+  return [...manifestRegistry.plugins, ...(manifestRegistry.duplicatePlugins ?? [])].map(
+    (record) => ({
+      idHint: record.id,
+      rootDir: record.rootDir,
+      source: record.source,
+      origin: record.origin,
+      ...(record.workspaceDir !== undefined ? { workspaceDir: record.workspaceDir } : {}),
+      ...(record.format !== undefined ? { format: record.format } : {}),
+      ...(record.bundleFormat !== undefined ? { bundleFormat: record.bundleFormat } : {}),
+    }),
+  );
 }
 
 export function clearPluginLoaderCache(): void {
@@ -2381,7 +2383,10 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     });
 
     const manifestByRoot = new Map(
-      manifestRegistry.plugins.map((record) => [record.rootDir, record]),
+      [...manifestRegistry.plugins, ...(manifestRegistry.duplicatePlugins ?? [])].map((record) => [
+        record.rootDir,
+        record,
+      ]),
     );
     const orderedCandidates = [...discovery.candidates].toSorted((left, right) => {
       return compareDuplicateCandidateOrder({
@@ -3293,7 +3298,10 @@ export async function loadOpenClawPluginCliRegistry(
     env,
   });
   const manifestByRoot = new Map(
-    manifestRegistry.plugins.map((record) => [record.rootDir, record]),
+    [...manifestRegistry.plugins, ...(manifestRegistry.duplicatePlugins ?? [])].map((record) => [
+      record.rootDir,
+      record,
+    ]),
   );
   const orderedCandidates = [...discovery.candidates].toSorted((left, right) => {
     return compareDuplicateCandidateOrder({

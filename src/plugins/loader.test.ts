@@ -495,10 +495,16 @@ function expectPluginSourcePrecedence(
   },
 ) {
   const entries = registry.plugins.filter((entry) => entry.id === scenario.pluginId);
-  expect(entries, scenario.label).toHaveLength(1);
-  const loaded = entries[0];
+  const loadedEntries = entries.filter((entry) => entry.status === "loaded");
+  expect(loadedEntries, scenario.label).toHaveLength(1);
+  const loaded = loadedEntries[0];
   expect(loaded?.origin, scenario.label).toBe(scenario.expectedLoadedOrigin);
-  expect(loaded?.status, scenario.label).toBe("loaded");
+  const disabled = entries.find(
+    (entry) => entry.status === "disabled" && entry.origin === scenario.expectedDisabledOrigin,
+  );
+  expect(disabled?.error, scenario.label).toContain(
+    scenario.expectedDisabledError ?? `overridden by ${scenario.expectedLoadedOrigin} plugin`,
+  );
   const expectedWarning =
     scenario.expectedDisabledError ??
     `${scenario.expectedDisabledOrigin} plugin will be overridden by ${scenario.expectedLoadedOrigin} plugin`;
@@ -6884,6 +6890,7 @@ module.exports = {
         },
         expectedLoadedOrigin: "config",
         expectedDisabledOrigin: "bundled",
+        expectDuplicateWarning: false,
         assert: expectPluginSourcePrecedence,
       },
       {
@@ -6921,6 +6928,7 @@ module.exports = {
         expectedLoadedOrigin: "bundled",
         expectedDisabledOrigin: "global",
         expectedDisabledError: "overridden by bundled plugin",
+        expectDuplicateWarning: false,
         assert: expectPluginSourcePrecedence,
       },
       {
@@ -7135,6 +7143,7 @@ module.exports = {
             expectedLoadedOrigin: "bundled",
             expectedDisabledOrigin: "workspace",
             expectedDisabledError: "overridden by bundled plugin",
+            expectDuplicateWarning: false,
             label: "bundled plugins stay ahead of trusted workspace duplicates",
           });
         },

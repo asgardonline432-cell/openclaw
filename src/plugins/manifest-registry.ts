@@ -162,6 +162,7 @@ export type PluginManifestRecord = {
 
 export type PluginManifestRegistry = {
   plugins: PluginManifestRecord[];
+  duplicatePlugins?: PluginManifestRecord[];
   diagnostics: PluginDiagnostic[];
 };
 
@@ -586,6 +587,13 @@ function isIntentionalInstalledBundledDuplicate(params: {
   );
 }
 
+function shouldWarnForDuplicatePluginId(params: {
+  left: PluginCandidate;
+  right: PluginCandidate;
+}): boolean {
+  return params.left.origin === params.right.origin;
+}
+
 export function loadPluginManifestRegistry(
   params: {
     config?: OpenClawConfig;
@@ -628,6 +636,7 @@ export function loadPluginManifestRegistry(
   const diagnostics: PluginDiagnostic[] = [...discovery.diagnostics];
   const candidates: PluginCandidate[] = discovery.candidates;
   const records: PluginManifestRecord[] = [];
+  const duplicateRecords: PluginManifestRecord[] = [];
   const seenIds = new Map<string, SeenIdEntry>();
   const realpathCache = new Map<string, string>();
   const currentHostVersion = resolveCompatibilityHostVersion(env);
@@ -763,10 +772,14 @@ export function loadPluginManifestRegistry(
       const candidateWins = candidateRank < existingRank;
       const winnerCandidate = candidateWins ? candidate : existing.candidate;
       const overriddenCandidate = candidateWins ? existing.candidate : candidate;
+      const overriddenRecord = candidateWins ? records[existing.recordIndex] : record;
       if (candidateWins) {
         records[existing.recordIndex] = record;
         seenIds.set(manifest.id, { candidate, recordIndex: existing.recordIndex });
         pushManifestCompatibilityDiagnostics({ record, diagnostics });
+      }
+      if (overriddenRecord) {
+        duplicateRecords.push(overriddenRecord);
       }
       if (
         isIntentionalInstalledBundledDuplicate({
@@ -778,6 +791,9 @@ export function loadPluginManifestRegistry(
           installRecords: getInstallRecords(),
         })
       ) {
+        continue;
+      }
+      if (!shouldWarnForDuplicatePluginId({ left: candidate, right: existing.candidate })) {
         continue;
       }
       diagnostics.push({
@@ -794,7 +810,11 @@ export function loadPluginManifestRegistry(
     pushManifestCompatibilityDiagnostics({ record, diagnostics });
   }
 
-  const registry = { plugins: records, diagnostics };
+  const registry = {
+    plugins: records,
+    ...(duplicateRecords.length > 0 ? { duplicatePlugins: duplicateRecords } : {}),
+    diagnostics,
+  };
   if (cacheEnabled) {
     const ttl = resolveManifestCacheMs(env);
     if (ttl > 0) {
