@@ -150,6 +150,8 @@ const GENERATED_LOCALES = [
     navFile: "th-navigation.json",
     tmFile: "th.tm.jsonl",
     navMode: "clone-en",
+    // Keep Thai content/TM sync enabled, but omit Mintlify navigation until th validates.
+    navigation: false,
   },
 ];
 
