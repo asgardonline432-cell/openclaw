@@ -193,12 +193,7 @@ function generateZshArgs(cmd: Command): string {
       const flags = opt.flags.split(/[ ,|]+/);
       const name = flags.find((f) => f.startsWith("--")) || flags[0];
       const short = flags.find((f) => f.startsWith("-") && !f.startsWith("--"));
-      const desc = opt.description
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
-        .replace(/'/g, "'\\''")
-        .replace(/\[/g, "\\[")
-        .replace(/\]/g, "\\]");
+      const desc = escapeZshDoubleQuotedSpecText(opt.description);
       if (short) {
         return `"(${name} ${short})"{${name},${short}}"[${desc}]"`;
       }
@@ -210,16 +205,53 @@ function generateZshArgs(cmd: Command): string {
 function generateZshSubcmdList(cmd: Command): string {
   const list = cmd.commands
     .map((c) => {
-      const desc = c
-        .description()
-        .replace(/\\/g, "\\\\")
-        .replace(/'/g, "'\\''")
-        .replace(/\[/g, "\\[")
-        .replace(/\]/g, "\\]");
+      const desc = escapeZshSingleQuotedSpecText(c.description());
       return `'${c.name()}[${desc}]'`;
     })
     .join(" ");
   return `"1: :_values 'command' ${list}"`;
+}
+
+function generateZshPositionalArgs(cmd: Command): string {
+  return (cmd.registeredArguments || [])
+    .map((arg, index) => {
+      const position = arg.variadic ? "*" : String(index + 1);
+      const cardinality = arg.required ? ":" : "::";
+      const label = escapeZshPositionalMessage(arg.description || arg.name());
+      const action = `_message ${escapeZshActionWord(arg.name())}`;
+      return `"${position}${cardinality}${label}:${action}"`;
+    })
+    .join(" \\\n    ");
+}
+
+function generateZshLeafArgs(cmd: Command): string {
+  return [generateZshArgs(cmd), generateZshPositionalArgs(cmd)]
+    .filter((entry) => entry.length > 0)
+    .join(" \\\n    ");
+}
+
+function escapeZshDoubleQuotedSpecText(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]");
+}
+
+function escapeZshSingleQuotedSpecText(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "'\\''")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]");
+}
+
+function escapeZshPositionalMessage(value: string): string {
+  return escapeZshDoubleQuotedSpecText(value).replace(/:/g, "\\:");
+}
+
+function escapeZshActionWord(value: string): string {
+  return escapeZshDoubleQuotedSpecText(value).replace(/:/g, "\\:");
 }
 
 function generateZshSubcommands(program: Command, prefix: string): string {
@@ -260,7 +292,7 @@ ${funcName}() {
       segments.push(`
 ${funcName}() {
   _arguments -C \\
-    ${generateZshArgs(cmd)}
+    ${generateZshLeafArgs(cmd)}
 }
 `);
     }

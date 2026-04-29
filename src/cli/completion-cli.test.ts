@@ -21,6 +21,22 @@ function createCompletionProgram(): Command {
   return program;
 }
 
+function createArgumentCompletionProgram(): Command {
+  const program = new Command();
+  program.name("openclaw");
+  program.option("--owner", "Owner's profile");
+
+  program
+    .command("read")
+    .description("Read config")
+    .argument("<path>", "Config path: dot notation");
+  program.command("pair").description("Pair device").argument("[code]", "Owner's pairing code");
+  program.command("docs").description("Search docs").argument("[query...]", "Search query");
+  program.command("resolve").description("Resolve entries").argument("<entries...>", "Entries");
+
+  return program;
+}
+
 describe("completion-cli", () => {
   it("generates zsh functions for nested subcommands", () => {
     const script = getCompletionScript("zsh", createCompletionProgram());
@@ -29,6 +45,19 @@ describe("completion-cli", () => {
     expect(script).toContain("(status) _openclaw_gateway_status ;;");
     expect(script).toContain("(restart) _openclaw_gateway_restart ;;");
     expect(script).toContain("--force[Force the action]");
+  });
+
+  it("generates zsh positional argument specs for leaf commands", () => {
+    const script = getCompletionScript("zsh", createArgumentCompletionProgram());
+
+    expect(script).toContain(`"--owner[Owner's profile]"`);
+    expect(script).not.toContain("Owner'\\''s profile");
+    expect(script).toContain(`"1:Config path\\: dot notation:_message path"`);
+    expect(script).toContain(`"1::Owner's pairing code:_message code"`);
+    expect(script).not.toContain("Owner'\\''s pairing code");
+    expect(script).toContain(`"*::Search query:_message query"`);
+    expect(script).toContain(`"*:Entries:_message entries"`);
+    expect(script).not.toContain("_files");
   });
 
   it("defers zsh registration until compinit is available", async () => {
