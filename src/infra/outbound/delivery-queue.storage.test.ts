@@ -27,6 +27,7 @@ describe("delivery-queue storage", () => {
           bestEffort: true,
           gifPlayback: true,
           silent: true,
+          skipMessageHooks: true,
           gatewayClientScopes: ["operator.write"],
           mirror: {
             sessionKey: "agent:main:main",
@@ -53,6 +54,7 @@ describe("delivery-queue storage", () => {
         bestEffort: true,
         gifPlayback: true,
         silent: true,
+        skipMessageHooks: true,
         gatewayClientScopes: ["operator.write"],
         mirror: {
           sessionKey: "agent:main:main",

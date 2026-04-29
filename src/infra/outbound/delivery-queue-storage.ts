@@ -33,6 +33,8 @@ export type QueuedDeliveryPayload = {
   mirror?: OutboundMirror;
   /** Session context needed to preserve outbound media policy on recovery. */
   session?: OutboundSessionContext;
+  /** Suppress message_sending/message_sent hooks when replaying hook-generated replies. */
+  skipMessageHooks?: boolean;
   /** Gateway caller scopes at enqueue time, preserved for recovery replay. */
   gatewayClientScopes?: readonly string[];
 };
@@ -154,6 +156,7 @@ export async function enqueueDelivery(
     silent: params.silent,
     mirror: params.mirror,
     session: params.session,
+    skipMessageHooks: params.skipMessageHooks,
     gatewayClientScopes: params.gatewayClientScopes,
     retryCount: 0,
   });

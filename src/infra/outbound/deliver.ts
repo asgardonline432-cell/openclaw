@@ -371,6 +371,8 @@ type DeliverOutboundPayloadsCoreParams = {
   session?: OutboundSessionContext;
   mirror?: DeliveryMirror;
   silent?: boolean;
+  /** Suppress message_sending/message_sent hooks for hook-generated replies. */
+  skipMessageHooks?: boolean;
   gatewayClientScopes?: readonly string[];
 };
 
@@ -565,6 +567,13 @@ function normalizeDeliveryPin(payload: ReplyPayload): ReplyPayloadDeliveryPin | 
   return normalized;
 }
 
+function normalizeInternalHookReplyText(messages: readonly string[]): string {
+  return messages
+    .map((message) => message.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 async function maybePinDeliveredMessage(params: {
   handler: ChannelHandler;
   payload: ReplyPayload;
@@ -669,6 +678,7 @@ function createMessageSentEmitter(params: {
   sessionKeyForInternalHooks?: string;
   mirrorIsGroup?: boolean;
   mirrorGroupId?: string;
+  sendInternalHookMessages?: (messages: readonly string[]) => Promise<void>;
 }): { emitMessageSent: (event: MessageSentEvent) => void; hasMessageSentHooks: boolean } {
   const hasMessageSentHooks = params.hookRunner?.hasHooks("message_sent") ?? false;
   const canEmitInternalHook = Boolean(params.sessionKeyForInternalHooks);
@@ -703,15 +713,17 @@ function createMessageSentEmitter(params: {
     if (!canEmitInternalHook) {
       return;
     }
+    const hookEvent = createInternalHookEvent(
+      "message",
+      "sent",
+      params.sessionKeyForInternalHooks!,
+      toInternalMessageSentContext(canonical),
+    );
     fireAndForgetHook(
-      triggerInternalHook(
-        createInternalHookEvent(
-          "message",
-          "sent",
-          params.sessionKeyForInternalHooks!,
-          toInternalMessageSentContext(canonical),
-        ),
-      ),
+      (async () => {
+        await triggerInternalHook(hookEvent);
+        await params.sendInternalHookMessages?.(hookEvent.messages);
+      })(),
       "deliverOutboundPayloads: message:sent internal hook failed",
       (message) => {
         log.warn(message);
@@ -835,6 +847,7 @@ export async function deliverOutboundPayloads(
         silent: params.silent,
         mirror: params.mirror,
         session: params.session,
+        skipMessageHooks: params.skipMessageHooks,
         gatewayClientScopes: params.gatewayClientScopes,
       }).catch(() => null); // Best-effort — don't block delivery if queue write fails.
 
@@ -990,16 +1003,62 @@ async function deliverOutboundPayloadsCore(
   const sessionKeyForInternalHooks = params.mirror?.sessionKey ?? params.session?.key;
   const mirrorIsGroup = params.mirror?.isGroup;
   const mirrorGroupId = params.mirror?.groupId;
-  const { emitMessageSent, hasMessageSentHooks } = createMessageSentEmitter({
-    hookRunner,
-    channel,
-    to,
-    accountId,
-    sessionKeyForInternalHooks,
-    mirrorIsGroup,
-    mirrorGroupId,
-  });
-  const hasMessageSendingHooks = hookRunner?.hasHooks("message_sending") ?? false;
+  const sendInternalHookMessages = async (messages: readonly string[]): Promise<void> => {
+    const text = normalizeInternalHookReplyText(messages);
+    if (!text) {
+      return;
+    }
+    await deliverOutboundPayloads({
+      cfg,
+      channel,
+      to,
+      accountId,
+      payloads: [{ text }],
+      replyToId: params.replyToId,
+      replyToMode: params.replyToMode,
+      formatting: params.formatting,
+      threadId: params.threadId,
+      identity: params.identity,
+      deps,
+      mediaAccess: params.mediaAccess,
+      gifPlayback: params.gifPlayback,
+      forceDocument: params.forceDocument,
+      abortSignal,
+      bestEffort: params.bestEffort,
+      session: params.session,
+      mirror: params.mirror
+        ? {
+            sessionKey: params.mirror.sessionKey,
+            agentId: params.mirror.agentId,
+            text,
+            mediaUrls: [],
+            isGroup: params.mirror.isGroup,
+            groupId: params.mirror.groupId,
+          }
+        : undefined,
+      silent: params.silent,
+      skipMessageHooks: true,
+      gatewayClientScopes: params.gatewayClientScopes,
+    });
+  };
+  const messageHooksEnabled = params.skipMessageHooks !== true;
+  const { emitMessageSent, hasMessageSentHooks } = messageHooksEnabled
+    ? createMessageSentEmitter({
+        hookRunner,
+        channel,
+        to,
+        accountId,
+        sessionKeyForInternalHooks,
+        mirrorIsGroup,
+        mirrorGroupId,
+        sendInternalHookMessages,
+      })
+    : {
+        emitMessageSent: (_event: MessageSentEvent) => {},
+        hasMessageSentHooks: false,
+      };
+  const hasMessageSendingHooks =
+    messageHooksEnabled && (hookRunner?.hasHooks("message_sending") ?? false);
   const diagnosticSessionKey = sessionKeyForDeliveryDiagnostics(params);
   if (hasMessageSentHooks && params.session?.agentId && !sessionKeyForInternalHooks) {
     log.warn(

@@ -130,6 +130,11 @@ function withMatrixChannel(result: Awaited<ReturnType<MatrixSendFn>>) {
   };
 }
 
+async function waitForFireAndForgetHooks(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+}
+
 const matrixOutboundForTest: ChannelOutboundAdapter = {
   deliveryMode: "direct",
   chunker: chunkText,
@@ -1515,6 +1520,62 @@ describe("deliverOutboundPayloads", () => {
       expectSuccessfulMatrixInternalHookPayload({ content: "hello", messageId: "m1" }),
     );
     expect(internalHookMocks.triggerInternalHook).toHaveBeenCalledTimes(1);
+  });
+
+  it("delivers internal message:sent hook replies without re-entering message hooks", async () => {
+    hookMocks.runner.hasHooks.mockReturnValue(true);
+    internalHookMocks.triggerInternalHook.mockImplementationOnce(async (...args: unknown[]) => {
+      const event = args[0] as { messages: string[] };
+      event.messages.push("hook follow-up");
+    });
+    const sendMatrix = vi
+      .fn()
+      .mockResolvedValueOnce({ messageId: "m1", roomId: "!room:example" })
+      .mockResolvedValueOnce({ messageId: "m2", roomId: "!room:example" });
+
+    await deliverOutboundPayloads({
+      cfg: matrixChunkConfig,
+      channel: "matrix",
+      to: "!room:example",
+      payloads: [{ text: "hello" }],
+      deps: { matrix: sendMatrix },
+      session: { key: "agent:main:main", agentId: "agent-main" },
+    });
+    await waitForFireAndForgetHooks();
+
+    expect(sendMatrix.mock.calls.map((call) => call[1])).toEqual(["hello", "hook follow-up"]);
+    expect(hookMocks.runner.runMessageSending).toHaveBeenCalledTimes(1);
+    expect(hookMocks.runner.runMessageSent).toHaveBeenCalledTimes(1);
+    expect(internalHookMocks.triggerInternalHook).toHaveBeenCalledTimes(1);
+    expect(queueMocks.enqueueDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payloads: [{ text: "hook follow-up" }],
+        skipMessageHooks: true,
+      }),
+    );
+  });
+
+  it("persists skipMessageHooks and skips outbound message hooks", async () => {
+    hookMocks.runner.hasHooks.mockReturnValue(true);
+    const sendMatrix = vi.fn().mockResolvedValue({ messageId: "m1", roomId: "!room:example" });
+
+    await deliverOutboundPayloads({
+      cfg: matrixChunkConfig,
+      channel: "matrix",
+      to: "!room:example",
+      payloads: [{ text: "hello" }],
+      deps: { matrix: sendMatrix },
+      session: { key: "agent:main:main", agentId: "agent-main" },
+      skipMessageHooks: true,
+    });
+
+    expect(sendMatrix).toHaveBeenCalledTimes(1);
+    expect(hookMocks.runner.runMessageSending).not.toHaveBeenCalled();
+    expect(hookMocks.runner.runMessageSent).not.toHaveBeenCalled();
+    expect(internalHookMocks.triggerInternalHook).not.toHaveBeenCalled();
+    expect(queueMocks.enqueueDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({ skipMessageHooks: true }),
+    );
   });
 
   it("warns when session.agentId is set without a session key", async () => {

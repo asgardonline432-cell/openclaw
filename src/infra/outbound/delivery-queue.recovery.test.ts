@@ -64,6 +64,29 @@ describe("delivery-queue recovery", () => {
     expect(await loadPendingDeliveries(tmpDir())).toHaveLength(0);
   });
 
+  it("preserves skipMessageHooks when replaying queued hook replies", async () => {
+    await enqueueDelivery(
+      {
+        channel: "demo-channel-a",
+        to: "+1",
+        payloads: [{ text: "hook reply" }],
+        skipMessageHooks: true,
+      },
+      tmpDir(),
+    );
+    const deliver = vi.fn().mockResolvedValue([]);
+
+    await runRecovery({ deliver });
+
+    expect(deliver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payloads: [{ text: "hook reply" }],
+        skipMessageHooks: true,
+        skipQueue: true,
+      }),
+    );
+  });
+
   it("moves entries that exceeded max retries to failed/", async () => {
     const id = await enqueueDelivery(
       { channel: "demo-channel-a", to: "+1", payloads: [{ text: "a" }] },

@@ -445,6 +445,11 @@ export async function dispatchReplyFromConfig(
   });
   const routeReplyTo = replyRoute.to;
   const deliveryChannel = shouldRouteToOriginating ? routeReplyChannel : currentSurface;
+  const deliverySessionKey = sessionStoreEntry.sessionKey ?? acpDispatchSessionKey ?? sessionKey;
+  const deliveryPolicySessionKey =
+    ctx.CommandSource === "native"
+      ? (normalizeOptionalString(ctx.CommandTargetSessionKey) ?? deliverySessionKey)
+      : deliverySessionKey;
   let normalizeReplyMediaPaths:
     | ReturnType<
         (typeof import("./reply-media-paths.runtime.js"))["createReplyMediaPathNormalizer"]
@@ -481,7 +486,7 @@ export async function dispatchReplyFromConfig(
 
   const routeReplyToOriginating = async (
     payload: ReplyPayload,
-    options?: { abortSignal?: AbortSignal; mirror?: boolean },
+    options?: { abortSignal?: AbortSignal; mirror?: boolean; skipMessageHooks?: boolean },
   ) => {
     if (!shouldRouteToOriginating || !routeReplyChannel || !routeReplyTo || !routeReplyRuntime) {
       return null;
@@ -491,11 +496,8 @@ export async function dispatchReplyFromConfig(
       payload,
       channel: routeReplyChannel,
       to: routeReplyTo,
-      sessionKey: ctx.SessionKey,
-      policySessionKey:
-        ctx.CommandSource === "native"
-          ? (ctx.CommandTargetSessionKey ?? ctx.SessionKey)
-          : ctx.SessionKey,
+      sessionKey: deliverySessionKey,
+      policySessionKey: deliveryPolicySessionKey,
       policyConversationType: resolveRoutedPolicyConversationType(ctx),
       accountId: replyRoute.accountId,
       requesterSenderId: ctx.SenderId,
@@ -506,6 +508,7 @@ export async function dispatchReplyFromConfig(
       cfg,
       abortSignal: options?.abortSignal,
       mirror: options?.mirror,
+      skipMessageHooks: options?.skipMessageHooks,
       isGroup,
       groupId,
     });
@@ -611,6 +614,37 @@ export async function dispatchReplyFromConfig(
     suppressHookReplyLifecycle,
   } = sourceReplyPolicy;
 
+  const sendInternalHookMessages = async (
+    messages: readonly string[],
+    label: string,
+  ): Promise<void> => {
+    const text = messages
+      .map((message) => message.trim())
+      .filter(Boolean)
+      .join("\n\n");
+    if (!text) {
+      return;
+    }
+    if (suppressDelivery) {
+      logVerbose(
+        `dispatch-from-config: ${label} hook reply suppressed by ${deliverySuppressionReason} (session=${sessionKey ?? "unknown"})`,
+      );
+      return;
+    }
+    const payload = await normalizeReplyMediaPayload({ text });
+    const result = await routeReplyToOriginating(payload, { skipMessageHooks: true });
+    if (result) {
+      if (!result.ok) {
+        logVerbose(
+          `dispatch-from-config: route-reply (${label} hook reply) failed: ${result.error ?? "unknown error"}`,
+        );
+      }
+      return;
+    }
+    markInboundDedupeReplayUnsafe();
+    dispatcher.sendToolResult(payload);
+  };
+
   let pluginFallbackReason:
     | "plugin-bound-fallback-missing-plugin"
     | "plugin-bound-fallback-no-handler"
@@ -712,13 +746,15 @@ export async function dispatchReplyFromConfig(
 
   // Bridge to internal hooks (HOOK.md discovery system) - refs #8807
   if (sessionKey) {
+    const hookEvent = createInternalHookEvent("message", "received", sessionKey, {
+      ...toInternalMessageReceivedContext(hookContext),
+      timestamp,
+    });
     fireAndForgetHook(
-      triggerInternalHook(
-        createInternalHookEvent("message", "received", sessionKey, {
-          ...toInternalMessageReceivedContext(hookContext),
-          timestamp,
-        }),
-      ),
+      (async () => {
+        await triggerInternalHook(hookEvent);
+        await sendInternalHookMessages(hookEvent.messages, "message_received");
+      })(),
       "dispatch-from-config: message_received internal hook failed",
     );
   }

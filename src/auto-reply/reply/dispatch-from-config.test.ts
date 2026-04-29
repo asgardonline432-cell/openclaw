@@ -518,6 +518,11 @@ function createDispatcher(): ReplyDispatcher {
   };
 }
 
+async function waitForFireAndForgetHooks(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+}
+
 function shouldUseAcpReplyDispatchHook(eventUnknown: unknown): boolean {
   const event = eventUnknown as {
     sessionKey?: string;
@@ -2804,6 +2809,71 @@ describe("dispatchReplyFromConfig", () => {
       }),
     );
     expect(internalHookMocks.triggerInternalHook).toHaveBeenCalledTimes(1);
+  });
+
+  it("delivers internal message:received hook replies through the current dispatcher", async () => {
+    setNoAbort();
+    const cfg = emptyConfig;
+    const dispatcher = createDispatcher();
+    internalHookMocks.triggerInternalHook.mockImplementationOnce(async (...args: unknown[]) => {
+      const event = args[0] as { messages: string[] };
+      event.messages.push("Hook says hello");
+    });
+    const ctx = buildTestCtx({
+      Provider: "whatsapp",
+      Surface: "whatsapp",
+      SessionKey: "agent:main:main",
+      CommandBody: "hello",
+    });
+
+    const replyResolver = async () => ({ text: "core reply" }) satisfies ReplyPayload;
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+    await waitForFireAndForgetHooks();
+
+    expect(dispatcher.sendToolResult).toHaveBeenCalledWith({ text: "Hook says hello" });
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({ text: "core reply" });
+  });
+
+  it("routes internal message:received hook replies with hook suppression and resolved session context", async () => {
+    setNoAbort();
+    const cfg = emptyConfig;
+    const dispatcher = createDispatcher();
+    internalHookMocks.triggerInternalHook.mockImplementationOnce(async (...args: unknown[]) => {
+      const event = args[0] as { messages: string[] };
+      event.messages.push("Hook routed reply");
+    });
+    const ctx = buildTestCtx({
+      Provider: "slack",
+      Surface: "slack",
+      SessionKey: undefined,
+      CommandTargetSessionKey: "agent:main:telegram:group:999",
+      OriginatingChannel: "telegram",
+      OriginatingTo: "telegram:999",
+      From: "slack:U1",
+      To: "slack:C1",
+    });
+
+    const replyResolver = async () => ({ text: "core reply" }) satisfies ReplyPayload;
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+    await waitForFireAndForgetHooks();
+
+    expect(mocks.routeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ text: "Hook routed reply" }),
+        channel: "telegram",
+        to: "telegram:999",
+        sessionKey: "agent:main:telegram:group:999",
+        policySessionKey: "agent:main:telegram:group:999",
+        skipMessageHooks: true,
+      }),
+    );
+    expect(mocks.routeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ text: "core reply" }),
+        sessionKey: "agent:main:telegram:group:999",
+        policySessionKey: "agent:main:telegram:group:999",
+      }),
+    );
   });
 
   it("skips internal message:received hook when session key is unavailable", async () => {

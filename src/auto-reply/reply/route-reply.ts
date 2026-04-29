@@ -69,6 +69,8 @@ export type RouteReplyParams = {
   abortSignal?: AbortSignal;
   /** Mirror reply into session transcript (default: true when sessionKey is set). */
   mirror?: boolean;
+  /** Suppress outbound message hooks for hook-generated replies. */
+  skipMessageHooks?: boolean;
   /** Whether this message is being sent in a group/channel context */
   isGroup?: boolean;
   /** Group or channel identifier for correlation with received events */
@@ -246,6 +248,7 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
               ...(params.groupId ? { groupId: params.groupId } : {}),
             }
           : undefined,
+      skipMessageHooks: params.skipMessageHooks,
     });
 
     const last = results.at(-1);
