@@ -3,7 +3,13 @@ import { parseAgentSessionKey } from "../sessions/session-key-utils.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { asString, extractTextFromMessage, isCommandMessage } from "./tui-formatters.js";
 import { TuiStreamAssembler } from "./tui-stream-assembler.js";
-import type { AgentEvent, BtwEvent, ChatEvent, TuiStateAccess } from "./tui-types.js";
+import type {
+  AgentEvent,
+  BtwEvent,
+  ChatEvent,
+  SessionChangedEvent,
+  TuiStateAccess,
+} from "./tui-types.js";
 
 type EventHandlerChatLog = {
   startTool: (toolCallId: string, toolName: string, args: unknown) => void;
@@ -84,10 +90,14 @@ export function createEventHandlers(context: EventHandlerContext) {
 
   const flushPendingHistoryRefreshIfIdle = () => {
     if (!pendingHistoryRefresh || state.activeChatRunId) {
-      return;
+      return false;
     }
     pendingHistoryRefresh = false;
-    void loadHistory?.();
+    if (!loadHistory) {
+      return false;
+    }
+    void loadHistory();
+    return true;
   };
 
   const clearStreamingWatchdog = () => {
@@ -96,6 +106,18 @@ export function createEventHandlers(context: EventHandlerContext) {
       streamingWatchdogTimer = null;
     }
     streamingWatchdogRunId = null;
+  };
+
+  const clearTrackedRunState = () => {
+    finalizedRuns.clear();
+    sessionRuns.clear();
+    streamAssembler = new TuiStreamAssembler();
+    pendingHistoryRefresh = false;
+    state.pendingOptimisticUserMessage = false;
+    clearLocalRunIds?.();
+    clearLocalBtwRunIds?.();
+    btw.clear();
+    clearStreamingWatchdog();
   };
 
   const armStreamingWatchdog = (runId: string) => {
@@ -157,15 +179,7 @@ export function createEventHandlers(context: EventHandlerContext) {
       return;
     }
     lastSessionKey = state.currentSessionKey;
-    finalizedRuns.clear();
-    sessionRuns.clear();
-    streamAssembler = new TuiStreamAssembler();
-    pendingHistoryRefresh = false;
-    state.pendingOptimisticUserMessage = false;
-    clearLocalRunIds?.();
-    clearLocalBtwRunIds?.();
-    btw.clear();
-    clearStreamingWatchdog();
+    clearTrackedRunState();
   };
 
   const resolveAuthErrorHint = (errorMessage: string): string | undefined => {
@@ -196,7 +210,7 @@ export function createEventHandlers(context: EventHandlerContext) {
     }
   };
 
-  const clearStaleStreamingRunIfNoTrackedRunRemains = () => {
+  const clearStaleStreamingRunIfNoTrackedRunRemains = (): boolean => {
     const activeRunId = state.activeChatRunId;
     if (
       !activeRunId ||
@@ -204,23 +218,23 @@ export function createEventHandlers(context: EventHandlerContext) {
       sessionRuns.size > 0 ||
       state.activityStatus !== "streaming"
     ) {
-      return;
+      return false;
     }
     state.activeChatRunId = null;
     state.activityStatus = "idle";
     setActivityStatus("idle");
     clearStreamingWatchdog();
-    flushPendingHistoryRefreshIfIdle();
+    return flushPendingHistoryRefreshIfIdle();
   };
 
   const finalizeRun = (params: {
     runId: string;
     wasActiveRun: boolean;
     status: "idle" | "error";
-  }) => {
+  }): boolean => {
     noteFinalizedRun(params.runId);
     clearActiveRunIfMatch(params.runId);
-    flushPendingHistoryRefreshIfIdle();
+    let historyReloaded = flushPendingHistoryRefreshIfIdle();
     if (params.wasActiveRun) {
       setActivityStatus(params.status);
       clearStreamingWatchdog();
@@ -228,20 +242,20 @@ export function createEventHandlers(context: EventHandlerContext) {
       if (streamingWatchdogRunId === params.runId) {
         clearStreamingWatchdog();
       }
-      clearStaleStreamingRunIfNoTrackedRunRemains();
+      historyReloaded = clearStaleStreamingRunIfNoTrackedRunRemains() || historyReloaded;
     }
-    void refreshSessionInfo?.();
+    return historyReloaded;
   };
 
   const terminateRun = (params: {
     runId: string;
     wasActiveRun: boolean;
     status: "aborted" | "error";
-  }) => {
+  }): boolean => {
     streamAssembler.drop(params.runId);
     sessionRuns.delete(params.runId);
     clearActiveRunIfMatch(params.runId);
-    flushPendingHistoryRefreshIfIdle();
+    let historyReloaded = flushPendingHistoryRefreshIfIdle();
     if (params.wasActiveRun) {
       setActivityStatus(params.status);
       clearStreamingWatchdog();
@@ -249,9 +263,9 @@ export function createEventHandlers(context: EventHandlerContext) {
       if (streamingWatchdogRunId === params.runId) {
         clearStreamingWatchdog();
       }
-      clearStaleStreamingRunIfNoTrackedRunRemains();
+      historyReloaded = clearStaleStreamingRunIfNoTrackedRunRemains() || historyReloaded;
     }
-    void refreshSessionInfo?.();
+    return historyReloaded;
   };
 
   const hasConcurrentActiveRun = (runId: string) => {
@@ -265,26 +279,37 @@ export function createEventHandlers(context: EventHandlerContext) {
   const maybeRefreshHistoryForRun = (
     runId: string,
     opts?: { allowLocalWithoutDisplayableFinal?: boolean },
-  ) => {
+  ): boolean => {
     const isLocalRun = isLocalRunId?.(runId) ?? false;
     if (isLocalRun) {
       forgetLocalRunId?.(runId);
       // Local runs with displayable output do not need a history reload.
       if (!opts?.allowLocalWithoutDisplayableFinal) {
-        return;
+        return false;
       }
       // Defer the reload if a newer run is active so we preserve the pending
       // user message, then flush once that active run finishes.
       if (state.activeChatRunId && state.activeChatRunId !== runId) {
         pendingHistoryRefresh = true;
-        return;
+        return true;
       }
     }
     if (hasConcurrentActiveRun(runId)) {
-      return;
+      return false;
     }
     pendingHistoryRefresh = false;
-    void loadHistory?.();
+    if (!loadHistory) {
+      return false;
+    }
+    void loadHistory();
+    return true;
+  };
+
+  const refreshSessionInfoIfHistoryDidNotReload = (historyReloadScheduled: boolean) => {
+    if (historyReloadScheduled) {
+      return;
+    }
+    void refreshSessionInfo?.();
   };
 
   const isSameSessionKey = (left: string | undefined, right: string | undefined): boolean => {
@@ -359,25 +384,35 @@ export function createEventHandlers(context: EventHandlerContext) {
         return;
       }
       if (!evt.message) {
-        maybeRefreshHistoryForRun(evt.runId, {
+        const historyReloadScheduled = maybeRefreshHistoryForRun(evt.runId, {
           allowLocalWithoutDisplayableFinal: true,
         });
         chatLog.dropAssistant(evt.runId);
-        finalizeRun({ runId: evt.runId, wasActiveRun, status: "idle" });
+        const pendingHistoryReloaded = finalizeRun({
+          runId: evt.runId,
+          wasActiveRun,
+          status: "idle",
+        });
+        refreshSessionInfoIfHistoryDidNotReload(historyReloadScheduled || pendingHistoryReloaded);
         tui.requestRender();
         return;
       }
       if (isCommandMessage(evt.message)) {
-        maybeRefreshHistoryForRun(evt.runId);
+        const historyReloadScheduled = maybeRefreshHistoryForRun(evt.runId);
         const text = extractTextFromMessage(evt.message);
         if (text) {
           chatLog.addSystem(text);
         }
-        finalizeRun({ runId: evt.runId, wasActiveRun, status: "idle" });
+        const pendingHistoryReloaded = finalizeRun({
+          runId: evt.runId,
+          wasActiveRun,
+          status: "idle",
+        });
+        refreshSessionInfoIfHistoryDidNotReload(historyReloadScheduled || pendingHistoryReloaded);
         tui.requestRender();
         return;
       }
-      maybeRefreshHistoryForRun(evt.runId);
+      const historyReloadScheduled = maybeRefreshHistoryForRun(evt.runId);
       const stopReason =
         evt.message && typeof evt.message === "object" && !Array.isArray(evt.message)
           ? typeof (evt.message as Record<string, unknown>).stopReason === "string"
@@ -398,26 +433,68 @@ export function createEventHandlers(context: EventHandlerContext) {
       } else {
         chatLog.finalizeAssistant(finalText, evt.runId);
       }
-      finalizeRun({
+      const pendingHistoryReloaded = finalizeRun({
         runId: evt.runId,
         wasActiveRun,
         status: stopReason === "error" ? "error" : "idle",
       });
+      refreshSessionInfoIfHistoryDidNotReload(historyReloadScheduled || pendingHistoryReloaded);
     }
     if (evt.state === "aborted") {
       forgetLocalBtwRunId?.(evt.runId);
       const wasActiveRun = state.activeChatRunId === evt.runId;
       chatLog.addSystem("run aborted");
-      terminateRun({ runId: evt.runId, wasActiveRun, status: "aborted" });
-      maybeRefreshHistoryForRun(evt.runId);
+      const pendingHistoryReloaded = terminateRun({
+        runId: evt.runId,
+        wasActiveRun,
+        status: "aborted",
+      });
+      const historyReloadScheduled = pendingHistoryReloaded || maybeRefreshHistoryForRun(evt.runId);
+      refreshSessionInfoIfHistoryDidNotReload(historyReloadScheduled);
     }
     if (evt.state === "error") {
       forgetLocalBtwRunId?.(evt.runId);
       const wasActiveRun = state.activeChatRunId === evt.runId;
       const errorMessage = evt.errorMessage ?? "unknown";
       chatLog.addSystem(resolveAuthErrorHint(errorMessage) ?? `run error: ${errorMessage}`);
-      terminateRun({ runId: evt.runId, wasActiveRun, status: "error" });
-      maybeRefreshHistoryForRun(evt.runId);
+      const pendingHistoryReloaded = terminateRun({
+        runId: evt.runId,
+        wasActiveRun,
+        status: "error",
+      });
+      const historyReloadScheduled = pendingHistoryReloaded || maybeRefreshHistoryForRun(evt.runId);
+      refreshSessionInfoIfHistoryDidNotReload(historyReloadScheduled);
+    }
+    tui.requestRender();
+  };
+
+  const handleSessionsChangedEvent = (payload: unknown) => {
+    if (!payload || typeof payload !== "object") {
+      return;
+    }
+    const evt = payload as SessionChangedEvent;
+    syncSessionKey();
+    if (!isSameSessionKey(evt.sessionKey, state.currentSessionKey)) {
+      return;
+    }
+    if (evt.reason !== "new" && evt.reason !== "reset") {
+      return;
+    }
+
+    clearTrackedRunState();
+    state.activeChatRunId = null;
+    state.activityStatus = "idle";
+    setActivityStatus("idle");
+    if (typeof evt.sessionId === "string") {
+      state.currentSessionId = evt.sessionId;
+    }
+    if (typeof evt.updatedAt === "number" || evt.updatedAt === null) {
+      state.sessionInfo.updatedAt = evt.updatedAt;
+    }
+    if (loadHistory) {
+      void loadHistory();
+    } else {
+      void refreshSessionInfo?.();
     }
     tui.requestRender();
   };
@@ -518,5 +595,5 @@ export function createEventHandlers(context: EventHandlerContext) {
     clearStreamingWatchdog();
   };
 
-  return { handleChatEvent, handleAgentEvent, handleBtwEvent, dispose };
+  return { handleChatEvent, handleAgentEvent, handleBtwEvent, handleSessionsChangedEvent, dispose };
 }

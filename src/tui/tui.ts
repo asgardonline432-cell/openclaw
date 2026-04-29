@@ -900,23 +900,24 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     abortActive,
   } = sessionActions;
 
-  const { handleChatEvent, handleAgentEvent, handleBtwEvent } = createEventHandlers({
-    chatLog,
-    btw,
-    tui,
-    state,
-    localMode: isLocalMode,
-    setActivityStatus,
-    refreshSessionInfo,
-    loadHistory,
-    noteLocalRunId,
-    isLocalRunId,
-    forgetLocalRunId,
-    clearLocalRunIds,
-    isLocalBtwRunId,
-    forgetLocalBtwRunId,
-    clearLocalBtwRunIds,
-  });
+  const { handleChatEvent, handleAgentEvent, handleBtwEvent, handleSessionsChangedEvent } =
+    createEventHandlers({
+      chatLog,
+      btw,
+      tui,
+      state,
+      localMode: isLocalMode,
+      setActivityStatus,
+      refreshSessionInfo,
+      loadHistory,
+      noteLocalRunId,
+      isLocalRunId,
+      forgetLocalRunId,
+      clearLocalRunIds,
+      isLocalBtwRunId,
+      forgetLocalBtwRunId,
+      clearLocalBtwRunIds,
+    });
 
   let finishTui: (() => void) | null = null;
   const requestExit = (result?: Partial<TuiResult>) => {
@@ -1062,6 +1063,9 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     if (evt.event === "agent") {
       handleAgentEvent(evt.payload);
     }
+    if (evt.event === "sessions.changed") {
+      handleSessionsChangedEvent(evt.payload);
+    }
   };
 
   client.onConnected = () => {
@@ -1071,6 +1075,11 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     wasDisconnected = false;
     setConnectionStatus(isLocalMode ? "local ready" : "connected");
     void (async () => {
+      try {
+        await client.subscribeSessionEvents?.();
+      } catch (err) {
+        chatLog.addSystem(`session event subscribe failed: ${String(err)}`);
+      }
       await refreshAgents();
       updateHeader();
       await loadHistory();

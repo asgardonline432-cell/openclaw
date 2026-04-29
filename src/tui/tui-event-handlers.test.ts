@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEventHandlers } from "./tui-event-handlers.js";
-import type { AgentEvent, BtwEvent, ChatEvent, TuiStateAccess } from "./tui-types.js";
+import type {
+  AgentEvent,
+  BtwEvent,
+  ChatEvent,
+  SessionChangedEvent,
+  TuiStateAccess,
+} from "./tui-types.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
+type AsyncMockFn = ReturnType<typeof vi.fn<() => Promise<void>>>;
 type HandlerChatLog = {
   startTool: (...args: unknown[]) => void;
   updateToolResult: (...args: unknown[]) => void;
@@ -78,6 +85,7 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     const btw = createMockBtwPresenter();
     const tui = { requestRender: vi.fn() } as unknown as MockTui & HandlerTui;
     const setActivityStatus = vi.fn();
+    const refreshSessionInfo = vi.fn<() => Promise<void>>(async () => undefined);
     const loadHistory = vi.fn();
     const localRunIds = new Set<string>();
     const localBtwRunIds = new Set<string>();
@@ -100,6 +108,7 @@ describe("tui-event-handlers: handleAgentEvent", () => {
       tui,
       state,
       setActivityStatus,
+      refreshSessionInfo,
       loadHistory,
       noteLocalRunId,
       noteLocalBtwRunId,
@@ -116,6 +125,7 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     state?: Partial<TuiStateAccess>;
     chatLog?: HandlerChatLog;
     btw?: HandlerBtwPresenter;
+    refreshSessionInfo?: AsyncMockFn;
     localMode?: boolean;
   }) => {
     const state = makeState(params?.state);
@@ -128,10 +138,12 @@ describe("tui-event-handlers: handleAgentEvent", () => {
       state,
       localMode: params?.localMode,
       setActivityStatus: context.setActivityStatus,
+      refreshSessionInfo: params?.refreshSessionInfo ?? context.refreshSessionInfo,
       loadHistory: context.loadHistory,
       noteLocalRunId: context.noteLocalRunId,
       isLocalRunId: context.isLocalRunId,
       forgetLocalRunId: context.forgetLocalRunId,
+      clearLocalRunIds: context.clearLocalRunIds,
       isLocalBtwRunId: context.isLocalBtwRunId,
       forgetLocalBtwRunId: context.forgetLocalBtwRunId,
       clearLocalBtwRunIds: context.clearLocalBtwRunIds,
@@ -351,6 +363,91 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     expect(tui.requestRender).not.toHaveBeenCalled();
   });
 
+  it("reloads the current session and clears stale run state after sessions.changed reset", () => {
+    const refreshSessionInfo = vi.fn<() => Promise<void>>(async () => undefined);
+    const {
+      state,
+      chatLog,
+      btw,
+      tui,
+      loadHistory,
+      setActivityStatus,
+      noteLocalRunId,
+      isLocalRunId,
+      handleChatEvent,
+      handleAgentEvent,
+      handleSessionsChangedEvent,
+    } = createHandlersHarness({
+      state: {
+        activeChatRunId: null,
+        currentSessionId: "session-before",
+        sessionInfo: { verboseLevel: "on", updatedAt: 100 },
+      },
+      refreshSessionInfo,
+    });
+
+    handleChatEvent({
+      runId: "run-old",
+      sessionKey: state.currentSessionKey,
+      state: "final",
+      message: { content: [{ type: "text", text: "done" }] },
+    });
+    noteLocalRunId("run-local");
+    state.activeChatRunId = "run-stale";
+    state.pendingOptimisticUserMessage = true;
+    state.activityStatus = "streaming";
+    loadHistory.mockClear();
+    refreshSessionInfo.mockClear();
+    chatLog.startTool.mockClear();
+    btw.clear.mockClear();
+    tui.requestRender.mockClear();
+    setActivityStatus.mockClear();
+
+    handleSessionsChangedEvent({
+      sessionKey: "main",
+      reason: "reset",
+      sessionId: "session-after",
+      updatedAt: 200,
+    } satisfies SessionChangedEvent);
+
+    expect(state.activeChatRunId).toBeNull();
+    expect(state.pendingOptimisticUserMessage).toBe(false);
+    expect(state.activityStatus).toBe("idle");
+    expect(state.currentSessionId).toBe("session-after");
+    expect(state.sessionInfo.updatedAt).toBe(200);
+    expect(isLocalRunId("run-local")).toBe(false);
+    expect(setActivityStatus).toHaveBeenCalledWith("idle");
+    expect(btw.clear).toHaveBeenCalledTimes(1);
+    expect(loadHistory).toHaveBeenCalledTimes(1);
+    expect(refreshSessionInfo).not.toHaveBeenCalled();
+    expect(tui.requestRender).toHaveBeenCalledTimes(1);
+
+    handleAgentEvent({
+      runId: "run-old",
+      stream: "tool",
+      data: { phase: "start", toolCallId: "tc-old", name: "exec" },
+    });
+
+    expect(chatLog.startTool).not.toHaveBeenCalled();
+  });
+
+  it("ignores sessions.changed reset events for other sessions", () => {
+    const { state, loadHistory, setActivityStatus, handleSessionsChangedEvent } =
+      createHandlersHarness({
+        state: { activeChatRunId: "run-current", activityStatus: "streaming" },
+      });
+
+    handleSessionsChangedEvent({
+      sessionKey: "agent:other:main",
+      reason: "reset",
+    } satisfies SessionChangedEvent);
+
+    expect(state.activeChatRunId).toBe("run-current");
+    expect(state.activityStatus).toBe("streaming");
+    expect(loadHistory).not.toHaveBeenCalled();
+    expect(setActivityStatus).not.toHaveBeenCalledWith("idle");
+  });
+
   it("accepts tool events after chat final for the same run", () => {
     const { state, chatLog, tui, handleChatEvent, handleAgentEvent } = createHandlersHarness({
       state: { activeChatRunId: null },
@@ -455,9 +552,11 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     );
   });
 
-  it("refreshes history after a non-local chat final", () => {
+  it("refreshes history after a non-local chat final without a separate session-info refresh", () => {
+    const refreshSessionInfo = vi.fn<() => Promise<void>>(async () => undefined);
     const { state, loadHistory, handleChatEvent } = createHandlersHarness({
       state: { activeChatRunId: null },
+      refreshSessionInfo,
     });
 
     handleChatEvent({
@@ -468,6 +567,7 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     });
 
     expect(loadHistory).toHaveBeenCalledTimes(1);
+    expect(refreshSessionInfo).not.toHaveBeenCalled();
   });
 
   it("binds optimistic pending messages to the first gateway run id and skips history reload", () => {
@@ -725,9 +825,11 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     expect(loadHistory).not.toHaveBeenCalled();
   });
 
-  it("flushes deferred history reload after the newer local run finishes", () => {
+  it("flushes deferred history reload after the newer local run finishes without a separate session-info refresh", () => {
+    const refreshSessionInfo = vi.fn<() => Promise<void>>(async () => undefined);
     const { state, loadHistory, noteLocalRunId, handleChatEvent } = createHandlersHarness({
       state: { activeChatRunId: "run-main" },
+      refreshSessionInfo,
     });
 
     noteLocalRunId("run-local-empty");
@@ -746,6 +848,7 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     });
 
     expect(loadHistory).toHaveBeenCalledTimes(1);
+    expect(refreshSessionInfo).not.toHaveBeenCalled();
   });
 });
 
