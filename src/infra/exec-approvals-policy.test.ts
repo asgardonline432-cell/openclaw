@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { DEFAULT_AGENT_ID } from "../routing/session-key.js";
 import {
@@ -21,6 +22,20 @@ import {
   normalizeExecSecurity,
   requiresExecApproval,
 } from "./exec-approvals.js";
+
+const originalOpenClawStateDir = process.env.OPENCLAW_STATE_DIR;
+
+beforeEach(() => {
+  delete process.env.OPENCLAW_STATE_DIR;
+});
+
+afterEach(() => {
+  if (originalOpenClawStateDir === undefined) {
+    delete process.env.OPENCLAW_STATE_DIR;
+  } else {
+    process.env.OPENCLAW_STATE_DIR = originalOpenClawStateDir;
+  }
+});
 
 function expectMalformedAgentAskUsesDefaults(agentAsk: unknown): void {
   const approvals = {
@@ -303,6 +318,36 @@ describe("exec approvals policy helpers", () => {
     expect(summary.askFallback).toEqual({
       effective: "deny",
       source: "/tmp/node-exec-approvals.json defaults.askFallback",
+    });
+  });
+
+  it("uses OPENCLAW_STATE_DIR when reporting default host sources", () => {
+    const stateDir = path.resolve("tmp", "openclaw-exec-policy-state");
+    process.env.OPENCLAW_STATE_DIR = stateDir;
+    const hostPath = path.join(stateDir, "exec-approvals.json");
+
+    const summary = resolveExecPolicyScopeSummary({
+      approvals: {
+        version: 1,
+        defaults: {
+          security: "allowlist",
+          ask: "always",
+          askFallback: "deny",
+        },
+      },
+      scopeExecConfig: {
+        security: "full",
+        ask: "off",
+      },
+      configPath: "tools.exec",
+      scopeLabel: "tools.exec",
+    });
+
+    expect(summary.security.hostSource).toBe(`${hostPath} defaults.security`);
+    expect(summary.ask.hostSource).toBe(`${hostPath} defaults.ask`);
+    expect(summary.askFallback).toEqual({
+      effective: "deny",
+      source: `${hostPath} defaults.askFallback`,
     });
   });
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { withTempDir } from "../test-helpers/temp-dir.js";
 import {
   DEFAULT_GATEWAY_PORT,
+  resolveCanonicalStateDir,
   resolveDefaultConfigCandidates,
   resolveConfigPathCandidate,
   resolveConfigPath,
@@ -122,6 +123,14 @@ describe("state + config path candidates", () => {
     expect(resolveStateDir(env, () => "/home/test")).toBe(path.resolve("/new/state"));
   });
 
+  it("uses OPENCLAW_STATE_DIR for the canonical state dir when set", () => {
+    const env = {
+      OPENCLAW_STATE_DIR: "/new/state",
+    } as NodeJS.ProcessEnv;
+
+    expect(resolveCanonicalStateDir(env, () => "/home/test")).toBe(path.resolve("/new/state"));
+  });
+
   it("uses OPENCLAW_HOME for default state/config locations", () => {
     const env = {
       OPENCLAW_HOME: "/srv/openclaw-home",
@@ -165,6 +174,18 @@ describe("state + config path candidates", () => {
       await fs.mkdir(legacyDir, { recursive: true });
       const resolved = resolveStateDir({} as NodeJS.ProcessEnv, () => root);
       expect(resolved).toBe(legacyDir);
+    });
+  });
+
+  it("keeps the canonical state dir at ~/.openclaw when only legacy state exists", async () => {
+    await withTempDir({ prefix: "openclaw-canonical-state-" }, async (root) => {
+      const legacyDir = path.join(root, ".clawdbot");
+      await fs.mkdir(legacyDir, { recursive: true });
+
+      expect(resolveCanonicalStateDir({} as NodeJS.ProcessEnv, () => root)).toBe(
+        path.join(root, ".openclaw"),
+      );
+      expect(resolveStateDir({} as NodeJS.ProcessEnv, () => root)).toBe(legacyDir);
     });
   });
 

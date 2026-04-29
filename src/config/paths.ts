@@ -52,6 +52,23 @@ export function resolveNewStateDir(homedir: () => string = resolveDefaultHomeDir
   return newStateDir(homedir);
 }
 
+export function resolveExplicitStateDir(
+  env: NodeJS.ProcessEnv = process.env,
+  homedir: () => string = envHomedir(env),
+): string | null {
+  const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
+  const override = env.OPENCLAW_STATE_DIR?.trim();
+  return override ? resolveUserPath(override, env, effectiveHomedir) : null;
+}
+
+export function resolveCanonicalStateDir(
+  env: NodeJS.ProcessEnv = process.env,
+  homedir: () => string = envHomedir(env),
+): string {
+  const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
+  return resolveExplicitStateDir(env, homedir) ?? newStateDir(effectiveHomedir);
+}
+
 /**
  * State directory for mutable data (sessions, logs, caches).
  * Can be overridden via OPENCLAW_STATE_DIR.
@@ -62,9 +79,9 @@ export function resolveStateDir(
   homedir: () => string = envHomedir(env),
 ): string {
   const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
-  const override = env.OPENCLAW_STATE_DIR?.trim();
-  if (override) {
-    return resolveUserPath(override, env, effectiveHomedir);
+  const explicitStateDir = resolveExplicitStateDir(env, homedir);
+  if (explicitStateDir) {
+    return explicitStateDir;
   }
   const newDir = newStateDir(effectiveHomedir);
   if (env.OPENCLAW_TEST_FAST === "1") {
@@ -154,7 +171,7 @@ export function resolveConfigPath(
   if (env.OPENCLAW_TEST_FAST === "1") {
     return path.join(stateDir, CONFIG_FILENAME);
   }
-  const stateOverride = env.OPENCLAW_STATE_DIR?.trim();
+  const explicitStateDir = resolveExplicitStateDir(env, homedir);
   const candidates = [
     path.join(stateDir, CONFIG_FILENAME),
     ...LEGACY_CONFIG_FILENAMES.map((name) => path.join(stateDir, name)),
@@ -169,7 +186,7 @@ export function resolveConfigPath(
   if (existing) {
     return existing;
   }
-  if (stateOverride) {
+  if (explicitStateDir) {
     return path.join(stateDir, CONFIG_FILENAME);
   }
   const defaultStateDir = resolveStateDir(env, homedir);
@@ -196,11 +213,10 @@ export function resolveDefaultConfigCandidates(
   }
 
   const candidates: string[] = [];
-  const openclawStateDir = env.OPENCLAW_STATE_DIR?.trim();
-  if (openclawStateDir) {
-    const resolved = resolveUserPath(openclawStateDir, env, effectiveHomedir);
-    candidates.push(path.join(resolved, CONFIG_FILENAME));
-    candidates.push(...LEGACY_CONFIG_FILENAMES.map((name) => path.join(resolved, name)));
+  const explicitStateDir = resolveExplicitStateDir(env, homedir);
+  if (explicitStateDir) {
+    candidates.push(path.join(explicitStateDir, CONFIG_FILENAME));
+    candidates.push(...LEGACY_CONFIG_FILENAMES.map((name) => path.join(explicitStateDir, name)));
   }
 
   const defaultDirs = [newStateDir(effectiveHomedir), ...legacyStateDirs(effectiveHomedir)];
