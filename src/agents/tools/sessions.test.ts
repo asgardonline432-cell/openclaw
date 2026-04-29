@@ -6,6 +6,9 @@ import { createTestRegistry } from "../../test-utils/channel-plugins.js";
 import { extractAssistantText, sanitizeTextContent } from "./sessions-helpers.js";
 
 const callGatewayMock = vi.fn();
+const sessionsSendA2AMocks = vi.hoisted(() => ({
+  runSessionsSendA2AFlow: vi.fn(),
+}));
 vi.mock("../../gateway/call.js", () => ({
   callGateway: (opts: unknown) => callGatewayMock(opts),
 }));
@@ -32,7 +35,7 @@ vi.mock("../../config/config.js", async () => {
   };
 });
 vi.mock("./sessions-send-tool.a2a.js", () => ({
-  runSessionsSendA2AFlow: vi.fn(),
+  runSessionsSendA2AFlow: sessionsSendA2AMocks.runSessionsSendA2AFlow,
 }));
 
 let createSessionsListTool: typeof import("./sessions-list-tool.js").createSessionsListTool;
@@ -213,6 +216,7 @@ describe("sanitizeTextContent", () => {
 
 beforeEach(() => {
   loadConfigMock.mockReset();
+  sessionsSendA2AMocks.runSessionsSendA2AFlow.mockClear();
   loadConfigMock.mockReturnValue({
     session: { scope: "per-sender", mainKey: "main" },
     tools: { agentToAgent: { enabled: false } },
@@ -699,6 +703,62 @@ describe("sessions_send gating", () => {
       status: "ok",
       reply: undefined,
       sessionKey: MAIN_AGENT_SESSION_KEY,
+    });
+  });
+
+  it("marks accepted delivery separately from reply wait timeout", async () => {
+    const tool = createMainSessionsSendTool();
+
+    callGatewayMock.mockImplementation(async (opts: unknown) => {
+      const request = opts as { method?: string; params?: Record<string, unknown> };
+      if (request.method === "sessions.list") {
+        return {
+          path: "/tmp/sessions.json",
+          sessions: [{ key: MAIN_AGENT_SESSION_KEY, kind: "direct" }],
+        };
+      }
+      if (request.method === "chat.history") {
+        return { messages: [] };
+      }
+      if (request.method === "agent") {
+        return { runId: "run-accepted-timeout", status: "accepted", acceptedAt: 123 };
+      }
+      if (request.method === "agent.wait") {
+        return {
+          runId: "run-accepted-timeout",
+          status: "timeout",
+          error: "still running",
+          startedAt: 100,
+          endedAt: 200,
+          livenessState: "active",
+          yielded: true,
+        };
+      }
+      return {};
+    });
+
+    const result = await tool.execute("call-accepted-timeout", {
+      sessionKey: MAIN_AGENT_SESSION_KEY,
+      message: "ping",
+      timeoutSeconds: 1,
+    });
+
+    expect(result.details).toMatchObject({
+      status: "timeout",
+      error: "still running",
+      runId: "run-accepted-timeout",
+      sessionKey: MAIN_AGENT_SESSION_KEY,
+      accepted: true,
+      delivery: { status: "accepted", mode: "agent", acceptedAt: 123 },
+      replyWait: {
+        status: "timeout",
+        timeoutMs: 1000,
+        error: "still running",
+        startedAt: 100,
+        endedAt: 200,
+        livenessState: "active",
+        yielded: true,
+      },
     });
   });
 });

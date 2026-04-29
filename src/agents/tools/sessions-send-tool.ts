@@ -14,6 +14,7 @@ import {
 } from "../../utils/message-channel.js";
 import { resolveNestedAgentLaneForSession } from "../lanes.js";
 import {
+  type AgentWaitResult,
   readLatestAssistantReplySnapshot,
   waitForAgentRunAndReadUpdatedAssistantReply,
 } from "../run-wait.js";
@@ -51,16 +52,21 @@ async function startAgentRun(params: {
   runId: string;
   sendParams: Record<string, unknown>;
   sessionKey: string;
-}): Promise<{ ok: true; runId: string } | { ok: false; result: ReturnType<typeof jsonResult> }> {
+}): Promise<
+  | { ok: true; runId: string; acceptedAt?: number }
+  | { ok: false; result: ReturnType<typeof jsonResult> }
+> {
   try {
-    const response = await params.callGateway<{ runId: string }>({
+    const response = await params.callGateway<{ runId?: unknown; acceptedAt?: unknown }>({
       method: "agent",
       params: params.sendParams,
       timeoutMs: 10_000,
     });
+    const acceptedAt = typeof response?.acceptedAt === "number" ? response.acceptedAt : undefined;
     return {
       ok: true,
       runId: typeof response?.runId === "string" && response.runId ? response.runId : params.runId,
+      ...(acceptedAt !== undefined ? { acceptedAt } : {}),
     };
   } catch (err) {
     const messageText =
@@ -75,6 +81,32 @@ async function startAgentRun(params: {
       }),
     };
   }
+}
+
+function buildReplyWaitMetadata(result: AgentWaitResult, timeoutMs: number) {
+  const metadata: Record<string, boolean | number | string> = {
+    status: result.status,
+    timeoutMs,
+  };
+  if (result.error) {
+    metadata.error = result.error;
+  }
+  if (result.startedAt !== undefined) {
+    metadata.startedAt = result.startedAt;
+  }
+  if (result.endedAt !== undefined) {
+    metadata.endedAt = result.endedAt;
+  }
+  if (result.stopReason) {
+    metadata.stopReason = result.stopReason;
+  }
+  if (result.livenessState) {
+    metadata.livenessState = result.livenessState;
+  }
+  if (result.yielded !== undefined) {
+    metadata.yielded = result.yielded;
+  }
+  return metadata;
 }
 
 export function createSessionsSendTool(opts?: {
@@ -382,6 +414,13 @@ export function createSessionsSendTool(opts?: {
           status: "timeout",
           error: result.error,
           sessionKey: displayKey,
+          accepted: true,
+          delivery: {
+            status: "accepted",
+            mode: "agent",
+            ...(start.acceptedAt !== undefined ? { acceptedAt: start.acceptedAt } : {}),
+          },
+          replyWait: buildReplyWaitMetadata(result, timeoutMs),
         });
       }
       if (result.status === "error") {

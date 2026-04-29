@@ -93,6 +93,19 @@ the response:
   immediately.
 - **Wait for reply:** set a timeout and get the response inline.
 
+The top-level `status` describes what the tool caller should do next:
+
+- `status: "error"` or `status: "forbidden"` means the target was not accepted
+  because lookup, policy, or the initial Gateway `agent` call failed.
+- `status: "accepted"` means `timeoutSeconds: 0` accepted the target run and no
+  inline reply was requested.
+- `status: "timeout"` keeps the historical wait-timeout value. When the initial
+  target run was accepted, the result also includes `accepted: true`,
+  `delivery.status: "accepted"`, and `replyWait.status: "timeout"` so callers can
+  distinguish accepted delivery from a reply-wait timeout.
+- `status: "ok"` means the target run completed before the wait timeout; the
+  latest target reply, if a new one was visible, is returned as `reply`.
+
 Messages and A2A follow-up replies are marked as inter-session data in the
 receiving prompt (`[Inter-session message ... isUser=false]`) and in transcript
 provenance. The receiving agent should treat them as tool-routed data, not as a
