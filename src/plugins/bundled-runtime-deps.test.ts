@@ -6,6 +6,7 @@ import { Module } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getProcessStartTime } from "../shared/pid-alive.js";
 import {
   __testing as bundledRuntimeDepsActivityTesting,
   getActiveBundledRuntimeDepsInstallCount,
@@ -28,6 +29,7 @@ import {
   resolveBundledRuntimeDepsNpmRunner,
   scanBundledPluginRuntimeDeps,
   type BundledRuntimeDepsInstallParams,
+  withBundledRuntimeDepsFilesystemLock,
 } from "./bundled-runtime-deps.js";
 import {
   writeBundledPluginRuntimeDepsPackage as writeBundledPluginPackage,
@@ -2599,6 +2601,37 @@ describe("ensureBundledPluginRuntimeDeps", () => {
       bundledRuntimeDepsTesting.shouldRemoveRuntimeDepsLock(
         { pid: 123, createdAtMs: 0 },
         Number.MAX_SAFE_INTEGER,
+        () => true,
+      ),
+    ).toBe(false);
+  });
+
+  it("persists raw process starttime for live runtime-deps lock owner comparisons", () => {
+    const observedStarttime = getProcessStartTime(process.pid);
+    if (observedStarttime === null) {
+      expect(observedStarttime).toBeNull();
+      return;
+    }
+
+    const installRoot = makeTempDir();
+    const lockName = ".test-runtime-deps.lock";
+    let owner: { createdAtMs?: unknown; pid?: unknown; starttime?: unknown } | undefined;
+    withBundledRuntimeDepsFilesystemLock(installRoot, lockName, () => {
+      owner = JSON.parse(
+        fs.readFileSync(path.join(installRoot, lockName, "owner.json"), "utf8"),
+      ) as typeof owner;
+    });
+
+    expect(owner).toEqual(
+      expect.objectContaining({
+        pid: process.pid,
+        starttime: observedStarttime,
+      }),
+    );
+    expect(
+      bundledRuntimeDepsTesting.shouldRemoveRuntimeDepsLock(
+        { pid: process.pid, starttime: observedStarttime, createdAtMs: Number(owner?.createdAtMs) },
+        Date.now(),
         () => true,
       ),
     ).toBe(false);
