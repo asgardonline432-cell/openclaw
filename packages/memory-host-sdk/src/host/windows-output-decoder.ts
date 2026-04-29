@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { win32 as pathWin32 } from "node:path";
 import { normalizeLowercaseStringOrEmpty } from "./string-utils.js";
 
 const WINDOWS_CODEPAGE_ENCODING_MAP: Record<number, string> = {
@@ -12,6 +13,35 @@ const WINDOWS_CODEPAGE_ENCODING_MAP: Record<number, string> = {
 };
 
 let cachedWindowsConsoleEncoding: string | null | undefined;
+
+const WINDOWS_CODEPAGE_DETECTION_TIMEOUT_MS = 1_000;
+const DEFAULT_WINDOWS_SYSTEM_ROOT = "C:\\Windows";
+
+export function decodeWindowsOutputBuffer(params: {
+  buffer: Buffer;
+  platform?: NodeJS.Platform;
+  windowsEncoding?: string | null;
+}): string {
+  const platform = params.platform ?? process.platform;
+  if (platform !== "win32") {
+    return params.buffer.toString("utf8");
+  }
+
+  const utf8 = decodeStrictUtf8(params.buffer);
+  if (utf8 !== null) {
+    return utf8;
+  }
+
+  const encoding = params.windowsEncoding ?? resolveWindowsConsoleEncoding();
+  if (!encoding || normalizeLowercaseStringOrEmpty(encoding) === "utf-8") {
+    return params.buffer.toString("utf8");
+  }
+  try {
+    return new TextDecoder(encoding).decode(params.buffer);
+  } catch {
+    return params.buffer.toString("utf8");
+  }
+}
 
 export function createWindowsOutputDecoder(params?: {
   platform?: NodeJS.Platform;
@@ -83,10 +113,11 @@ function resolveWindowsConsoleEncoding(): string | null {
     return cachedWindowsConsoleEncoding;
   }
   try {
-    const result = spawnSync("cmd.exe", ["/d", "/s", "/c", "chcp"], {
+    const result = spawnSync(resolveTrustedWindowsCmdPath(), ["/d", "/s", "/c", "chcp"], {
       windowsHide: true,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      timeout: WINDOWS_CODEPAGE_DETECTION_TIMEOUT_MS,
     });
     const raw = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
     const codePage = parseWindowsCodePage(raw);
@@ -96,6 +127,31 @@ function resolveWindowsConsoleEncoding(): string | null {
     cachedWindowsConsoleEncoding = null;
   }
   return cachedWindowsConsoleEncoding;
+}
+
+function resolveTrustedWindowsCmdPath(): string {
+  const systemRoot =
+    normalizeWindowsSystemRoot(process.env.SystemRoot) ?? DEFAULT_WINDOWS_SYSTEM_ROOT;
+  return pathWin32.join(systemRoot, "System32", "cmd.exe");
+}
+
+function normalizeWindowsSystemRoot(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.includes("\0") || !pathWin32.isAbsolute(trimmed)) {
+    return null;
+  }
+  const normalized = pathWin32.normalize(trimmed);
+  const parsed = pathWin32.parse(normalized);
+  if (
+    pathWin32.basename(normalized).toLowerCase() !== "windows" ||
+    pathWin32.dirname(normalized).toLowerCase() !== parsed.root.toLowerCase()
+  ) {
+    return null;
+  }
+  return normalized;
 }
 
 function parseWindowsCodePage(raw: string): number | null {
@@ -151,4 +207,12 @@ function getUtf8SequenceLength(byte: number): number {
     return 4;
   }
   return 1;
+}
+
+function decodeStrictUtf8(buffer: Buffer): string | null {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return null;
+  }
 }

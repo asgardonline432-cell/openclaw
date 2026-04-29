@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { createWindowsOutputDecoder } from "../infra/windows-encoding.js";
+import { decodeWindowsOutputBuffer } from "../infra/windows-encoding.js";
 import { createLocalShellRunner } from "./tui-local-shell.js";
 
 const createSelector = () => {
@@ -15,7 +15,7 @@ const createSelector = () => {
 
 function createShellHarness(params?: {
   spawnCommand?: typeof import("node:child_process").spawn;
-  createOutputDecoder?: typeof createWindowsOutputDecoder;
+  decodeOutputBuffer?: typeof decodeWindowsOutputBuffer;
   env?: Record<string, string>;
 }) {
   const messages: string[] = [];
@@ -40,7 +40,7 @@ function createShellHarness(params?: {
     closeOverlay,
     createSelector: createSelectorSpy,
     spawnCommand,
-    ...(params?.createOutputDecoder ? { createOutputDecoder: params.createOutputDecoder } : {}),
+    ...(params?.decodeOutputBuffer ? { decodeOutputBuffer: params.decodeOutputBuffer } : {}),
     ...(params?.env ? { env: params.env } : {}),
   });
   return {
@@ -118,9 +118,8 @@ describe("createLocalShellRunner", () => {
           return;
         }
         setImmediate(() => {
-          child.stdout.emit("data", Buffer.from([0xb2]));
-          child.stdout.emit("data", Buffer.from([0xe2, 0xca]));
-          child.stdout.emit("data", Buffer.from([0xd4]));
+          child.stdout.emit("data", Buffer.from([0xd0, 0xa1]));
+          child.stdout.emit("data", Buffer.from([0xca, 0xd4]));
           child.stderr.emit("data", Buffer.from([0xa3]));
           child.stderr.emit("data", Buffer.from([0xbb]));
           child.emit("close", 0, null);
@@ -131,8 +130,8 @@ describe("createLocalShellRunner", () => {
 
     const harness = createShellHarness({
       spawnCommand: spawnCommand as unknown as typeof import("node:child_process").spawn,
-      createOutputDecoder: () =>
-        createWindowsOutputDecoder({ platform: "win32", windowsEncoding: "gbk" }),
+      decodeOutputBuffer: (params) =>
+        decodeWindowsOutputBuffer({ ...params, platform: "win32", windowsEncoding: "gbk" }),
     });
 
     const firstRun = harness.runLocalShellLine("!echo cjk");
@@ -140,7 +139,7 @@ describe("createLocalShellRunner", () => {
     selector?.onSelect?.({ value: "yes", label: "Yes" });
     await firstRun;
 
-    expect(harness.messages).toContain("[local] 测试");
+    expect(harness.messages).toContain("[local] 小试");
     expect(harness.messages).toContain("[local] ；");
   });
 });

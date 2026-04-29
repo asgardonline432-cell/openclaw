@@ -141,9 +141,8 @@ describe("runCliCommand", () => {
     const child = createMockChild();
     spawnMock.mockImplementationOnce(() => {
       queueMicrotask(() => {
-        child.stdout.emit("data", Buffer.from([0xb2]));
-        child.stdout.emit("data", Buffer.from([0xe2, 0xca]));
-        child.stdout.emit("data", Buffer.from([0xd4]));
+        child.stdout.emit("data", Buffer.from([0xd0, 0xa1]));
+        child.stdout.emit("data", Buffer.from([0xca, 0xd4]));
         child.stderr.emit("data", Buffer.from([0xa3]));
         child.stderr.emit("data", Buffer.from([0xbb]));
         child.emit("close", 0);
@@ -159,7 +158,15 @@ describe("runCliCommand", () => {
         cwd: tempDir,
         maxOutputChars: 1_000,
       }),
-    ).resolves.toEqual({ stdout: "测试", stderr: "；" });
+    ).resolves.toEqual({ stdout: "小试", stderr: "；" });
+
+    const chcpCommand = String(spawnSyncMock.mock.calls[0]?.[0] ?? "");
+    expect(path.win32.isAbsolute(chcpCommand)).toBe(true);
+    expect(chcpCommand.toLowerCase()).toMatch(/\\system32\\cmd\.exe$/);
+    expect(spawnSyncMock.mock.calls[0]?.[2]).toMatchObject({
+      timeout: 1_000,
+      windowsHide: true,
+    });
   });
 });
 

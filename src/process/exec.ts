@@ -6,7 +6,6 @@ import { promisify } from "node:util";
 import { danger, shouldLogVerbose } from "../globals.js";
 import { markOpenClawExecEnv } from "../infra/openclaw-exec-env.js";
 import {
-  createWindowsOutputDecoder,
   decodeWindowsOutputBuffer,
   resolveWindowsConsoleEncoding,
 } from "../infra/windows-encoding.js";
@@ -213,6 +212,13 @@ export type CommandOptions = {
 const WINDOWS_CLOSE_STATE_SETTLE_TIMEOUT_MS = 250;
 const WINDOWS_CLOSE_STATE_POLL_MS = 10;
 
+function outputChunkToBuffer(chunk: Buffer | string | Uint8Array): Buffer {
+  if (Buffer.isBuffer(chunk)) {
+    return chunk;
+  }
+  return Buffer.from(chunk);
+}
+
 export function resolveProcessExitCode(params: {
   explicitCode: number | null | undefined;
   childExitCode: number | null | undefined;
@@ -298,10 +304,8 @@ export async function runCommandWithTimeout(
   });
   // Spawn with inherited stdin (TTY) so tools like `pi` stay interactive when needed.
   return await new Promise((resolve, reject) => {
-    let stdout = "";
-    let stderr = "";
-    const stdoutDecoder = createWindowsOutputDecoder();
-    const stderrDecoder = createWindowsOutputDecoder();
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
     let settled = false;
     let timedOut = false;
     let noOutputTimedOut = false;
@@ -364,11 +368,11 @@ export async function runCommandWithTimeout(
     }
 
     child.stdout?.on("data", (d) => {
-      stdout += stdoutDecoder.decode(d);
+      stdoutChunks.push(outputChunkToBuffer(d));
       armNoOutputTimer();
     });
     child.stderr?.on("data", (d) => {
-      stderr += stderrDecoder.decode(d);
+      stderrChunks.push(outputChunkToBuffer(d));
       armNoOutputTimer();
     });
     child.on("error", (err) => {
@@ -425,8 +429,15 @@ export async function runCommandWithTimeout(
             ? 124
             : resolvedCode
           : resolvedCode;
-      stdout += stdoutDecoder.flush();
-      stderr += stderrDecoder.flush();
+      const windowsEncoding = resolveWindowsConsoleEncoding();
+      const stdout = decodeWindowsOutputBuffer({
+        buffer: Buffer.concat(stdoutChunks),
+        windowsEncoding,
+      });
+      const stderr = decodeWindowsOutputBuffer({
+        buffer: Buffer.concat(stderrChunks),
+        windowsEncoding,
+      });
       resolve({
         pid: child.pid ?? undefined,
         stdout,
