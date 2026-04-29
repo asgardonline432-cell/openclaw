@@ -81,6 +81,10 @@ const bundledRuntimeMirrorMaterializeCache = new Map<
   string,
   { signature: string; materialize: boolean }
 >();
+const rootDistMirroredRuntimeDepsCache = new Map<
+  string,
+  { signature: string; deps: RuntimeDepEntry[] }
+>();
 
 export type BundledRuntimeDepsNpmRunner = {
   command: string;
@@ -90,6 +94,10 @@ export type BundledRuntimeDepsNpmRunner = {
 
 function clearBundledRuntimeMirrorMaterializeCache(): void {
   bundledRuntimeMirrorMaterializeCache.clear();
+}
+
+function clearRootDistMirroredRuntimeDepsCache(): void {
+  rootDistMirroredRuntimeDepsCache.clear();
 }
 
 function statSignature(stat: Pick<fs.Stats, "dev" | "ino" | "size" | "mtimeMs">): string {
@@ -150,14 +158,15 @@ export function materializeBundledRuntimeMirrorDistFile(
     return;
   }
   try {
+    const targetStat = fs.lstatSync(targetPath);
     if (
       fs.realpathSync(sourcePath) === fs.realpathSync(targetPath) &&
-      !fs.lstatSync(targetPath).isSymbolicLink()
+      !targetStat.isSymbolicLink()
     ) {
       return;
     }
   } catch {
-    // Missing targets are expected before the mirror file is materialized.
+    // Missing or unreadable targets are replaced below.
   }
   fs.mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o755 });
   fs.rmSync(targetPath, { recursive: true, force: true });
@@ -434,6 +443,7 @@ function formatRuntimeDepsLockTimeoutMessage(params: {
 
 export const __testing = {
   clearBundledRuntimeMirrorMaterializeCache,
+  clearRootDistMirroredRuntimeDepsCache,
   formatRuntimeDepsLockTimeoutMessage,
   shouldRemoveRuntimeDepsLock,
 };
@@ -536,14 +546,13 @@ function collectMirroredPackageRuntimeDeps(
     const dep = parseInstallableRuntimeDep(name, runtimeDeps[name]);
     return dep ? [{ ...dep, pluginIds: [MIRRORED_PACKAGE_RUNTIME_DEP_PLUGIN_ID] }] : [];
   });
-  return mergeRuntimeDepEntries([
-    ...coreRuntimeDeps,
-    ...collectRootDistMirroredRuntimeDeps({
-      packageRoot,
-      runtimeDeps,
-      ownerPluginIds,
-    }),
-  ]);
+  const rootDistDeps = collectRootDistMirroredRuntimeDepsCached({
+    packageRoot,
+    runtimeDeps,
+  }).filter(
+    (dep) => !ownerPluginIds || dep.pluginIds.some((pluginId) => ownerPluginIds.has(pluginId)),
+  );
+  return mergeRuntimeDepEntries([...coreRuntimeDeps, ...rootDistDeps]);
 }
 
 function packageNameFromSpecifier(specifier: string): string | null {
@@ -670,11 +679,75 @@ function collectBundledRuntimeDependencyOwners(packageRoot: string): Map<
   return owners;
 }
 
+function stringifyRuntimeDepsSignature(runtimeDeps: Record<string, unknown>): string {
+  return JSON.stringify(
+    Object.entries(runtimeDeps).toSorted(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function fileSignature(filePath: string): string {
+  try {
+    return statSignature(fs.statSync(filePath));
+  } catch {
+    return "missing";
+  }
+}
+
+function createPluginPackageSignature(extensionsDir: string): string {
+  if (!fs.existsSync(extensionsDir)) {
+    return "missing";
+  }
+  const entries = fs
+    .readdirSync(extensionsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const packageJsonPath = path.join(extensionsDir, entry.name, "package.json");
+      return `${entry.name}:${fileSignature(packageJsonPath)}`;
+    })
+    .toSorted((left, right) => left.localeCompare(right));
+  return entries.join("|");
+}
+
+function createRootDistMirroredRuntimeDepsCacheSignature(params: {
+  packageRoot: string;
+  runtimeDeps: Record<string, unknown>;
+}): string {
+  const distDir = path.join(params.packageRoot, "dist");
+  const extensionsDir = path.join(distDir, "extensions");
+  return JSON.stringify({
+    packageJson: fileSignature(path.join(params.packageRoot, "package.json")),
+    dist: fileSignature(distDir),
+    plugins: createPluginPackageSignature(extensionsDir),
+    runtimeDeps: stringifyRuntimeDepsSignature(params.runtimeDeps),
+  });
+}
+
+function cloneRuntimeDepEntries(deps: readonly RuntimeDepEntry[]): RuntimeDepEntry[] {
+  return deps.map((dep) => ({ ...dep, pluginIds: [...dep.pluginIds] }));
+}
+
+function collectRootDistMirroredRuntimeDepsCached(params: {
+  packageRoot: string;
+  runtimeDeps: Record<string, unknown>;
+}): RuntimeDepEntry[] {
+  const cacheKey = path.resolve(params.packageRoot);
+  const signature = createRootDistMirroredRuntimeDepsCacheSignature(params);
+  const cached = rootDistMirroredRuntimeDepsCache.get(cacheKey);
+  if (cached?.signature === signature) {
+    return cloneRuntimeDepEntries(cached.deps);
+  }
+  const deps = collectRootDistMirroredRuntimeDeps(params);
+  rootDistMirroredRuntimeDepsCache.set(cacheKey, {
+    signature,
+    deps: cloneRuntimeDepEntries(deps),
+  });
+  return deps;
+}
+
 function collectRootDistMirroredRuntimeDeps(params: {
   packageRoot: string;
   runtimeDeps: Record<string, unknown>;
-  ownerPluginIds?: ReadonlySet<string>;
-}): { name: string; version: string; pluginIds: string[] }[] {
+}): RuntimeDepEntry[] {
   const dependencyOwners = collectBundledRuntimeDependencyOwners(params.packageRoot);
   if (dependencyOwners.size === 0) {
     return [];
@@ -694,12 +767,6 @@ function collectRootDistMirroredRuntimeDeps(params: {
       }
       const owner = dependencyOwners.get(dependencyName);
       if (!owner) {
-        continue;
-      }
-      if (
-        params.ownerPluginIds &&
-        !owner.pluginIds.some((pluginId) => params.ownerPluginIds?.has(pluginId))
-      ) {
         continue;
       }
       if (isPluginOwnedDistImporter({ relativePath, source, pluginIds: owner.pluginIds })) {

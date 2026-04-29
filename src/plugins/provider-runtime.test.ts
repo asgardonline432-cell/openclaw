@@ -27,6 +27,8 @@ type ResolveExternalAuthProfileProviderPluginIds =
   typeof import("./providers.js").resolveExternalAuthProfileProviderPluginIds;
 type ResolveOwningPluginIdsForProvider =
   typeof import("./providers.js").resolveOwningPluginIdsForProvider;
+type ResolveOwningPluginIdsForModelRefs =
+  typeof import("./providers.js").resolveOwningPluginIdsForModelRefs;
 type ResolveBundledProviderPolicySurface =
   typeof import("./provider-public-artifacts.js").resolveBundledProviderPolicySurface;
 
@@ -42,6 +44,7 @@ const resolveExternalAuthProfileProviderPluginIdsMock =
 const resolveOwningPluginIdsForProviderMock = vi.fn<ResolveOwningPluginIdsForProvider>(
   (_) => undefined,
 );
+const resolveOwningPluginIdsForModelRefsMock = vi.fn<ResolveOwningPluginIdsForModelRefs>((_) => []);
 const resolveBundledProviderPolicySurfaceMock = vi.fn<ResolveBundledProviderPolicySurface>(
   (_) => null,
 );
@@ -254,6 +257,8 @@ describe("provider-runtime", () => {
         resolveExternalAuthProfileProviderPluginIdsMock(params as never),
       resolveOwningPluginIdsForProvider: (params: unknown) =>
         resolveOwningPluginIdsForProviderMock(params as never),
+      resolveOwningPluginIdsForModelRefs: (params: unknown) =>
+        resolveOwningPluginIdsForModelRefsMock(params as never),
     }));
     vi.doMock("./providers.runtime.js", () => ({
       resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
@@ -335,6 +340,8 @@ describe("provider-runtime", () => {
     resolveExternalAuthProfileProviderPluginIdsMock.mockReturnValue([]);
     resolveOwningPluginIdsForProviderMock.mockReset();
     resolveOwningPluginIdsForProviderMock.mockReturnValue(undefined);
+    resolveOwningPluginIdsForModelRefsMock.mockReset();
+    resolveOwningPluginIdsForModelRefsMock.mockReturnValue([]);
     resolveBundledProviderPolicySurfaceMock.mockReset();
     resolveBundledProviderPolicySurfaceMock.mockReturnValue(null);
     providerRuntimeWarnMock.mockReset();
@@ -768,6 +775,36 @@ describe("provider-runtime", () => {
 
     expect(resolveCatalogHookProviderPluginIdsMock).toHaveBeenCalledTimes(1);
     expect(resolvePluginProvidersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes catalog augmentation hooks to requested provider owners", async () => {
+    resolveOwningPluginIdsForProviderMock.mockImplementation(({ provider }) =>
+      provider === "openai" ? ["openai"] : undefined,
+    );
+    resolvePluginProvidersMock.mockReturnValue([
+      {
+        id: "openai",
+        label: "OpenAI",
+        auth: [],
+        augmentModelCatalog: () => [{ provider: "openai", id: "gpt-5.4", name: "GPT-5.4" }],
+      },
+    ]);
+
+    expect(
+      await augmentModelCatalogWithProviderPlugins({
+        config: {} as OpenClawConfig,
+        env: process.env,
+        providerDiscoveryProviderIds: ["openai"],
+        context: { config: {}, env: process.env, entries: [] },
+      }),
+    ).toEqual([{ provider: "openai", id: "gpt-5.4", name: "GPT-5.4" }]);
+
+    expect(resolveCatalogHookProviderPluginIdsMock).not.toHaveBeenCalled();
+    expect(resolvePluginProvidersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        onlyPluginIds: ["openai"],
+      }),
+    );
   });
 
   it("returns provider-prepared runtime auth for the matched provider", async () => {
@@ -1255,6 +1292,32 @@ describe("provider-runtime", () => {
       api: "google-generative-ai",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta",
     });
+  });
+
+  it("does not scan all provider hooks after a matched transport owner declines", () => {
+    resolvePluginProvidersMock.mockImplementation((params) => {
+      expect(params.providerRefs).toEqual(["openai"]);
+      return [
+        {
+          id: "openai",
+          label: "OpenAI",
+          auth: [],
+          normalizeTransport: () => undefined,
+        },
+      ];
+    });
+
+    expect(
+      normalizeProviderTransportWithPlugin({
+        provider: "openai",
+        context: {
+          provider: "openai",
+          api: "openai-responses",
+          baseUrl: "https://api.openai.com/v1",
+        },
+      }),
+    ).toBeUndefined();
+    expect(resolvePluginProvidersMock).toHaveBeenCalledTimes(1);
   });
 
   it("invalidates cached runtime providers when config mutates in place", () => {
@@ -2005,6 +2068,12 @@ describe("provider-runtime", () => {
         supportsStore: false,
       },
     });
+    expect(resolvePluginProvidersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerRefs: ["openrouter"],
+        modelRefs: ["mistralai/mistral-small-3.2-24b-instruct"],
+      }),
+    );
   });
 
   it("applies foreign transport normalization for custom provider hosts", () => {

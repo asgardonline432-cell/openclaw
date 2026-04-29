@@ -613,6 +613,11 @@ describe("agentCommand", () => {
         { provider: "anthropic", model: "claude-opus-4-6" },
         { provider: "openai", model: "gpt-5.4" },
       ]);
+      expect(loadModelCatalog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerDiscoveryProviderIds: ["anthropic", "openai"],
+        }),
+      );
     });
   });
 

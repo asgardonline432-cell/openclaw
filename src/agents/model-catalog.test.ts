@@ -175,6 +175,20 @@ describe("loadModelCatalog", () => {
     expect(discoverAuthStorage).toHaveBeenCalledWith("/tmp/openclaw", { readOnly: true });
   });
 
+  it("scopes models.json preparation when catalog provider scope is supplied", async () => {
+    mockSingleOpenAiCatalogModel();
+    const cfg = {} as OpenClawConfig;
+
+    await loadModelCatalog({
+      config: cfg,
+      providerDiscoveryProviderIds: ["openai"],
+    });
+
+    expect(ensureOpenClawModelsJsonMock).toHaveBeenCalledWith(cfg, undefined, {
+      providerDiscoveryProviderIds: ["openai"],
+    });
+  });
+
   it("does not synthesize stale openai-codex/gpt-5.3-codex-spark entries from gpt-5.4", async () => {
     mockPiDiscoveryModels([
       {

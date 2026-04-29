@@ -813,11 +813,26 @@ function mirrorBundledRuntimeDistRootEntries(params: {
     if (path.resolve(sourcePath) === path.resolve(targetPath)) {
       continue;
     }
-    if (entry.isFile() && shouldMaterializeBundledRuntimeMirrorDistFile(sourcePath)) {
-      materializeBundledRuntimeMirrorDistFile(sourcePath, targetPath);
+    let existingTargetIsSymlink = false;
+    try {
+      const targetStat = fs.lstatSync(targetPath);
+      if (!targetStat.isSymbolicLink()) {
+        continue;
+      }
+      existingTargetIsSymlink = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+    if (
+      existingTargetIsSymlink &&
+      !(entry.isFile() && shouldMaterializeBundledRuntimeMirrorDistFile(sourcePath))
+    ) {
       continue;
     }
-    if (fs.existsSync(targetPath)) {
+    if (entry.isFile() && shouldMaterializeBundledRuntimeMirrorDistFile(sourcePath)) {
+      materializeBundledRuntimeMirrorDistFile(sourcePath, targetPath);
       continue;
     }
     try {

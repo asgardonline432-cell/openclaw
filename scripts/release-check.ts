@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { COMPLETION_SKIP_PLUGIN_COMMANDS_ENV } from "../src/cli/completion-runtime.ts";
 import {
   isBundledRuntimeDepsInstallStagePath,
   LOCAL_BUILD_METADATA_DIST_PATHS,
@@ -120,6 +121,12 @@ export const PACKED_CLI_SMOKE_COMMANDS = [
   ["status", "--json", "--timeout", "1"],
   ["config", "schema"],
   ["models", "list", "--provider", "amazon-bedrock"],
+] as const;
+export const PACKED_COMPLETION_SMOKE_ARGS = [
+  "completion",
+  "--write-state",
+  "--shell",
+  "zsh",
 ] as const;
 
 function collectBundledExtensions(): BundledExtension[] {
@@ -296,6 +303,19 @@ export function createPackedCliSmokeEnv(
     OPENCLAW_NO_ONBOARD: "1",
     OPENCLAW_SUPPRESS_NOTES: "1",
     ...overrides,
+  };
+}
+
+export function createPackedCompletionSmokeEnv(
+  env: NodeJS.ProcessEnv,
+  overrides: NodeJS.ProcessEnv = {},
+): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    ...overrides,
+    OPENCLAW_SUPPRESS_NOTES: "1",
+    OPENCLAW_DISABLE_BUNDLED_ENTRY_SOURCE_FALLBACK: "1",
+    [COMPLETION_SKIP_PLUGIN_COMMANDS_ENV]: "1",
   };
 }
 
@@ -585,17 +605,14 @@ function runPackedBundledChannelEntrySmoke(): void {
 
     execFileSync(
       process.execPath,
-      [join(packageRoot, "openclaw.mjs"), "completion", "--write-state"],
+      [join(packageRoot, "openclaw.mjs"), ...PACKED_COMPLETION_SMOKE_ARGS],
       {
         cwd: packageRoot,
         stdio: "inherit",
-        env: {
-          ...process.env,
+        env: createPackedCompletionSmokeEnv(process.env, {
           HOME: homeDir,
           OPENCLAW_STATE_DIR: stateDir,
-          OPENCLAW_SUPPRESS_NOTES: "1",
-          OPENCLAW_DISABLE_BUNDLED_ENTRY_SOURCE_FALLBACK: "1",
-        },
+        }),
       },
     );
 

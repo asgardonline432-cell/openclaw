@@ -5,7 +5,10 @@ import { bundledDistPluginFile, bundledPluginFile } from "openclaw/plugin-sdk/te
 import { describe, expect, it } from "vitest";
 import { listBundledPluginPackArtifacts } from "../scripts/lib/bundled-plugin-build-entries.mjs";
 import { listPluginSdkDistArtifacts } from "../scripts/lib/plugin-sdk-entries.mjs";
-import { WORKSPACE_TEMPLATE_PACK_PATHS } from "../scripts/lib/workspace-bootstrap-smoke.mjs";
+import {
+  WORKSPACE_TEMPLATE_PACK_PATHS,
+  createWorkspaceBootstrapSmokeEnv,
+} from "../scripts/lib/workspace-bootstrap-smoke.mjs";
 import { collectInstalledRootDependencyManifestErrors } from "../scripts/openclaw-npm-postpublish-verify.ts";
 import {
   collectAppcastSparkleVersionErrors,
@@ -19,11 +22,14 @@ import {
   collectMissingPackPaths,
   collectPackUnpackedSizeErrors,
   createPackedCliSmokeEnv,
+  createPackedCompletionSmokeEnv,
   createPackedBundledPluginPostinstallEnv,
   PACKED_CLI_SMOKE_COMMANDS,
+  PACKED_COMPLETION_SMOKE_ARGS,
   packageNameFromSpecifier,
   resolveMissingPackBuildHint,
 } from "../scripts/release-check.ts";
+import { COMPLETION_SKIP_PLUGIN_COMMANDS_ENV } from "../src/cli/completion-runtime.ts";
 import {
   LOCAL_BUILD_METADATA_DIST_PATHS,
   PACKAGE_DIST_INVENTORY_RELATIVE_PATH,
@@ -74,6 +80,10 @@ describe("packed CLI smoke", () => {
     ]);
   });
 
+  it("keeps packed completion smoke scoped to one shell cache", () => {
+    expect(PACKED_COMPLETION_SMOKE_ARGS).toEqual(["completion", "--write-state", "--shell", "zsh"]);
+  });
+
   it("builds a packed CLI smoke env with packaged-install guardrails", () => {
     expect(
       createPackedCliSmokeEnv(
@@ -108,6 +118,61 @@ describe("packed CLI smoke", () => {
       OPENCLAW_NO_ONBOARD: "1",
       OPENCLAW_SUPPRESS_NOTES: "1",
       OPENCLAW_STATE_DIR: "/tmp/smoke-state",
+    });
+  });
+
+  it("skips plugin command discovery during packed completion cache smoke", () => {
+    expect(
+      createPackedCompletionSmokeEnv(
+        {
+          PATH: "/usr/bin",
+          OPENCLAW_COMPLETION_SKIP_PLUGIN_COMMANDS: "0",
+        },
+        {
+          HOME: "/tmp/smoke-home",
+          OPENCLAW_STATE_DIR: "/tmp/smoke-state",
+        },
+      ),
+    ).toMatchObject({
+      PATH: "/usr/bin",
+      HOME: "/tmp/smoke-home",
+      OPENCLAW_STATE_DIR: "/tmp/smoke-state",
+      OPENCLAW_SUPPRESS_NOTES: "1",
+      OPENCLAW_DISABLE_BUNDLED_ENTRY_SOURCE_FALLBACK: "1",
+      [COMPLETION_SKIP_PLUGIN_COMMANDS_ENV]: "1",
+    });
+  });
+});
+
+describe("workspace bootstrap smoke", () => {
+  it("runs with a sterile env instead of maintainer provider credentials", () => {
+    expect(
+      createWorkspaceBootstrapSmokeEnv(
+        {
+          PATH: "/usr/bin",
+          HOME: "/tmp/original-home",
+          TMPDIR: "/tmp/original-tmp",
+          OPENAI_API_KEY: "real-secret",
+          ANTHROPIC_API_KEY: "real-secret",
+          OPENCLAW_CONFIG_PATH: "/tmp/leaky-config.json",
+        },
+        "/tmp/bootstrap-home",
+      ),
+    ).toEqual({
+      PATH:
+        process.platform === "win32"
+          ? `${dirname(process.execPath)};C:\\Windows\\System32;C:\\Windows`
+          : `${dirname(process.execPath)}:/usr/bin:/bin`,
+      HOME: "/tmp/bootstrap-home",
+      USERPROFILE: "/tmp/bootstrap-home",
+      OPENCLAW_HOME: "/tmp/bootstrap-home",
+      TMPDIR: "/tmp/original-tmp",
+      OPENCLAW_NO_ONBOARD: "1",
+      OPENCLAW_SUPPRESS_NOTES: "1",
+      OPENCLAW_DISABLE_BUNDLED_ENTRY_SOURCE_FALLBACK: "1",
+      AWS_EC2_METADATA_DISABLED: "true",
+      AWS_SHARED_CREDENTIALS_FILE: "/tmp/bootstrap-home/.aws/credentials",
+      AWS_CONFIG_FILE: "/tmp/bootstrap-home/.aws/config",
     });
   });
 });

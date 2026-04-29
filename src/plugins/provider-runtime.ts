@@ -166,18 +166,24 @@ function buildCatalogHookProviderIdCacheKey(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  providerDiscoveryProviderIds?: readonly string[];
 }): string {
   const { roots } = resolvePluginCacheInputs({
     workspaceDir: params.workspaceDir,
     env: params.env,
   });
-  return `${roots.workspace ?? ""}::${roots.global}::${roots.stock ?? ""}::${JSON.stringify(resolveProviderHookConfigCacheShape(params.config, undefined))}`;
+  const providerScope = params.providerDiscoveryProviderIds
+    ?.map((provider) => normalizeProviderId(provider))
+    .filter(Boolean)
+    .toSorted((left, right) => left.localeCompare(right));
+  return `${roots.workspace ?? ""}::${roots.global}::${roots.stock ?? ""}::${JSON.stringify(resolveProviderHookConfigCacheShape(params.config, undefined))}::${JSON.stringify(providerScope ?? null)}`;
 }
 
 function resolveCachedCatalogHookProviderPluginIds(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  providerDiscoveryProviderIds?: readonly string[];
 }): string[] {
   const env = params.env ?? process.env;
   const bucket = resolveCatalogHookProviderIdCacheBucket({
@@ -187,16 +193,34 @@ function resolveCachedCatalogHookProviderPluginIds(params: {
     config: params.config,
     workspaceDir: params.workspaceDir,
     env,
+    providerDiscoveryProviderIds: params.providerDiscoveryProviderIds,
   });
   const cached = bucket.get(key);
   if (cached) {
     return cached;
   }
-  const resolved = resolveCatalogHookProviderPluginIds({
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    env,
-  });
+  const providerScope = params.providerDiscoveryProviderIds
+    ?.map((provider) => provider.trim())
+    .filter(Boolean);
+  const resolved = providerScope?.length
+    ? [
+        ...new Set(
+          providerScope.flatMap(
+            (provider) =>
+              resolveOwningPluginIdsForProvider({
+                provider,
+                config: params.config,
+                workspaceDir: params.workspaceDir,
+                env,
+              }) ?? [provider],
+          ),
+        ),
+      ].toSorted((left, right) => left.localeCompare(right))
+    : resolveCatalogHookProviderPluginIds({
+        config: params.config,
+        workspaceDir: params.workspaceDir,
+        env,
+      });
   bucket.set(key, resolved);
   return resolved;
 }
@@ -231,6 +255,7 @@ function resolveProviderPluginsForCatalogHooks(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  providerDiscoveryProviderIds?: readonly string[];
 }): ProviderPlugin[] {
   const workspaceDir = params.workspaceDir ?? getActivePluginRegistryWorkspaceDirFromState();
   const env = params.env ?? process.env;
@@ -243,6 +268,7 @@ function resolveProviderPluginsForCatalogHooks(params: {
     config: params.config,
     workspaceDir,
     env,
+    providerDiscoveryProviderIds: params.providerDiscoveryProviderIds,
   });
   const cacheKey = JSON.stringify({
     workspaceDir: workspaceDir ?? "",
@@ -402,9 +428,14 @@ function resolveProviderCompatHookPlugins(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  modelRefs?: readonly string[];
 }): ProviderPlugin[] {
-  const candidates = resolveProviderPluginsForHooks(params);
   const owner = resolveProviderRuntimePlugin(params);
+  const candidates = resolveProviderPluginsForHooks({
+    ...params,
+    providerRefs: [params.provider],
+    modelRefs: params.modelRefs ? [...params.modelRefs] : undefined,
+  });
   if (!owner) {
     return candidates;
   }
@@ -451,7 +482,10 @@ export function applyProviderResolvedModelCompatWithPlugins(params: {
   let nextModel = params.context.model;
   let changed = false;
 
-  for (const plugin of resolveProviderCompatHookPlugins(params)) {
+  for (const plugin of resolveProviderCompatHookPlugins({
+    ...params,
+    modelRefs: [params.context.modelId],
+  })) {
     const patch = plugin.contributeResolvedModelCompat?.({
       ...params.context,
       model: nextModel,
@@ -533,6 +567,10 @@ export function normalizeProviderTransportWithPlugin(params: {
   const normalizedMatched = matchedPlugin?.normalizeTransport?.(params.context);
   if (normalizedMatched && hasTransportChange(normalizedMatched)) {
     return normalizedMatched;
+  }
+
+  if (matchedPlugin) {
+    return undefined;
   }
 
   for (const candidate of resolveProviderPluginsForHooks(params)) {
@@ -974,7 +1012,7 @@ export function resolveProviderSyntheticAuthWithPlugin(params: {
       return runtimeProviderResolved;
     }
   }
-  if (providerRefs.length === 1) {
+  if (providerRefs.length === 1 && discoveryPluginIds.length === 0) {
     return resolvePluginDiscoveryProvidersRuntime({
       config: params.config,
       workspaceDir: params.workspaceDir,
@@ -1073,6 +1111,7 @@ export async function augmentModelCatalogWithProviderPlugins(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  providerDiscoveryProviderIds?: readonly string[];
   context: ProviderAugmentModelCatalogContext;
 }) {
   const supplemental = [] as ProviderAugmentModelCatalogContext["entries"];

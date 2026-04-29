@@ -9,6 +9,7 @@ import {
 import { formatCliCommand } from "../cli/command-format.js";
 import type { CliDeps } from "../cli/deps.types.js";
 import type { SessionEntry } from "../config/sessions/types.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
   clearAgentRunContext,
   emitAgentEvent,
@@ -249,6 +250,50 @@ function normalizeExplicitOverrideInput(raw: string, kind: "provider" | "model")
     throw new Error(`${label} override contains invalid control characters.`);
   }
   return trimmed;
+}
+
+function resolveModelCatalogProviderScope(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  defaultProvider: string;
+  defaultModel: string;
+  hasStoredOverride: boolean;
+  storedModelOverrideSource?: "auto" | "user";
+  explicitProviderOverride?: string;
+  explicitModelOverride?: string;
+}): string[] {
+  const providers = new Set<string>();
+  const addProvider = (provider: string | undefined) => {
+    const normalized = provider?.trim();
+    if (normalized) {
+      providers.add(normalized);
+    }
+  };
+  const addModelRef = (raw: string | undefined, defaultProvider: string) => {
+    const parsed = raw ? parseModelRef(raw, defaultProvider) : null;
+    addProvider(parsed?.provider);
+  };
+
+  addProvider(params.defaultProvider);
+  addModelRef(params.defaultModel, params.defaultProvider);
+  addProvider(params.explicitProviderOverride);
+  addModelRef(
+    params.explicitModelOverride,
+    params.explicitProviderOverride ?? params.defaultProvider,
+  );
+  for (const raw of Object.keys(params.cfg.agents?.defaults?.models ?? {})) {
+    addModelRef(raw, params.defaultProvider);
+  }
+  for (const raw of resolveEffectiveModelFallbacks({
+    cfg: params.cfg,
+    agentId: params.agentId,
+    hasSessionModelOverride: params.hasStoredOverride,
+    modelOverrideSource: params.storedModelOverrideSource,
+  }) ?? []) {
+    addModelRef(raw, params.defaultProvider);
+  }
+
+  return [...providers].toSorted((left, right) => left.localeCompare(right));
 }
 
 async function prepareAgentCommandExecution(
@@ -723,7 +768,19 @@ async function agentCommandInternal(
     let allowAnyModel = !hasAllowlist;
 
     if (needsModelCatalog) {
-      modelCatalog = await loadModelCatalog({ config: cfg });
+      modelCatalog = await loadModelCatalog({
+        config: cfg,
+        providerDiscoveryProviderIds: resolveModelCatalogProviderScope({
+          cfg,
+          agentId: sessionAgentId,
+          defaultProvider,
+          defaultModel,
+          hasStoredOverride,
+          storedModelOverrideSource,
+          explicitProviderOverride,
+          explicitModelOverride,
+        }),
+      });
       const allowed = buildAllowedModelSet({
         cfg,
         catalog: modelCatalog,

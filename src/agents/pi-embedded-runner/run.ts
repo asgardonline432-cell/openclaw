@@ -431,7 +431,9 @@ export async function runEmbeddedPiAgent(
         dynamicModelResolution.model || pluginHarnessOwnsTransport
           ? dynamicModelResolution
           : await (async () => {
-              await ensureOpenClawModelsJson(params.config, agentDir);
+              await ensureOpenClawModelsJson(params.config, agentDir, {
+                providerDiscoveryProviderIds: [provider],
+              });
               return await resolveModelAsync(provider, modelId, agentDir, params.config);
             })();
       const { model, error, authStorage, modelRegistry } = modelResolution;

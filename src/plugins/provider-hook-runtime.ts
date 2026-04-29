@@ -3,7 +3,10 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { normalizePluginIdScope, serializePluginIdScope } from "./plugin-scope.js";
 import { resolveProviderConfigApiOwnerHint } from "./provider-config-owner.js";
-import { resolveOwningPluginIdsForProvider } from "./providers.js";
+import {
+  resolveOwningPluginIdsForModelRefs,
+  resolveOwningPluginIdsForProvider,
+} from "./providers.js";
 import { isPluginProvidersLoadInFlight, resolvePluginProviders } from "./providers.runtime.js";
 import { resolvePluginCacheInputs } from "./roots.js";
 import { getActivePluginRegistryWorkspaceDirFromState } from "./runtime-state.js";
@@ -130,6 +133,23 @@ function resolveProviderOwnerConfigPluginIds(params: {
   return [...pluginIds].toSorted((left, right) => left.localeCompare(right));
 }
 
+function resolveModelOwnerConfigPluginIds(params: {
+  modelRefs?: readonly string[];
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+}): string[] {
+  if (!params.modelRefs?.length) {
+    return [];
+  }
+  return resolveOwningPluginIdsForModelRefs({
+    models: params.modelRefs,
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+  });
+}
+
 export function resolveProviderHookConfigCacheShape(
   config: OpenClawConfig | undefined,
   fullConfigPluginIds: readonly string[] | undefined,
@@ -148,6 +168,7 @@ function buildHookProviderCacheKey(params: {
   workspaceDir?: string;
   onlyPluginIds?: string[];
   providerRefs?: string[];
+  modelRefs?: string[];
   env?: NodeJS.ProcessEnv;
   fullConfigPluginIds?: string[];
   applyAutoEnable?: boolean;
@@ -166,7 +187,7 @@ function buildHookProviderCacheKey(params: {
     bundledProviderVitestCompat: params.bundledProviderVitestCompat ?? true,
     installBundledRuntimeDeps: params.installBundledRuntimeDeps ?? false,
   };
-  return `${roots.workspace ?? ""}::${roots.global}::${roots.stock ?? ""}::${JSON.stringify(resolveProviderHookConfigCacheShape(params.config, params.fullConfigPluginIds))}::${serializePluginIdScope(onlyPluginIds)}::${JSON.stringify(params.providerRefs ?? [])}::${JSON.stringify(loadPolicy)}`;
+  return `${roots.workspace ?? ""}::${roots.global}::${roots.stock ?? ""}::${JSON.stringify(resolveProviderHookConfigCacheShape(params.config, params.fullConfigPluginIds))}::${serializePluginIdScope(onlyPluginIds)}::${JSON.stringify(params.providerRefs ?? [])}::${JSON.stringify(params.modelRefs ?? [])}::${JSON.stringify(loadPolicy)}`;
 }
 
 export function clearProviderRuntimeHookCache(): void {
@@ -187,6 +208,7 @@ export function resolveProviderPluginsForHooks(params: {
   env?: NodeJS.ProcessEnv;
   onlyPluginIds?: string[];
   providerRefs?: string[];
+  modelRefs?: string[];
   applyAutoEnable?: boolean;
   bundledProviderAllowlistCompat?: boolean;
   bundledProviderVitestCompat?: boolean;
@@ -206,6 +228,12 @@ export function resolveProviderPluginsForHooks(params: {
         workspaceDir,
         env,
       }),
+      ...resolveModelOwnerConfigPluginIds({
+        modelRefs: params.modelRefs,
+        config: params.config,
+        workspaceDir,
+        env,
+      }),
     ]),
   ].toSorted((left, right) => left.localeCompare(right));
   const cacheKey = buildHookProviderCacheKey({
@@ -213,6 +241,7 @@ export function resolveProviderPluginsForHooks(params: {
     workspaceDir,
     onlyPluginIds,
     providerRefs: params.providerRefs,
+    modelRefs: params.modelRefs,
     env,
     fullConfigPluginIds,
     applyAutoEnable: params.applyAutoEnable,
