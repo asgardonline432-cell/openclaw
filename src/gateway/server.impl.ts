@@ -979,6 +979,7 @@ export async function startGatewayServer(
         defaultWorkspaceDir,
         deps,
         startChannels,
+        refreshHealthSnapshot: refreshGatewayHealthSnapshotWithRuntime,
         logHooks,
         logChannels,
         unavailableGatewayMethods,

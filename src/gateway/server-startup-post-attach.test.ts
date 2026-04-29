@@ -369,6 +369,38 @@ describe("startGatewayPostAttachRuntime", () => {
     );
   });
 
+  it("forces a health refresh after channel startup", async () => {
+    const events: string[] = [];
+    const startChannels = vi.fn(async () => {
+      events.push("channels");
+    });
+    const refreshHealthSnapshot = vi.fn(async () => {
+      events.push("health");
+    });
+
+    await startGatewaySidecars({
+      cfg: { hooks: { internal: { enabled: false } } } as never,
+      pluginRegistry: createPostAttachParams().pluginRegistry,
+      defaultWorkspaceDir: "/tmp/openclaw-workspace",
+      deps: {} as never,
+      startChannels,
+      refreshHealthSnapshot,
+      log: { warn: vi.fn() },
+      logHooks: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      logChannels: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    expect(events).toEqual(["channels", "health"]);
+    expect(refreshHealthSnapshot).toHaveBeenCalledWith({ probe: false, force: true });
+  });
+
   it("keeps startup-gated methods unavailable while sidecars are still resuming", async () => {
     let resumeSidecars!: () => void;
     const sidecarsReady = new Promise<{ pluginServices: null }>((resolve) => {

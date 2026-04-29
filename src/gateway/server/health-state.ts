@@ -15,6 +15,7 @@ let healthVersion = 1;
 let healthCache: HealthSummary | null = null;
 let healthRefresh: Promise<HealthSummary> | null = null;
 let sensitiveHealthRefresh: Promise<HealthSummary> | null = null;
+let publicHealthRefreshGeneration = 0;
 let broadcastHealthUpdate: ((snap: HealthSummary) => void) | null = null;
 
 export function buildGatewaySnapshot(opts?: { includeSensitive?: boolean }): Snapshot {
@@ -75,11 +76,20 @@ export function setBroadcastHealthUpdate(fn: ((snap: HealthSummary) => void) | n
 export async function refreshGatewayHealthSnapshot(opts?: {
   probe?: boolean;
   includeSensitive?: boolean;
+  force?: boolean;
   getRuntimeSnapshot?: () => ChannelRuntimeSnapshot;
 }) {
   const includeSensitive = opts?.includeSensitive === true;
+  const force = opts?.force === true;
   let refresh = includeSensitive ? sensitiveHealthRefresh : healthRefresh;
-  if (!refresh) {
+  if (!refresh || force) {
+    const generation = includeSensitive ? 0 : publicHealthRefreshGeneration + 1;
+    if (!includeSensitive) {
+      publicHealthRefreshGeneration = generation;
+      if (force) {
+        healthCache = null;
+      }
+    }
     refresh = (async () => {
       let runtimeSnapshot: ChannelRuntimeSnapshot | undefined;
       try {
@@ -92,7 +102,7 @@ export async function refreshGatewayHealthSnapshot(opts?: {
         includeSensitive,
         runtimeSnapshot,
       });
-      if (!includeSensitive) {
+      if (!includeSensitive && generation === publicHealthRefreshGeneration) {
         healthCache = snap;
         healthVersion += 1;
         if (broadcastHealthUpdate) {
@@ -102,8 +112,10 @@ export async function refreshGatewayHealthSnapshot(opts?: {
       return snap;
     })().finally(() => {
       if (includeSensitive) {
-        sensitiveHealthRefresh = null;
-      } else {
+        if (sensitiveHealthRefresh === refresh) {
+          sensitiveHealthRefresh = null;
+        }
+      } else if (healthRefresh === refresh) {
         healthRefresh = null;
       }
     });

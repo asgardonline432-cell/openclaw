@@ -61,6 +61,59 @@ describe("refreshGatewayHealthSnapshot", () => {
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
   });
 
+  it("force refreshes clear cached public health and ignore older in-flight refreshes", async () => {
+    const healthState = await loadHealthState();
+    const cachedSummary = createHealthSummary();
+    const staleSummary = createHealthSummary();
+    const freshSummary = createHealthSummary();
+    const runtimeSnapshot = {
+      channels: { telegram: { accountId: "default", running: true } },
+      channelAccounts: {},
+    };
+    let resolveStale: ((summary: HealthSummary) => void) | undefined;
+    let resolveFresh: ((summary: HealthSummary) => void) | undefined;
+    getHealthSnapshotMock
+      .mockResolvedValueOnce(cachedSummary)
+      .mockImplementationOnce(
+        () =>
+          new Promise<HealthSummary>((resolve) => {
+            resolveStale = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<HealthSummary>((resolve) => {
+            resolveFresh = resolve;
+          }),
+      );
+
+    await healthState.refreshGatewayHealthSnapshot({ probe: true });
+    expect(healthState.getHealthCache()).toBe(cachedSummary);
+
+    const stale = healthState.refreshGatewayHealthSnapshot({ probe: true });
+    const fresh = healthState.refreshGatewayHealthSnapshot({
+      probe: false,
+      force: true,
+      getRuntimeSnapshot: () => runtimeSnapshot,
+    });
+
+    expect(getHealthSnapshotMock).toHaveBeenCalledTimes(3);
+    expect(healthState.getHealthCache()).toBeNull();
+    expect(getHealthSnapshotMock.mock.calls[2]?.[0]).toEqual({
+      probe: false,
+      includeSensitive: false,
+      runtimeSnapshot,
+    });
+
+    resolveFresh?.(freshSummary);
+    await expect(fresh).resolves.toBe(freshSummary);
+    expect(healthState.getHealthCache()).toBe(freshSummary);
+
+    resolveStale?.(staleSummary);
+    await expect(stale).resolves.toBe(staleSummary);
+    expect(healthState.getHealthCache()).toBe(freshSummary);
+  });
+
   it("captures runtime snapshots for completed refreshes and guards snapshot failures", async () => {
     const healthState = await loadHealthState();
     const runtimeSnapshot = {
@@ -98,7 +151,9 @@ describe("refreshGatewayHealthSnapshot", () => {
     const sensitiveSummary = createHealthSummary();
     const safeSummary = createHealthSummary();
     const broadcast = vi.fn();
-    getHealthSnapshotMock.mockResolvedValueOnce(sensitiveSummary).mockResolvedValueOnce(safeSummary);
+    getHealthSnapshotMock
+      .mockResolvedValueOnce(sensitiveSummary)
+      .mockResolvedValueOnce(safeSummary);
     healthState.setBroadcastHealthUpdate(broadcast);
     const version = healthState.getHealthVersion();
 

@@ -208,6 +208,7 @@ export async function startGatewaySidecars(params: {
   defaultWorkspaceDir: string;
   deps: CliDeps;
   startChannels: () => Promise<void>;
+  refreshHealthSnapshot?: (opts?: { probe?: boolean; force?: boolean }) => Promise<unknown>;
   prewarmPrimaryModel?: typeof prewarmConfiguredPrimaryModel;
   log: { warn: (msg: string) => void };
   logHooks: {
@@ -343,6 +344,17 @@ export async function startGatewaySidecars(params: {
         );
       } catch (err) {
         params.logChannels.error(`channel startup failed: ${String(err)}`);
+      } finally {
+        const refreshHealthSnapshot = params.refreshHealthSnapshot;
+        if (refreshHealthSnapshot) {
+          try {
+            await measureStartup(params.startupTrace, "sidecars.health-refresh", () =>
+              refreshHealthSnapshot({ probe: false, force: true }),
+            );
+          } catch (err) {
+            params.logChannels.error(`post-channel health refresh failed: ${String(err)}`);
+          }
+        }
       }
     } else {
       params.logChannels.info(
@@ -520,6 +532,7 @@ export async function startGatewayPostAttachRuntime(
     getCronService?: () => PluginHookGatewayCronService | null | undefined;
     onPluginServices?: (pluginServices: PluginServicesHandle | null) => void;
     onSidecarsReady?: () => void;
+    refreshHealthSnapshot?: (opts?: { probe?: boolean; force?: boolean }) => Promise<unknown>;
     startupTrace?: GatewayStartupTrace;
     deferSidecars?: boolean;
   },
@@ -588,6 +601,7 @@ export async function startGatewayPostAttachRuntime(
             defaultWorkspaceDir: params.defaultWorkspaceDir,
             deps: params.deps,
             startChannels: params.startChannels,
+            refreshHealthSnapshot: params.refreshHealthSnapshot,
             log: params.log,
             logHooks: params.logHooks,
             logChannels: params.logChannels,
