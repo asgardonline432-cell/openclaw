@@ -458,8 +458,11 @@ function buildExternalRunFailureReply(
   };
 }
 
-const CONTEXT_OVERFLOW_RESET_HINT =
-  "\n\nTo prevent this, increase your compaction buffer by setting " +
+const CONTEXT_OVERFLOW_SESSION_PRESERVED_GUIDANCE =
+  "\n\nTry again with a shorter prompt, run `/compact` to summarize this conversation, " +
+  "or use `/new` to start a fresh session.";
+const CONTEXT_OVERFLOW_RESERVE_HINT =
+  "\n\nTo prevent repeated overflows, increase your compaction buffer by setting " +
   "`agents.defaults.compaction.reserveTokensFloor` to 20000 or higher in your config.";
 
 type ModelRefLike = {
@@ -614,17 +617,18 @@ export function buildContextOverflowRecoveryText(params: {
   activeSessionEntry?: SessionEntry;
 }): string {
   const prefix = params.duringCompaction
-    ? "⚠️ Context limit exceeded during compaction. I've reset our conversation to start fresh - please try again."
-    : "⚠️ Context limit exceeded. I've reset our conversation to start fresh - please try again.";
+    ? "⚠️ Context limit exceeded during compaction. I couldn't compact this conversation, so I kept the current session unchanged."
+    : "⚠️ Context limit exceeded. I kept the current session unchanged.";
   return (
     prefix +
+    CONTEXT_OVERFLOW_SESSION_PRESERVED_GUIDANCE +
     (resolveHeartbeatBleedHint({
       cfg: params.cfg,
       agentId: params.agentId,
       primaryProvider: params.primaryProvider,
       primaryModel: params.primaryModel,
       activeSessionEntry: params.activeSessionEntry,
-    }) ?? CONTEXT_OVERFLOW_RESET_HINT)
+    }) ?? CONTEXT_OVERFLOW_RESERVE_HINT)
   );
 }
 
@@ -829,7 +833,6 @@ export async function runAgentTurnWithFallback(params: {
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
   pendingToolTasks: Set<Promise<void>>;
-  resetSessionAfterCompactionFailure: (reason: string) => Promise<boolean>;
   resetSessionAfterRoleOrderingConflict: (reason: string) => Promise<boolean>;
   isHeartbeat: boolean;
   sessionKey?: string;
@@ -923,7 +926,6 @@ export async function runAgentTurnWithFallback(params: {
   let fallbackProvider = params.followupRun.run.provider;
   let fallbackModel = params.followupRun.run.model;
   let fallbackAttempts: RuntimeFallbackAttempt[] = [];
-  let didResetAfterCompactionFailure = false;
   let didRetryTransientHttpError = false;
   let liveModelSwitchRetries = 0;
   let bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
@@ -1637,15 +1639,10 @@ export async function runAgentTurnWithFallback(params: {
         : [];
 
       // Some embedded runs surface context overflow as an error payload instead of throwing.
-      // Treat those as a session-level failure and auto-recover by starting a fresh session.
+      // Preserve the active session so WebChat and other session-bound surfaces do not
+      // silently rebind to a new transcript after compaction could not recover the turn.
       const embeddedError = runResult.meta?.error;
-      if (
-        embeddedError &&
-        isContextOverflowError(embeddedError.message) &&
-        !didResetAfterCompactionFailure &&
-        (await params.resetSessionAfterCompactionFailure(embeddedError.message))
-      ) {
-        didResetAfterCompactionFailure = true;
+      if (embeddedError && isContextOverflowError(embeddedError.message)) {
         params.replyOperation?.fail("run_failed", embeddedError);
         return {
           kind: "final",
@@ -1766,18 +1763,13 @@ export async function runAgentTurnWithFallback(params: {
         };
       }
 
-      if (
-        isCompactionFailure &&
-        !didResetAfterCompactionFailure &&
-        (await params.resetSessionAfterCompactionFailure(message))
-      ) {
-        didResetAfterCompactionFailure = true;
+      if (isCompactionFailure || isContextOverflow) {
         params.replyOperation?.fail("run_failed", err);
         return {
           kind: "final",
           payload: {
             text: buildContextOverflowRecoveryText({
-              duringCompaction: true,
+              duringCompaction: isCompactionFailure,
               cfg: runtimeConfig,
               agentId: params.followupRun.run.agentId,
               primaryProvider: params.followupRun.run.provider,

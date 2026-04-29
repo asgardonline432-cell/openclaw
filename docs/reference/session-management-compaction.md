@@ -265,6 +265,12 @@ Where:
 
 These are Pi runtime semantics (OpenClaw consumes the events, but Pi decides when to compact).
 
+If overflow recovery or compaction fails before a reply, OpenClaw preserves the
+current `sessionKey` to `sessionId` mapping. WebChat sessions such as
+`agent:main:main` stay bound to the same transcript, and the user receives
+explicit guidance to retry, run `/compact`, or use `/new` instead of a silent
+session rotation.
+
 OpenClaw can also trigger a preflight local compaction before opening the next
 run when `agents.defaults.compaction.maxActiveTranscriptBytes` is set and the
 active transcript file reaches that size. This is a file-size guard for local
