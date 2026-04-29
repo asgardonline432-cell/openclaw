@@ -106,7 +106,12 @@ import {
   type RuntimeConfigWriteNotification,
 } from "./runtime-snapshot.js";
 import { resolveShellEnvExpectedKeys } from "./shell-env-expected-keys.js";
-import type { OpenClawConfig, ConfigFileSnapshot, LegacyConfigIssue } from "./types.js";
+import type {
+  OpenClawConfig,
+  ConfigFileSnapshot,
+  ConfigValidationIssue,
+  LegacyConfigIssue,
+} from "./types.js";
 import {
   validateConfigObjectRawWithPlugins,
   validateConfigObjectWithPlugins,
@@ -155,6 +160,7 @@ type ShippedPluginInstallConfigReadMigration = {
 
 const CONFIG_HEALTH_STATE_FILENAME = "config-health.json";
 const loggedInvalidConfigs = new Set<string>();
+const loggedConfigWarningFingerprints = new Map<string, string>();
 
 type ConfigHealthFingerprint = {
   hash: string;
@@ -246,6 +252,46 @@ function hashConfigRaw(raw: string | null): string {
     .createHash("sha256")
     .update(raw ?? "")
     .digest("hex");
+}
+
+function formatConfigWarningDetails(warnings: readonly ConfigValidationIssue[]): string {
+  return warnings
+    .map(
+      (warning) =>
+        `- ${sanitizeTerminalText(warning.path || "<root>")}: ${sanitizeTerminalText(
+          warning.message,
+        )}`,
+    )
+    .join("\n");
+}
+
+function clearConfigWarningLogFingerprint(configPath: string): void {
+  loggedConfigWarningFingerprints.delete(configPath);
+}
+
+function clearConfigWarningLogFingerprintForSnapshot(snapshot: ConfigFileSnapshot): void {
+  if (!snapshot.exists || !snapshot.valid || snapshot.warnings.length === 0) {
+    clearConfigWarningLogFingerprint(snapshot.path);
+  }
+}
+
+function logConfigWarningsOnce(params: {
+  configPath: string;
+  raw: string | null;
+  warnings: readonly ConfigValidationIssue[];
+  logger: Pick<typeof console, "warn">;
+}): void {
+  if (params.warnings.length === 0) {
+    clearConfigWarningLogFingerprint(params.configPath);
+    return;
+  }
+  const details = formatConfigWarningDetails(params.warnings);
+  const fingerprint = `${hashConfigRaw(params.raw)}\0${details}`;
+  if (loggedConfigWarningFingerprints.get(params.configPath) === fingerprint) {
+    return;
+  }
+  loggedConfigWarningFingerprints.set(params.configPath, fingerprint);
+  params.logger.warn(`Config warnings:\n${details}`);
 }
 
 async function tightenStateDirPermissionsIfNeeded(params: {
@@ -1201,6 +1247,7 @@ async function finalizeReadConfigSnapshotInternalResult(
   deps: Required<ConfigIoDeps>,
   result: ReadConfigFileSnapshotInternalResult,
 ): Promise<ReadConfigFileSnapshotInternalResult> {
+  clearConfigWarningLogFingerprintForSnapshot(result.snapshot);
   await observeConfigSnapshot(deps, result.snapshot);
   return result;
 }
@@ -1484,6 +1531,7 @@ export function createConfigIO(
     try {
       maybeLoadDotEnvForConfig(deps.env);
       if (!deps.fs.existsSync(configPath)) {
+        clearConfigWarningLogFingerprint(configPath);
         if (shouldEnableShellEnvFallback(deps.env) && !shouldDeferShellEnvFallback(deps.env)) {
           loadShellEnvFallback({
             enabled: true,
@@ -1526,6 +1574,7 @@ export function createConfigIO(
       }
       warnOnConfigMiskeys(effectiveConfigRaw, deps.logger);
       if (typeof effectiveConfigRaw !== "object" || effectiveConfigRaw === null) {
+        clearConfigWarningLogFingerprint(configPath);
         observeLoadConfigSnapshot({
           ...createConfigFileSnapshot({
             path: configPath,
@@ -1555,6 +1604,7 @@ export function createConfigIO(
         pluginValidation: overrides.pluginValidation,
       });
       if (!validated.ok) {
+        clearConfigWarningLogFingerprint(configPath);
         observeLoadConfigSnapshot({
           ...createConfigFileSnapshot({
             path: configPath,
@@ -1577,15 +1627,12 @@ export function createConfigIO(
           loggedConfigPaths: loggedInvalidConfigs,
         });
       }
-      if (validated.warnings.length > 0) {
-        const details = validated.warnings
-          .map(
-            (iss) =>
-              `- ${sanitizeTerminalText(iss.path || "<root>")}: ${sanitizeTerminalText(iss.message)}`,
-          )
-          .join("\n");
-        deps.logger.warn(`Config warnings:\n${details}`);
-      }
+      logConfigWarningsOnce({
+        configPath,
+        raw: snapshotRaw,
+        warnings: validated.warnings,
+        logger: deps.logger,
+      });
       warnIfConfigFromFuture(validated.config, deps.logger);
       const cfg = materializeRuntimeConfig(validated.config, "load");
       observeLoadConfigSnapshot({
@@ -1605,6 +1652,7 @@ export function createConfigIO(
       });
       return finalizeLoadedRuntimeConfig(cfg);
     } catch (err) {
+      clearConfigWarningLogFingerprint(configPath);
       if (err instanceof DuplicateAgentDirError) {
         deps.logger.error(err.message);
         throw err;
@@ -2017,17 +2065,18 @@ export function createConfigIO(
 
     const validated = validateConfigObjectRawWithPlugins(persistCandidate, { env: deps.env });
     if (!validated.ok) {
+      clearConfigWarningLogFingerprint(configPath);
       const issue = validated.issues[0];
       const pathLabel = issue?.path ? issue.path : "<root>";
       const issueMessage = issue?.message ?? "invalid";
       throw new Error(formatConfigValidationFailure(pathLabel, issueMessage));
     }
-    if (validated.warnings.length > 0) {
-      const details = validated.warnings
-        .map((warning) => `- ${warning.path}: ${warning.message}`)
-        .join("\n");
-      deps.logger.warn(`Config warnings:\n${details}`);
-    }
+    logConfigWarningsOnce({
+      configPath,
+      raw: JSON.stringify(persistCandidate, null, 2),
+      warnings: validated.warnings,
+      logger: deps.logger,
+    });
 
     // Restore ${VAR} env var references that were resolved during config loading.
     // Read the current file (pre-substitution) and restore any references whose
