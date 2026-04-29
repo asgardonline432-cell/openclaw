@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { SANDBOX_PINNED_MUTATION_PYTHON } from "./fs-bridge-mutation-helper.js";
 import { createSandbox } from "./fs-bridge.test-helpers.js";
 import {
   createRemoteShellSandboxFsBridge,
@@ -19,17 +18,15 @@ function createLocalRemoteRuntime(params: {
     remoteAgentWorkspaceDir: params.remoteAgentWorkspaceDir,
     runRemoteShellScript: async (command) => {
       calls.push(command);
-      const result = command.script.includes("python3 /dev/fd/3 \"$@\" 3<<'PY'")
-        ? spawnSync("python3", ["-c", SANDBOX_PINNED_MUTATION_PYTHON, ...(command.args ?? [])], {
-            input: command.stdin,
-            encoding: "buffer",
-            stdio: ["pipe", "pipe", "pipe"],
-          })
-        : spawnSync("sh", ["-c", command.script, "openclaw-sandbox-fs", ...(command.args ?? [])], {
-            input: command.stdin,
-            encoding: "buffer",
-            stdio: ["pipe", "pipe", "pipe"],
-          });
+      const result = spawnSync(
+        "sh",
+        ["-c", command.script, "openclaw-sandbox-fs", ...(command.args ?? [])],
+        {
+          input: command.stdin,
+          encoding: "buffer",
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
       const stdout = Buffer.isBuffer(result.stdout)
         ? result.stdout
         : Buffer.from(result.stdout ?? []);
@@ -92,9 +89,57 @@ describe("remote sandbox fs bridge", () => {
         );
         expect(calls).toHaveLength(1);
         expect(calls[0]?.args?.[0]).toBe("read");
-        expect(calls[0]?.script).toContain("python3 /dev/fd/3 \"$@\" 3<<'PY'");
+        expect(calls[0]?.script).toContain('"$python_cmd" /dev/fd/3 "$@" 3<<\'PY\'');
         expect(calls[0]?.script).toContain("read_file(parent_fd, basename)");
         expect(calls[0]?.script).not.toContain('cat -- "$1"');
+      });
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "adds actionable guidance when the pinned mutation helper cannot find python",
+    async () => {
+      await withTempDir("openclaw-remote-fs-bridge-", async (stateDir) => {
+        const workspaceDir = path.join(stateDir, "workspace");
+        await fs.mkdir(workspaceDir, { recursive: true });
+        const missingPythonError = Object.assign(new Error("python3: not found"), {
+          code: 127,
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.from("python3: not found\n"),
+        });
+        const { runtime } = createLocalRemoteRuntime({
+          remoteWorkspaceDir: workspaceDir,
+          remoteAgentWorkspaceDir: workspaceDir,
+        });
+        const runtimeWithMissingPython: RemoteShellSandboxHandle = {
+          ...runtime,
+          runRemoteShellScript: async (command) => {
+            if (command.script.includes("operation = sys.argv[1]")) {
+              throw missingPythonError;
+            }
+            return runtime.runRemoteShellScript(command);
+          },
+        };
+        const bridge = createRemoteShellSandboxFsBridge({
+          sandbox: createSandbox({
+            workspaceDir,
+            agentWorkspaceDir: workspaceDir,
+          }),
+          runtime: runtimeWithMissingPython,
+        });
+
+        await expect(bridge.writeFile({ filePath: "note.txt", data: "hello" })).rejects.toThrow(
+          /install python3 in the configured sandbox image/i,
+        );
+        try {
+          await bridge.writeFile({ filePath: "note.txt", data: "hello" });
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).cause).toBe(missingPythonError);
+          expect((error as { code?: unknown }).code).toBe("INVALID_CONFIG");
+          return;
+        }
+        throw new Error("expected writeFile to fail");
       });
     },
   );

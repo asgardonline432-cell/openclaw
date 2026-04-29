@@ -5,6 +5,9 @@ import {
   createSandbox,
   createSandboxFsBridge,
   createSeededSandboxFsBridge,
+  dockerExecResult,
+  getDockerArg,
+  getDockerScript,
   getScriptsFromCalls,
   installFsBridgeTestHarness,
   mockedExecDockerRaw,
@@ -138,6 +141,42 @@ describe("sandbox fs bridge shell compatibility", () => {
     expect(scripts.some((script) => script.includes('cat >"$1"'))).toBe(false);
     expect(scripts.some((script) => script.includes('cat >"$tmp"'))).toBe(false);
     expect(scripts.some((script) => script.includes("os.replace("))).toBe(true);
+  });
+
+  it("adds actionable guidance when the pinned mutation helper cannot find python", async () => {
+    const missingPythonError = Object.assign(
+      new Error("sandbox pinned mutation helper requires python3 or python"),
+      {
+        code: 127,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.from("sandbox pinned mutation helper requires python3 or python\n"),
+      },
+    );
+    mockedExecDockerRaw.mockImplementation(async (args) => {
+      const script = getDockerScript(args);
+      if (script.includes("operation = sys.argv[1]")) {
+        throw missingPythonError;
+      }
+      if (script.includes('readlink -f -- "$cursor"')) {
+        return dockerExecResult(`${getDockerArg(args, 1)}\n`);
+      }
+      return dockerExecResult("");
+    });
+
+    const bridge = createSandboxFsBridge({ sandbox: createSandbox() });
+
+    await expect(bridge.writeFile({ filePath: "b.txt", data: "hello" })).rejects.toThrow(
+      /rebuild the default sandbox image/i,
+    );
+    try {
+      await bridge.writeFile({ filePath: "b.txt", data: "hello" });
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).cause).toBe(missingPythonError);
+      expect((error as { code?: unknown }).code).toBe("INVALID_CONFIG");
+      return;
+    }
+    throw new Error("expected writeFile to fail");
   });
 
   it("routes mkdirp, remove, and rename through the pinned mutation helper", async () => {

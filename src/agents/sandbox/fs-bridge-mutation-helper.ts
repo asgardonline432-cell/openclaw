@@ -290,6 +290,21 @@ export const SANDBOX_PINNED_MUTATION_PYTHON = [
 
 const SANDBOX_PINNED_MUTATION_PYTHON_SHELL_LITERAL = `'${SANDBOX_PINNED_MUTATION_PYTHON.replaceAll("'", `'\\''`)}'`;
 
+export function buildPinnedMutationPythonResolverShell(): string[] {
+  return [
+    "python_cmd=''",
+    ...SANDBOX_PINNED_MUTATION_PYTHON_CANDIDATES.map(
+      (candidate) =>
+        `if [ -z "$python_cmd" ] && [ -x '${candidate}' ]; then python_cmd='${candidate}'; fi`,
+    ),
+    'if [ -z "$python_cmd" ]; then python_cmd=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true); fi',
+    'if [ -z "$python_cmd" ]; then',
+    "  echo >&2 'sandbox pinned mutation helper requires python3 or python'",
+    "  exit 127",
+    "fi",
+  ];
+}
+
 function buildPinnedMutationPlan(params: {
   args: string[];
   checks: PathSafetyCheck[];
@@ -300,16 +315,7 @@ function buildPinnedMutationPlan(params: {
     // Feed the helper source over fd 3 so stdin stays available for write payload bytes.
     script: [
       "set -eu",
-      "python_cmd=''",
-      ...SANDBOX_PINNED_MUTATION_PYTHON_CANDIDATES.map(
-        (candidate) =>
-          `if [ -z "$python_cmd" ] && [ -x '${candidate}' ]; then python_cmd='${candidate}'; fi`,
-      ),
-      'if [ -z "$python_cmd" ]; then python_cmd=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true); fi',
-      'if [ -z "$python_cmd" ]; then',
-      "  echo >&2 'sandbox pinned mutation helper requires python3 or python'",
-      "  exit 127",
-      "fi",
+      ...buildPinnedMutationPythonResolverShell(),
       `python_script=${SANDBOX_PINNED_MUTATION_PYTHON_SHELL_LITERAL}`,
       'exec "$python_cmd" -c "$python_script" "$@"',
     ].join("\n"),
