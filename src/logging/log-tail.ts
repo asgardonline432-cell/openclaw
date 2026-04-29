@@ -53,6 +53,10 @@ async function resolveLogFile(file: string): Promise<string> {
   return sorted[0]?.path ?? file;
 }
 
+export async function resolveConfiguredLogFile(): Promise<string> {
+  return resolveLogFile(getResolvedLoggerSettings().file);
+}
+
 async function readLogSlice(params: {
   file: string;
   cursor?: number;
@@ -152,7 +156,7 @@ export async function readConfiguredLogTail(params?: {
   limit?: number;
   maxBytes?: number;
 }): Promise<LogTailPayload> {
-  const file = await resolveLogFile(getResolvedLoggerSettings().file);
+  const file = await resolveConfiguredLogFile();
   const result = await readLogSlice({
     file,
     cursor: params?.cursor,
