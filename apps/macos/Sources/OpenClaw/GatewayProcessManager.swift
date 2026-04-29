@@ -125,8 +125,8 @@ final class GatewayProcessManager {
         Task { [weak self] in
             guard let self else { return }
             if self.prefersNativeHostedGateway() {
-                await self.stopLaunchdGatewayForNativeHostIfNeeded()
-                if await self.attachExistingGatewayIfAvailable() {
+                let stoppedLaunchd = await self.stopLaunchdGatewayForNativeHostIfNeeded()
+                if !stoppedLaunchd, await self.attachExistingGatewayIfAvailable() {
                     return
                 }
                 await self.startNativeGateway()
@@ -381,14 +381,14 @@ final class GatewayProcessManager {
             environment: ProcessInfo.processInfo.environment)
     }
 
-    private func stopLaunchdGatewayForNativeHostIfNeeded() async {
+    private func stopLaunchdGatewayForNativeHostIfNeeded() async -> Bool {
         guard !GatewayLaunchAgentManager.isLaunchAgentWriteDisabled() else {
             self.appendLog(
                 "[gateway] launchd stop skipped (attach-only); " +
                     "native host will attach if a listener is present\n")
-            return
+            return false
         }
-        guard await GatewayLaunchAgentManager.isLoaded() else { return }
+        guard await GatewayLaunchAgentManager.isLoaded() else { return false }
         let bundlePath = Bundle.main.bundleURL.path
         self.appendLog("[gateway] disabling launchd job before native host start\n")
         let err = await GatewayLaunchAgentManager.set(
@@ -397,7 +397,9 @@ final class GatewayProcessManager {
             port: GatewayEnvironment.gatewayPort())
         if let err {
             self.appendLog("[gateway] launchd disable before native host failed: \(err)\n")
+            return false
         }
+        return true
     }
 
     private func startNativeGateway() async {
