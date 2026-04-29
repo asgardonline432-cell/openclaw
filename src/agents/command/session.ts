@@ -26,6 +26,8 @@ import {
   DEFAULT_AGENT_ID,
   normalizeAgentId,
   normalizeMainKey,
+  toAgentRequestSessionKey,
+  toAgentStoreSessionKey,
 } from "../../routing/session-key.js";
 import { resolveSessionIdMatchSelection } from "../../sessions/session-id-resolution.js";
 import { listAgentIds, resolveDefaultAgentId } from "../agent-scope.js";
@@ -215,9 +217,19 @@ export function resolveSessionKeyForRequest(opts: {
   });
   const sessionStore = loadSessionStore(storePath);
 
-  const ctx: MsgContext | undefined = opts.to?.trim() ? { From: opts.to } : undefined;
-  let sessionKey: string | undefined =
-    explicitSessionKey ?? (ctx ? resolveSessionKey(scope, ctx, mainKey, storeAgentId) : undefined);
+  const requestTo = opts.to?.trim() || undefined;
+  const ctx: MsgContext | undefined = requestTo ? { From: requestTo } : undefined;
+  let sessionKey: string | undefined = explicitSessionKey;
+  if (!sessionKey && ctx) {
+    sessionKey =
+      requestedAgentId && requestTo
+        ? toAgentStoreSessionKey({
+            agentId: requestedAgentId,
+            requestKey: toAgentRequestSessionKey(requestTo),
+            mainKey,
+          })
+        : resolveSessionKey(scope, ctx, mainKey, storeAgentId);
+  }
 
   if (!sessionKey && !requestedSessionId) {
     sessionKey = resolveExplicitAgentSessionKey({

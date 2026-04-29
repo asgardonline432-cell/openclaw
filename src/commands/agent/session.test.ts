@@ -122,6 +122,44 @@ describe("resolveSessionKeyForRequest", () => {
     expect(mocks.resolveExplicitAgentSessionKey).not.toHaveBeenCalled();
   });
 
+  it("derives opaque selected-agent --to before implicit agent main fallback", async () => {
+    setupMainAndMybotStorePaths();
+    mocks.resolveExplicitAgentSessionKey.mockReturnValue("agent:mybot:main");
+    mockStoresByPath({
+      [MYBOT_STORE_PATH]: {
+        "agent:mybot:main": { sessionId: "main-session-id", updatedAt: 1 },
+      },
+    });
+
+    const result = resolveSessionKeyForRequest({
+      cfg: baseCfg,
+      agentId: "mybot",
+      to: "cw_111",
+    });
+
+    expect(result.sessionKey).toBe("agent:mybot:cw_111");
+    expect(result.storePath).toBe(MYBOT_STORE_PATH);
+    expect(mocks.resolveExplicitAgentSessionKey).not.toHaveBeenCalled();
+  });
+
+  it("rebinds qualified selected-agent --to to the selected agent", async () => {
+    setupMainAndMybotStorePaths();
+    mocks.resolveExplicitAgentSessionKey.mockReturnValue("agent:mybot:fallback-should-not-use");
+    mockStoresByPath({
+      [MYBOT_STORE_PATH]: {},
+    });
+
+    const result = resolveSessionKeyForRequest({
+      cfg: baseCfg,
+      agentId: "mybot",
+      to: "agent:main:main",
+    });
+
+    expect(result.sessionKey).toBe("agent:mybot:main");
+    expect(result.storePath).toBe(MYBOT_STORE_PATH);
+    expect(mocks.resolveExplicitAgentSessionKey).not.toHaveBeenCalled();
+  });
+
   it("preserves explicit --session-key over selected-agent --to", async () => {
     setupMainAndMybotStorePaths();
     mockStoresByPath({

@@ -13,7 +13,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
-- CLI/agent: derive selected-agent `--to` session keys before falling back to the implicit agent main session, so `openclaw agent --agent <id> --to <target>` routes channel-qualified targets to the selected agent conversation. Carries forward #42009. Thanks @TomDjerry.
+- CLI/agent: derive selected-agent `--to` session keys before falling back to the implicit agent main session, so `openclaw agent --agent <id> --to <target>` routes opaque and channel-qualified targets to the selected agent conversation. Carries forward #42009. Thanks @TomDjerry.
 - Gateway/shutdown: report structured shutdown warnings and HTTP close timeout warnings through `ShutdownResult` while preserving lifecycle hook hardening. Carries forward #41296. Thanks @edenfunf.
 - Plugins/QA: prebuild the private QA channel runtime before plugin gauntlet source runs so wrapper CPU/RSS measurements are not polluted by private QA dist rebuild work. Thanks @vincentkoc.
 - Gateway/reload: bound default restart deferral and SIGUSR1 restart drain to five minutes while preserving explicit `deferralTimeoutMs: 0` indefinite waits, so stale active work accounting cannot block config reloads forever. Thanks @vincentkoc.
