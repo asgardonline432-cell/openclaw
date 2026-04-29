@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { getRuntimeConfig } from "../config/config.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
@@ -45,6 +45,7 @@ type PiRegistryClassLike = {
 };
 
 let modelCatalogPromise: Promise<ModelCatalogEntry[]> | null = null;
+const workspaceModelCatalogPromises = new Map<string, Promise<ModelCatalogEntry[]>>();
 let hasLoggedModelCatalogError = false;
 const defaultImportPiSdk = () => import("./pi-model-discovery-runtime.js");
 let importPiSdk = defaultImportPiSdk;
@@ -61,6 +62,7 @@ function loadModelSuppression() {
 
 export function resetModelCatalogCache() {
   modelCatalogPromise = null;
+  workspaceModelCatalogPromises.clear();
   hasLoggedModelCatalogError = false;
 }
 
@@ -105,6 +107,11 @@ function appendCatalogEntriesIfAbsent(
   }
 }
 
+function resolveWorkspaceCatalogCacheKey(workspaceDir: string | undefined): string | undefined {
+  const normalized = normalizeOptionalString(workspaceDir);
+  return normalized ? resolve(normalized) : undefined;
+}
+
 export async function loadModelCatalog(params?: {
   config?: OpenClawConfig;
   workspaceDir?: string;
@@ -112,11 +119,23 @@ export async function loadModelCatalog(params?: {
   readOnly?: boolean;
 }): Promise<ModelCatalogEntry[]> {
   const readOnly = params?.readOnly === true;
+  const workspaceCacheKey = readOnly
+    ? undefined
+    : resolveWorkspaceCatalogCacheKey(params?.workspaceDir);
   if (!readOnly && params?.useCache === false) {
-    modelCatalogPromise = null;
+    if (workspaceCacheKey) {
+      workspaceModelCatalogPromises.delete(workspaceCacheKey);
+    } else {
+      modelCatalogPromise = null;
+    }
   }
-  if (!readOnly && modelCatalogPromise) {
-    return modelCatalogPromise;
+  if (!readOnly) {
+    const cached = workspaceCacheKey
+      ? workspaceModelCatalogPromises.get(workspaceCacheKey)
+      : modelCatalogPromise;
+    if (cached) {
+      return cached;
+    }
   }
 
   const loadCatalog = async () => {
@@ -218,7 +237,11 @@ export async function loadModelCatalog(params?: {
       if (models.length === 0) {
         // If we found nothing, don't cache this result so we can try again.
         if (!readOnly) {
-          modelCatalogPromise = null;
+          if (workspaceCacheKey) {
+            workspaceModelCatalogPromises.delete(workspaceCacheKey);
+          } else {
+            modelCatalogPromise = null;
+          }
         }
       }
 
@@ -232,7 +255,11 @@ export async function loadModelCatalog(params?: {
       }
       // Don't poison the cache on transient dependency/filesystem issues.
       if (!readOnly) {
-        modelCatalogPromise = null;
+        if (workspaceCacheKey) {
+          workspaceModelCatalogPromises.delete(workspaceCacheKey);
+        } else {
+          modelCatalogPromise = null;
+        }
       }
       if (models.length > 0) {
         return sortModels(models);
@@ -245,8 +272,13 @@ export async function loadModelCatalog(params?: {
     return loadCatalog();
   }
 
-  modelCatalogPromise = loadCatalog();
-  return modelCatalogPromise;
+  const catalogPromise = loadCatalog();
+  if (workspaceCacheKey) {
+    workspaceModelCatalogPromises.set(workspaceCacheKey, catalogPromise);
+  } else {
+    modelCatalogPromise = catalogPromise;
+  }
+  return catalogPromise;
 }
 
 /**

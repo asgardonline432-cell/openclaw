@@ -367,6 +367,38 @@ describe("loadModelCatalog", () => {
     );
   });
 
+  it("does not reuse the global catalog cache for workspace plugin entries", async () => {
+    mockSingleOpenAiCatalogModel();
+    augmentCatalogMock.mockImplementation(async (params: { workspaceDir?: string }) =>
+      params.workspaceDir === "/tmp/workspace-catalog"
+        ? [
+            {
+              provider: "workspace-cloud",
+              id: "workspace-model",
+              name: "Workspace Model",
+            },
+          ]
+        : [],
+    );
+
+    const globalCatalog = await loadModelCatalog({ config: {} as OpenClawConfig });
+    expect(globalCatalog).not.toContainEqual(
+      expect.objectContaining({ provider: "workspace-cloud", id: "workspace-model" }),
+    );
+
+    const workspaceCatalog = await loadModelCatalog({
+      config: {} as OpenClawConfig,
+      workspaceDir: "/tmp/workspace-catalog",
+    });
+
+    expect(workspaceCatalog).toContainEqual(
+      expect.objectContaining({ provider: "workspace-cloud", id: "workspace-model" }),
+    );
+    expect(augmentCatalogMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ workspaceDir: "/tmp/workspace-catalog" }),
+    );
+  });
+
   it("dedupes supplemental models against registry entries", async () => {
     mockSingleOpenAiCatalogModel();
     augmentCatalogMock.mockResolvedValueOnce([
