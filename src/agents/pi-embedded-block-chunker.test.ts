@@ -41,7 +41,7 @@ describe("EmbeddedBlockChunker", () => {
 
     expect(chunks.length).toBe(1);
     expect(chunks[0]).toContain("console.log");
-    expect(chunks[0]).toMatch(/```\n?$/);
+    expect(chunks[0]).toMatch(/```\n\n$/);
     expect(chunks[0]).not.toContain("After");
     expect(chunker.bufferedText).toMatch(/^After/);
   });
@@ -53,7 +53,7 @@ describe("EmbeddedBlockChunker", () => {
 
     const chunks = drainChunks(chunker);
 
-    expect(chunks).toEqual(["First paragraph.\n\nSecond paragraph."]);
+    expect(chunks).toEqual(["First paragraph.\n\nSecond paragraph.\n\n"]);
     expect(chunker.bufferedText).toBe("Third paragraph.");
   });
 
@@ -96,7 +96,7 @@ describe("EmbeddedBlockChunker", () => {
     const chunks = drainChunks(chunker);
 
     expect(chunks.every((chunk) => chunk.length <= 10)).toBe(true);
-    expect(chunks).toEqual(["abcdefghij", "k"]);
+    expect(chunks).toEqual(["abcdefghij", "k\n\n"]);
     expect(chunker.bufferedText).toBe("Rest");
   });
 
@@ -123,8 +123,52 @@ describe("EmbeddedBlockChunker", () => {
 
     const chunks = drainChunks(chunker);
 
-    expect(chunks).toEqual(["Intro\n```js\nconst a = 1;\n\nconst b = 2;\n```"]);
+    expect(chunks).toEqual(["Intro\n```js\nconst a = 1;\n\nconst b = 2;\n```\n\n"]);
     expect(chunker.bufferedText).toBe("After fence");
+  });
+
+  it("preserves newline separators in raw chunks", () => {
+    const chunker = new EmbeddedBlockChunker({
+      minChars: 1,
+      maxChars: 12,
+      breakPreference: "newline",
+    });
+    const text = "alpha\nbeta\ngamma";
+
+    chunker.append(text);
+
+    const chunks = drainChunks(chunker);
+
+    expect(chunks).toEqual(["alpha\nbeta\n"]);
+    expect(chunks.join("") + chunker.bufferedText).toBe(text);
+  });
+
+  it("keeps markdown tables intact when a max-char break falls inside one", () => {
+    const chunker = new EmbeddedBlockChunker({
+      minChars: 1,
+      maxChars: 20,
+      breakPreference: "paragraph",
+    });
+    const text = [
+      "Intro",
+      "",
+      "| Name | Value |",
+      "| --- | --- |",
+      "| Alpha | One |",
+      "| Beta | Two |",
+      "",
+      "Outro",
+    ].join("\n");
+
+    chunker.append(text);
+
+    const chunks = drainChunks(chunker);
+
+    expect(chunks).toEqual([
+      "Intro\n\n",
+      "| Name | Value |\n| --- | --- |\n| Alpha | One |\n| Beta | Two |\n\n",
+    ]);
+    expect(chunks.join("") + chunker.bufferedText).toBe(text);
   });
 
   it("parses fence spans once per drain call for long fenced buffers", () => {
