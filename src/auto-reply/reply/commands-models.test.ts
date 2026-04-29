@@ -18,6 +18,8 @@ const modelAuthLabelMocks = vi.hoisted(() => ({
 }));
 const modelProviderAuthMocks = vi.hoisted(() => ({
   authenticatedProviders: new Set(["anthropic", "google", "openai"]),
+  authenticatedProvidersByAgentDir: new Map<string, Set<string>>(),
+  createProviderAuthCheckerParams: [] as Array<{ agentDir?: string }>,
 }));
 
 const MODELS_ADD_DEPRECATED_TEXT =
@@ -32,8 +34,13 @@ vi.mock("../../agents/model-auth-label.js", () => ({
 }));
 
 vi.mock("../../agents/model-provider-auth.js", () => ({
-  createProviderAuthChecker: () => (provider: string) =>
-    modelProviderAuthMocks.authenticatedProviders.has(provider),
+  createProviderAuthChecker: (params: { agentDir?: string }) => {
+    modelProviderAuthMocks.createProviderAuthCheckerParams.push({ agentDir: params.agentDir });
+    return (provider: string) =>
+      modelProviderAuthMocks.authenticatedProvidersByAgentDir
+        .get(params.agentDir ?? "")
+        ?.has(provider) ?? modelProviderAuthMocks.authenticatedProviders.has(provider);
+  },
   hasAuthForModelProvider: ({ provider }: { provider: string }) =>
     modelProviderAuthMocks.authenticatedProviders.has(provider),
 }));
@@ -104,6 +111,8 @@ beforeEach(() => {
   modelAuthLabelMocks.resolveModelAuthLabel.mockReset();
   modelAuthLabelMocks.resolveModelAuthLabel.mockReturnValue(undefined);
   modelProviderAuthMocks.authenticatedProviders = new Set(["anthropic", "google", "openai"]);
+  modelProviderAuthMocks.authenticatedProvidersByAgentDir = new Map();
+  modelProviderAuthMocks.createProviderAuthCheckerParams = [];
   setActivePluginRegistry(
     createTestRegistry([
       ...textSurfaceModelsTestPlugins,
@@ -196,6 +205,33 @@ describe("handleModelsCommand", () => {
     expect(allListResult?.reply?.text).toContain("Models (openai) — showing 1-2 of 2 (page 1/1)");
     expect(allListResult?.reply?.text).toContain("- openai/gpt-4.1");
     expect(allListResult?.reply?.text).toContain("- openai/gpt-4.1-mini");
+  });
+
+  it("uses the target session agent auth scope when filtering visible providers", async () => {
+    const workerAgentDir = "/tmp/openclaw-worker-agent";
+    modelProviderAuthMocks.authenticatedProviders = new Set(["anthropic"]);
+    modelProviderAuthMocks.authenticatedProvidersByAgentDir = new Map([
+      [workerAgentDir, new Set(["openai"])],
+    ]);
+
+    const params = buildParams("/models", {
+      agents: {
+        defaults: {
+          model: { primary: "anthropic/claude-opus-4-5" },
+        },
+        list: [{ id: "worker", agentDir: workerAgentDir }],
+      },
+    });
+    params.agentId = "main";
+    params.agentDir = "/tmp/openclaw-main-agent";
+    params.sessionKey = "agent:worker:discord:direct:user-1";
+
+    const result = await handleModelsCommand(params, true);
+
+    expect(modelProviderAuthMocks.createProviderAuthCheckerParams).toContainEqual({
+      agentDir: workerAgentDir,
+    });
+    expect(result?.reply?.text).toContain("- openai (2)");
   });
 
   it("hides legacy runtime providers from /models provider lists", async () => {
