@@ -13,6 +13,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Agents/bootstrap: load explicit top-level workspace bootstrap files such as AGENTS.md, SOUL.md, USER.md, and MEMORY.md through symlinks to regular readable targets while preserving hardlink, dangling, oversized, and non-regular target rejection; extra/glob bootstrap patterns keep their existing workspace boundary checks. Fixes #38622 and #40210; carries forward #40230 and refs #52522. Thanks @shizenchan, @makerofpr, @LiudengZhang, and @Shanzid01.
 - Gateway/shutdown: report structured shutdown warnings and HTTP close timeout warnings through `ShutdownResult` while preserving lifecycle hook hardening. Carries forward #41296. Thanks @edenfunf.
 - Plugins/QA: prebuild the private QA channel runtime before plugin gauntlet source runs so wrapper CPU/RSS measurements are not polluted by private QA dist rebuild work. Thanks @vincentkoc.
 - Gateway/reload: bound default restart deferral and SIGUSR1 restart drain to five minutes while preserving explicit `deferralTimeoutMs: 0` indefinite waits, so stale active work accounting cannot block config reloads forever. Thanks @vincentkoc.

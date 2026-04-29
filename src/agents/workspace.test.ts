@@ -15,6 +15,7 @@ import {
   ensureAgentWorkspace,
   filterBootstrapFilesForSession,
   isWorkspaceBootstrapPending,
+  loadExtraBootstrapFiles,
   loadWorkspaceBootstrapFiles,
   reconcileWorkspaceBootstrapCompletion,
   resolveWorkspaceBootstrapStatus,
@@ -288,6 +289,11 @@ describe("ensureAgentWorkspace", () => {
 });
 
 describe("loadWorkspaceBootstrapFiles", () => {
+  const getBootstrapEntry = (
+    files: Awaited<ReturnType<typeof loadWorkspaceBootstrapFiles>>,
+    name: WorkspaceBootstrapFile["name"],
+  ) => files.find((file) => file.name === name);
+
   const getMemoryEntries = (files: Awaited<ReturnType<typeof loadWorkspaceBootstrapFiles>>) =>
     files.filter((file) => file.name === DEFAULT_MEMORY_FILENAME);
 
@@ -322,6 +328,129 @@ describe("loadWorkspaceBootstrapFiles", () => {
 
     const files = await loadWorkspaceBootstrapFiles(tempDir);
     expect(getMemoryEntries(files)).toHaveLength(0);
+  });
+
+  it("loads explicit top-level bootstrap files through symlink targets", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-workspace-symlink-"));
+    try {
+      const workspaceDir = path.join(rootDir, "workspace");
+      const targetDir = path.join(rootDir, "targets");
+      await fs.mkdir(workspaceDir, { recursive: true });
+      await fs.mkdir(targetDir, { recursive: true });
+      const names = [
+        DEFAULT_AGENTS_FILENAME,
+        DEFAULT_SOUL_FILENAME,
+        DEFAULT_TOOLS_FILENAME,
+        DEFAULT_IDENTITY_FILENAME,
+        DEFAULT_USER_FILENAME,
+        DEFAULT_HEARTBEAT_FILENAME,
+        DEFAULT_BOOTSTRAP_FILENAME,
+        DEFAULT_MEMORY_FILENAME,
+      ] as const;
+
+      for (const name of names) {
+        const targetPath = path.join(targetDir, `${name}.target`);
+        await fs.writeFile(targetPath, `linked ${name}`, "utf-8");
+        await fs.symlink(targetPath, path.join(workspaceDir, name));
+      }
+
+      const files = await loadWorkspaceBootstrapFiles(workspaceDir);
+      for (const name of names) {
+        const entry = getBootstrapEntry(files, name);
+        expect(entry?.missing).toBe(false);
+        expect(entry?.content).toBe(`linked ${name}`);
+      }
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps extra bootstrap patterns from following symlink targets outside the workspace", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-workspace-extra-symlink-"));
+    try {
+      const workspaceDir = path.join(rootDir, "workspace");
+      const outsideDir = path.join(rootDir, "outside");
+      await fs.mkdir(workspaceDir, { recursive: true });
+      await fs.mkdir(outsideDir, { recursive: true });
+      const outsideFile = path.join(outsideDir, DEFAULT_AGENTS_FILENAME);
+      await fs.writeFile(outsideFile, "outside", "utf-8");
+      await fs.symlink(outsideFile, path.join(workspaceDir, DEFAULT_AGENTS_FILENAME));
+
+      const fixedFiles = await loadWorkspaceBootstrapFiles(workspaceDir);
+      expect(getBootstrapEntry(fixedFiles, DEFAULT_AGENTS_FILENAME)?.content).toBe("outside");
+
+      const extraFiles = await loadExtraBootstrapFiles(workspaceDir, [DEFAULT_AGENTS_FILENAME]);
+      expect(extraFiles).toHaveLength(0);
+    } finally {
+      await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects unsafe symlinked bootstrap targets", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const expectRejectedAgentsSymlink = async (
+      prefix: string,
+      setup: (params: {
+        workspaceDir: string;
+        outsideDir: string;
+        linkPath: string;
+      }) => Promise<void>,
+    ) => {
+      const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), `openclaw-workspace-${prefix}-`));
+      try {
+        const workspaceDir = path.join(rootDir, "workspace");
+        const outsideDir = path.join(rootDir, "outside");
+        await fs.mkdir(workspaceDir, { recursive: true });
+        await fs.mkdir(outsideDir, { recursive: true });
+        const linkPath = path.join(workspaceDir, DEFAULT_AGENTS_FILENAME);
+        await setup({ workspaceDir, outsideDir, linkPath });
+
+        const files = await loadWorkspaceBootstrapFiles(workspaceDir);
+        const agents = getBootstrapEntry(files, DEFAULT_AGENTS_FILENAME);
+        expect(agents?.missing).toBe(true);
+        expect(agents?.content).toBeUndefined();
+      } finally {
+        await fs.rm(rootDir, { recursive: true, force: true });
+      }
+    };
+
+    await expectRejectedAgentsSymlink("dangling-symlink", async ({ outsideDir, linkPath }) => {
+      await fs.symlink(path.join(outsideDir, "missing.md"), linkPath);
+    });
+
+    await expectRejectedAgentsSymlink("directory-symlink", async ({ outsideDir, linkPath }) => {
+      const directoryTarget = path.join(outsideDir, "directory-target");
+      await fs.mkdir(directoryTarget);
+      await fs.symlink(directoryTarget, linkPath, "dir");
+    });
+
+    await expectRejectedAgentsSymlink("oversized-symlink", async ({ outsideDir, linkPath }) => {
+      const targetPath = path.join(outsideDir, "oversized.md");
+      await fs.writeFile(targetPath, "x".repeat(2 * 1024 * 1024 + 1), "utf-8");
+      await fs.symlink(targetPath, linkPath);
+    });
+
+    await expectRejectedAgentsSymlink(
+      "hardlinked-target-symlink",
+      async ({ outsideDir, linkPath }) => {
+        const targetPath = path.join(outsideDir, "hardlinked.md");
+        const aliasPath = path.join(outsideDir, "hardlinked-alias.md");
+        await fs.writeFile(targetPath, "hardlinked", "utf-8");
+        await fs.link(targetPath, aliasPath);
+        await fs.symlink(targetPath, linkPath);
+      },
+    );
   });
 
   it("treats hardlinked bootstrap aliases as missing", async () => {

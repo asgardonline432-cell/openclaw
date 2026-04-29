@@ -2,6 +2,7 @@ import syncFs from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { openBoundaryFile } from "../infra/boundary-file-read.js";
+import { openVerifiedFileSync } from "../infra/safe-open-sync.js";
 import {
   CANONICAL_ROOT_MEMORY_FILENAME,
   exactWorkspaceEntryExists,
@@ -33,6 +34,18 @@ const WORKSPACE_ONBOARDING_PROFILE_FILENAMES = [
   DEFAULT_USER_FILENAME,
 ] as const;
 
+/** Set of recognized bootstrap filenames for runtime validation */
+const VALID_BOOTSTRAP_NAMES: ReadonlySet<string> = new Set([
+  DEFAULT_AGENTS_FILENAME,
+  DEFAULT_SOUL_FILENAME,
+  DEFAULT_TOOLS_FILENAME,
+  DEFAULT_IDENTITY_FILENAME,
+  DEFAULT_USER_FILENAME,
+  DEFAULT_HEARTBEAT_FILENAME,
+  DEFAULT_BOOTSTRAP_FILENAME,
+  DEFAULT_MEMORY_FILENAME,
+]);
+
 const workspaceTemplateCache = new Map<string, Promise<string>>();
 let gitAvailabilityPromise: Promise<boolean> | null = null;
 const MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES = 2 * 1024 * 1024;
@@ -47,13 +60,96 @@ type WorkspaceGuardedReadResult =
   | { ok: true; content: string }
   | { ok: false; reason: "path" | "validation" | "io"; error?: unknown };
 
+type OpenedWorkspaceFile = {
+  path: string;
+  fd: number;
+  stat: syncFs.Stats;
+};
+
 function workspaceFileIdentity(stat: syncFs.Stats, canonicalPath: string): string {
   return `${canonicalPath}|${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+}
+
+function isExpectedWorkspacePathError(error: unknown): boolean {
+  const code =
+    typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+  return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP";
+}
+
+function isExplicitTopLevelBootstrapPath(params: {
+  filePath: string;
+  workspaceDir: string;
+}): boolean {
+  const filePath = path.resolve(params.filePath);
+  const workspaceDir = path.resolve(params.workspaceDir);
+  return (
+    path.dirname(filePath) === workspaceDir && VALID_BOOTSTRAP_NAMES.has(path.basename(filePath))
+  );
+}
+
+function readOpenedWorkspaceFile(params: {
+  cacheKey: string;
+  opened: OpenedWorkspaceFile;
+}): WorkspaceGuardedReadResult {
+  const identity = workspaceFileIdentity(params.opened.stat, params.opened.path);
+  const cached = workspaceFileCache.get(params.cacheKey);
+  if (cached && cached.identity === identity) {
+    syncFs.closeSync(params.opened.fd);
+    return { ok: true, content: cached.content };
+  }
+
+  try {
+    const content = syncFs.readFileSync(params.opened.fd, "utf-8");
+    workspaceFileCache.set(params.cacheKey, { content, identity });
+    return { ok: true, content };
+  } catch (error) {
+    workspaceFileCache.delete(params.cacheKey);
+    return { ok: false, reason: "io", error };
+  } finally {
+    syncFs.closeSync(params.opened.fd);
+  }
+}
+
+function readExplicitBootstrapSymlinkTargetWithGuards(params: {
+  filePath: string;
+  workspaceDir: string;
+}): WorkspaceGuardedReadResult {
+  if (!isExplicitTopLevelBootstrapPath(params)) {
+    return { ok: false, reason: "validation" };
+  }
+
+  try {
+    const linkStat = syncFs.lstatSync(params.filePath);
+    if (!linkStat.isSymbolicLink()) {
+      return { ok: false, reason: "validation" };
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      reason: isExpectedWorkspacePathError(error) ? "path" : "io",
+      error,
+    };
+  }
+
+  const opened = openVerifiedFileSync({
+    filePath: params.filePath,
+    rejectHardlinks: true,
+    maxBytes: MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES,
+  });
+  if (!opened.ok) {
+    return opened;
+  }
+
+  return readOpenedWorkspaceFile({
+    cacheKey: params.filePath,
+    opened,
+  });
 }
 
 async function readWorkspaceFileWithGuards(params: {
   filePath: string;
   workspaceDir: string;
+  allowExplicitBootstrapSymlinkTarget?: boolean;
 }): Promise<WorkspaceGuardedReadResult> {
   const opened = await openBoundaryFile({
     absolutePath: params.filePath,
@@ -63,26 +159,16 @@ async function readWorkspaceFileWithGuards(params: {
   });
   if (!opened.ok) {
     workspaceFileCache.delete(params.filePath);
+    if (params.allowExplicitBootstrapSymlinkTarget && opened.reason === "validation") {
+      return readExplicitBootstrapSymlinkTargetWithGuards(params);
+    }
     return opened;
   }
 
-  const identity = workspaceFileIdentity(opened.stat, opened.path);
-  const cached = workspaceFileCache.get(params.filePath);
-  if (cached && cached.identity === identity) {
-    syncFs.closeSync(opened.fd);
-    return { ok: true, content: cached.content };
-  }
-
-  try {
-    const content = syncFs.readFileSync(opened.fd, "utf-8");
-    workspaceFileCache.set(params.filePath, { content, identity });
-    return { ok: true, content };
-  } catch (error) {
-    workspaceFileCache.delete(params.filePath);
-    return { ok: false, reason: "io", error };
-  } finally {
-    syncFs.closeSync(opened.fd);
-  }
+  return readOpenedWorkspaceFile({
+    cacheKey: params.filePath,
+    opened,
+  });
 }
 
 function stripFrontMatter(content: string): string {
@@ -161,18 +247,6 @@ type WorkspaceSetupState = {
   bootstrapSeededAt?: string;
   setupCompletedAt?: string;
 };
-
-/** Set of recognized bootstrap filenames for runtime validation */
-const VALID_BOOTSTRAP_NAMES: ReadonlySet<string> = new Set([
-  DEFAULT_AGENTS_FILENAME,
-  DEFAULT_SOUL_FILENAME,
-  DEFAULT_TOOLS_FILENAME,
-  DEFAULT_IDENTITY_FILENAME,
-  DEFAULT_USER_FILENAME,
-  DEFAULT_HEARTBEAT_FILENAME,
-  DEFAULT_BOOTSTRAP_FILENAME,
-  DEFAULT_MEMORY_FILENAME,
-]);
 
 async function writeFileIfMissing(filePath: string, content: string): Promise<boolean> {
   try {
@@ -651,6 +725,7 @@ export async function loadWorkspaceBootstrapFiles(dir: string): Promise<Workspac
     const loaded = await readWorkspaceFileWithGuards({
       filePath: entry.filePath,
       workspaceDir: resolvedDir,
+      allowExplicitBootstrapSymlinkTarget: true,
     });
     if (loaded.ok) {
       result.push({
