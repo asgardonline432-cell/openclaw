@@ -8,6 +8,7 @@ import type { AuthProfileStore } from "./auth-profiles.js";
 import { resolveEnvApiKey } from "./model-auth-env.js";
 import {
   hasAvailableAuthForProvider,
+  hasRuntimeAvailableProviderAuth,
   resolveApiKeyForProvider,
   resolveModelAuthMode,
 } from "./model-auth.js";
@@ -102,6 +103,13 @@ describe("workspace plugin model auth evidence", () => {
               store,
             }),
           ).resolves.toBe(true);
+          expect(
+            hasRuntimeAvailableProviderAuth({
+              provider: "workspace-cloud",
+              cfg,
+              workspaceDir,
+            }),
+          ).toBe(true);
           expect(
             hasAuthForModelProvider({
               provider: "workspace-cloud",
