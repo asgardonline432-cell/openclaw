@@ -162,6 +162,12 @@ async function runGitHubCopilotNonInteractiveAuth(
 
   let profileId = DEFAULT_COPILOT_PROFILE_ID;
   if (resolved) {
+    const resolvedToken = normalizeOptionalSecretInput(resolved.key);
+    if (!resolvedToken) {
+      ctx.runtime.error("GitHub Copilot token is empty after normalization.");
+      ctx.runtime.exit(1);
+      return null;
+    }
     const useTokenRef = ctx.opts.secretInputMode === "ref" && resolved.source === "env";
     if (useTokenRef && !resolved.envVarName) {
       ctx.runtime.error(
@@ -188,7 +194,7 @@ async function runGitHubCopilotNonInteractiveAuth(
                 id: resolved.envVarName!,
               },
             }
-          : { token: resolved.key }),
+          : { token: resolvedToken }),
       },
       agentDir: ctx.agentDir,
     });

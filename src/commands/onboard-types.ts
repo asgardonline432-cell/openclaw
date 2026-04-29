@@ -53,6 +53,8 @@ export type OnboardOptions = OnboardDynamicProviderOptions & {
   tokenExpiresIn?: string;
   /** API key persistence mode for setup flows (default: plaintext). */
   secretInputMode?: SecretInputMode;
+  /** GitHub Copilot OAuth token for non-interactive provider setup. */
+  githubCopilotToken?: string;
   arceeaiApiKey?: string;
   cloudflareAiGatewayAccountId?: string;
   cloudflareAiGatewayGatewayId?: string;

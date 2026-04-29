@@ -222,7 +222,7 @@ describe("github-copilot plugin", () => {
     const resolveApiKey = vi.fn(async ({ envVar }: { envVar?: string }) =>
       envVar === "GH_TOKEN"
         ? {
-            key: "ghu_from_gh_token",
+            key: " ghu_from_\r\ngh_token ",
             source: "env" as const,
             envVarName: "GH_TOKEN",
           }
