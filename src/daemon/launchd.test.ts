@@ -944,7 +944,7 @@ describe("resolveLaunchAgentPlistPath", () => {
       expected: "/Users/test/Library/LaunchAgents/ai.openclaw.jbphoenix.plist",
     },
     {
-      name: "prefers OPENCLAW_LAUNCHD_LABEL over OPENCLAW_PROFILE",
+      name: "keeps custom operator OPENCLAW_LAUNCHD_LABEL over OPENCLAW_PROFILE",
       env: {
         HOME: "/Users/test",
         OPENCLAW_PROFILE: "jbphoenix",

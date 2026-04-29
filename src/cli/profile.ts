@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { resolveGatewayLaunchAgentLabel } from "../daemon/constants.js";
 import { isValueToken } from "../infra/cli-root-options.js";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
 import {
@@ -83,6 +84,31 @@ function resolveProfileStateDir(
   return path.join(resolveRequiredHomeDir(env as NodeJS.ProcessEnv, homedir), `.openclaw${suffix}`);
 }
 
+function isOpenClawManagedLaunchdLabel(label: string): boolean {
+  if (label === resolveGatewayLaunchAgentLabel()) {
+    return true;
+  }
+  const prefix = "ai.openclaw.";
+  if (!label.startsWith(prefix)) {
+    return false;
+  }
+  const profile = label.slice(prefix.length);
+  return isValidProfileName(profile) && label === resolveGatewayLaunchAgentLabel(profile);
+}
+
+function clearStaleManagedLaunchdLabel(
+  env: Record<string, string | undefined>,
+  profile: string,
+): void {
+  const launchdLabel = normalizeOptionalString(env.OPENCLAW_LAUNCHD_LABEL);
+  if (!launchdLabel || launchdLabel === resolveGatewayLaunchAgentLabel(profile)) {
+    return;
+  }
+  if (isOpenClawManagedLaunchdLabel(launchdLabel)) {
+    delete env.OPENCLAW_LAUNCHD_LABEL;
+  }
+}
+
 export function applyCliProfileEnv(params: {
   profile: string;
   env?: Record<string, string | undefined>;
@@ -95,7 +121,9 @@ export function applyCliProfileEnv(params: {
     return;
   }
 
-  // Convenience only: fill defaults, never override explicit env values.
+  clearStaleManagedLaunchdLabel(env, profile);
+
+  // Convenience only: fill profile defaults without overriding operator-provided paths.
   env.OPENCLAW_PROFILE = profile;
 
   const existingStateDir = normalizeOptionalString(env.OPENCLAW_STATE_DIR);

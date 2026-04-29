@@ -181,6 +181,34 @@ describe("applyCliProfileEnv", () => {
     expect(env.OPENCLAW_CONFIG_PATH).toBe(path.join("/custom", "openclaw.json"));
   });
 
+  it("clears stale OpenClaw-managed launchd labels when applying an explicit profile", () => {
+    const env: Record<string, string | undefined> = {
+      OPENCLAW_LAUNCHD_LABEL: "ai.openclaw.gateway",
+    };
+    applyCliProfileEnv({
+      profile: "work",
+      env,
+      homedir: () => "/home/peter",
+    });
+
+    expect(env.OPENCLAW_PROFILE).toBe("work");
+    expect(env.OPENCLAW_LAUNCHD_LABEL).toBeUndefined();
+  });
+
+  it("keeps custom operator launchd labels when applying an explicit profile", () => {
+    const env: Record<string, string | undefined> = {
+      OPENCLAW_LAUNCHD_LABEL: "com.example.openclaw.gateway",
+    };
+    applyCliProfileEnv({
+      profile: "work",
+      env,
+      homedir: () => "/home/peter",
+    });
+
+    expect(env.OPENCLAW_PROFILE).toBe("work");
+    expect(env.OPENCLAW_LAUNCHD_LABEL).toBe("com.example.openclaw.gateway");
+  });
+
   it("uses OPENCLAW_HOME when deriving profile state dir", () => {
     const env: Record<string, string | undefined> = {
       OPENCLAW_HOME: "/srv/openclaw-home",
