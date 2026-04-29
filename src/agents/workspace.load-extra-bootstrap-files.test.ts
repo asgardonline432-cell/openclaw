@@ -38,6 +38,23 @@ describe("loadExtraBootstrapFiles", () => {
     expect(files.map((file) => file.content)).toEqual(["readme", "tools"]);
   });
 
+  it("preserves Node glob character class matching for extra file patterns", async () => {
+    const workspaceDir = await createWorkspaceDir("glob-classes");
+    const docsDir = path.join(workspaceDir, "docs");
+    await fs.mkdir(docsDir, { recursive: true });
+    await fs.writeFile(path.join(docsDir, "a.md"), "a", "utf-8");
+    await fs.writeFile(path.join(docsDir, "b.md"), "b", "utf-8");
+    await fs.writeFile(path.join(docsDir, "c.md"), "c", "utf-8");
+
+    const files = await loadExtraBootstrapFiles(workspaceDir, ["docs/[ab]*.md"]);
+
+    expect(files.map((file) => path.relative(workspaceDir, file.path))).toEqual([
+      path.join("docs", "a.md"),
+      path.join("docs", "b.md"),
+    ]);
+    expect(files.map((file) => file.content)).toEqual(["a", "b"]);
+  });
+
   it("sorts literal paths deterministically before loading", async () => {
     const workspaceDir = await createWorkspaceDir("literal-order");
     const notesDir = path.join(workspaceDir, "notes");

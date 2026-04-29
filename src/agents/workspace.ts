@@ -187,81 +187,6 @@ function hasGlobPattern(value: string): boolean {
   return value.includes("*") || value.includes("?") || value.includes("{");
 }
 
-function escapeRegexChar(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
-}
-
-function globPatternToRegex(pattern: string): RegExp {
-  const normalized = pattern.replace(/\\/g, "/");
-  let source = "^";
-  for (let i = 0; i < normalized.length; i += 1) {
-    const char = normalized[i] ?? "";
-    const next = normalized[i + 1] ?? "";
-    if (char === "*") {
-      if (next === "*") {
-        if (normalized[i + 2] === "/") {
-          source += "(?:.*/)?";
-          i += 2;
-        } else {
-          source += ".*";
-          i += 1;
-        }
-      } else {
-        source += "[^/]*";
-      }
-      continue;
-    }
-    if (char === "?") {
-      source += "[^/]";
-      continue;
-    }
-    if (char === "{") {
-      const end = normalized.indexOf("}", i + 1);
-      if (end !== -1) {
-        const alternatives = normalized
-          .slice(i + 1, end)
-          .split(",")
-          .map((part) => part.replace(/[|\\{}()[\]^$+?.*]/g, "\\$&"));
-        source += `(?:${alternatives.join("|")})`;
-        i = end;
-        continue;
-      }
-    }
-    source += escapeRegexChar(char);
-  }
-  return new RegExp(`${source}$`);
-}
-
-async function listWorkspaceFilePaths(dir: string): Promise<string[]> {
-  const result: string[] = [];
-  async function visit(relativeDir: string): Promise<void> {
-    const absoluteDir = path.join(dir, relativeDir);
-    let entries: syncFs.Dirent[];
-    try {
-      entries = await fs.readdir(absoluteDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries.toSorted((a, b) => a.name.localeCompare(b.name))) {
-      const relativePath = path.join(relativeDir, entry.name);
-      if (entry.isDirectory()) {
-        await visit(relativePath);
-        continue;
-      }
-      if (entry.isFile()) {
-        result.push(relativePath);
-      }
-    }
-  }
-  await visit("");
-  return result;
-}
-
-function matchWorkspaceGlobPattern(files: string[], pattern: string): string[] {
-  const regex = globPatternToRegex(pattern);
-  return files.filter((file) => regex.test(file.replace(/\\/g, "/")));
-}
-
 async function fileContentDiffersFromTemplate(
   filePath: string,
   template: string,
@@ -769,15 +694,15 @@ export async function loadExtraBootstrapFilesWithDiagnostics(
 
   // Resolve glob patterns into concrete file paths
   const resolvedPaths = new Set<string>();
-  let workspaceFilePaths: string[] | undefined;
   for (const pattern of extraPatterns) {
     if (hasGlobPattern(pattern)) {
-      workspaceFilePaths ??= await listWorkspaceFilePaths(resolvedDir);
-      const matches = matchWorkspaceGlobPattern(workspaceFilePaths, pattern);
-      if (matches.length > 0) {
-        for (const match of matches) {
+      try {
+        const matches = fs.glob(pattern, { cwd: resolvedDir });
+        for await (const match of matches) {
           resolvedPaths.add(match);
         }
+      } catch {
+        resolvedPaths.add(pattern);
       }
     } else {
       resolvedPaths.add(pattern);
