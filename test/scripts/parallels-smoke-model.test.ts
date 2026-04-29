@@ -7,6 +7,7 @@ const OS_SCRIPT_PATHS = [
   "scripts/e2e/parallels-windows-smoke.sh",
 ];
 const NPM_UPDATE_SCRIPT_PATH = "scripts/e2e/parallels-npm-update-smoke.sh";
+const DEFAULT_OPENAI_MODEL = "openai/gpt-5.5";
 
 describe("Parallels smoke model selection", () => {
   it("keeps the OpenAI smoke lane on the stable direct API model by default", () => {
@@ -14,8 +15,9 @@ describe("Parallels smoke model selection", () => {
       const script = readFileSync(scriptPath, "utf8");
 
       expect(script, scriptPath).toContain(
-        'MODEL_ID="${OPENCLAW_PARALLELS_OPENAI_MODEL:-openai/gpt-5.5}"',
+        `MODEL_ID="\${OPENCLAW_PARALLELS_OPENAI_MODEL:-${DEFAULT_OPENAI_MODEL}}"`,
       );
+      expect(script, scriptPath).toContain(`Default: ${DEFAULT_OPENAI_MODEL} for the OpenAI lane`);
       expect(script, scriptPath).toContain("--model <provider/model>");
       expect(script, scriptPath).toContain("MODEL_ID_EXPLICIT=1");
     }
