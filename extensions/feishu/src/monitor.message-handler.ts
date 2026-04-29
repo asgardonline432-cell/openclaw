@@ -38,6 +38,7 @@ type FeishuMessageReceiveHandlerContext = {
     botOpenId?: string;
     botName?: string;
   }) => string;
+  onEventReceived?: () => void;
   hasProcessedMessage: (
     messageId: string | undefined | null,
     namespace: string,
@@ -173,6 +174,7 @@ export function createFeishuMessageReceiveHandler({
   getBotName = () => undefined,
   resolveSequentialKey = ({ accountId, event }) =>
     `feishu:${accountId}:${event.message.chat_id?.trim() || "unknown"}`,
+  onEventReceived,
 }: FeishuMessageReceiveHandlerContext): (data: unknown) => Promise<void> {
   const inboundDebounceMs = core.channel.debounce.resolveInboundDebounceMs({
     cfg,
@@ -319,6 +321,7 @@ export function createFeishuMessageReceiveHandler({
       log(`feishu[${accountId}]: dropping duplicate event for message ${messageId}`);
       return;
     }
+    onEventReceived?.();
     const processMessage = async () => {
       await inboundDebouncer.enqueue(event);
     };

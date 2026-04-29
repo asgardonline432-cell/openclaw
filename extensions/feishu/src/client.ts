@@ -82,6 +82,13 @@ export const FEISHU_HTTP_TIMEOUT_MS = 30_000;
 export const FEISHU_HTTP_TIMEOUT_MAX_MS = 300_000;
 export const FEISHU_HTTP_TIMEOUT_ENV_VAR = "OPENCLAW_FEISHU_HTTP_TIMEOUT_MS";
 
+export type FeishuWSClientLifecycleCallbacks = {
+  onReady?: () => void;
+  onError?: (err: Error) => void;
+  onReconnecting?: () => void;
+  onReconnected?: () => void;
+};
+
 type FeishuHttpInstanceLike = Pick<
   typeof feishuClientSdk.defaultHttpInstance,
   "request" | "get" | "post" | "put" | "patch" | "delete" | "head" | "options"
@@ -224,7 +231,10 @@ export function createFeishuClient(creds: FeishuClientCredentials): Lark.Client 
  * Create a Feishu WebSocket client for an account.
  * Note: WSClient is not cached since each call creates a new connection.
  */
-export async function createFeishuWSClient(account: ResolvedFeishuAccount): Promise<Lark.WSClient> {
+export async function createFeishuWSClient(
+  account: ResolvedFeishuAccount,
+  lifecycleCallbacks: FeishuWSClientLifecycleCallbacks = {},
+): Promise<Lark.WSClient> {
   const { accountId, appId, appSecret, domain } = account;
 
   if (!appId || !appSecret) {
@@ -238,6 +248,7 @@ export async function createFeishuWSClient(account: ResolvedFeishuAccount): Prom
     domain: resolveDomain(domain),
     loggerLevel: feishuClientSdk.LoggerLevel.info,
     wsConfig: FEISHU_WS_CONFIG,
+    ...lifecycleCallbacks,
     ...(agent ? { agent } : {}),
   } as ConstructorParameters<typeof feishuClientSdk.WSClient>[0] & {
     wsConfig: typeof FEISHU_WS_CONFIG;

@@ -15,6 +15,13 @@ type MockWsClient = {
   close: ReturnType<typeof vi.fn>;
 };
 
+type MockWsLifecycleCallbacks = {
+  onReady?: () => void;
+  onError?: (err: Error) => void;
+  onReconnecting?: () => void;
+  onReconnected?: () => void;
+};
+
 function createAccount(accountId: string): ResolvedFeishuAccount {
   return {
     accountId,
@@ -35,6 +42,16 @@ function createWsClient(): MockWsClient {
     start: vi.fn(),
     close: vi.fn(),
   };
+}
+
+function getWsLifecycleCallbacks(): MockWsLifecycleCallbacks {
+  const callbacks = createFeishuWSClientMock.mock.calls[0]?.[1] as
+    | MockWsLifecycleCallbacks
+    | undefined;
+  if (!callbacks) {
+    throw new Error("missing websocket lifecycle callbacks");
+  }
+  return callbacks;
 }
 
 afterEach(() => {
@@ -78,6 +95,66 @@ describe("feishu websocket cleanup", () => {
     expect(wsClients.has(accountId)).toBe(false);
     expect(botOpenIds.has(accountId)).toBe(false);
     expect(botNames.has(accountId)).toBe(false);
+  });
+
+  it("reports websocket connection state from SDK lifecycle callbacks", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const wsClient = createWsClient();
+    createFeishuWSClientMock.mockReturnValue(wsClient);
+    const statusSink = vi.fn();
+
+    const abortController = new AbortController();
+    const monitorPromise = monitorWebSocket({
+      account: createAccount("status"),
+      accountId: "status",
+      runtime: {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+      abortSignal: abortController.signal,
+      eventDispatcher: {} as never,
+      statusSink,
+    });
+
+    await vi.waitFor(() => {
+      expect(wsClient.start).toHaveBeenCalledTimes(1);
+    });
+    expect(statusSink).not.toHaveBeenCalledWith(expect.objectContaining({ connected: true }));
+
+    vi.setSystemTime(10_000);
+    getWsLifecycleCallbacks().onReady?.();
+    expect(statusSink).toHaveBeenCalledWith({
+      connected: true,
+      mode: "websocket",
+      healthState: "healthy",
+      lastConnectedAt: 10_000,
+      lastError: null,
+    });
+
+    vi.setSystemTime(11_000);
+    getWsLifecycleCallbacks().onReconnecting?.();
+    expect(statusSink).toHaveBeenCalledWith({
+      connected: false,
+      mode: "websocket",
+      healthState: "reconnecting",
+      lastDisconnect: { at: 11_000 },
+      lastError: null,
+    });
+
+    vi.setSystemTime(12_000);
+    getWsLifecycleCallbacks().onError?.(new Error("connect failed"));
+    expect(statusSink).toHaveBeenCalledWith({
+      connected: false,
+      mode: "websocket",
+      healthState: "disconnected",
+      lastDisconnect: { at: 12_000, error: "connect failed" },
+      lastError: "connect failed",
+    });
+
+    abortController.abort();
+    await monitorPromise;
   });
 
   it("retries with backoff after websocket start rejects", async () => {

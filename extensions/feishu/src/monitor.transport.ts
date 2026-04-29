@@ -10,6 +10,7 @@ import {
   readWebhookBodyOrReject,
   safeEqualSecret,
 } from "./monitor-transport-runtime-api.js";
+import type { FeishuStatusSink } from "./monitor.js";
 import {
   botNames,
   botOpenIds,
@@ -28,6 +29,7 @@ export type MonitorTransportParams = {
   runtime?: RuntimeEnv;
   abortSignal?: AbortSignal;
   eventDispatcher: Lark.EventDispatcher;
+  statusSink?: FeishuStatusSink;
 };
 
 const FEISHU_WS_RECONNECT_INITIAL_DELAY_MS = 1_000;
@@ -120,6 +122,29 @@ function formatFeishuWsErrorForLog(err: unknown): string {
   return `${redacted.slice(0, FEISHU_WS_LOG_ERROR_MAX_LENGTH)}...`;
 }
 
+function publishFeishuDisconnectedStatus(
+  statusSink: FeishuStatusSink | undefined,
+  params: {
+    mode: "websocket" | "webhook";
+    healthState?: string;
+    error?: unknown;
+  },
+): void {
+  if (!statusSink) {
+    return;
+  }
+  const at = Date.now();
+  const errorMessage =
+    params.error === undefined ? undefined : formatFeishuWsErrorForLog(params.error);
+  statusSink({
+    connected: false,
+    mode: params.mode,
+    healthState: params.healthState ?? "disconnected",
+    lastDisconnect: errorMessage ? { at, error: errorMessage } : { at },
+    lastError: errorMessage ?? null,
+  });
+}
+
 function cleanupFeishuWsClient(params: {
   accountId: string;
   wsClient?: Lark.WSClient;
@@ -166,6 +191,7 @@ export async function monitorWebSocket({
   runtime,
   abortSignal,
   eventDispatcher,
+  statusSink,
 }: MonitorTransportParams): Promise<void> {
   const log = runtime?.log ?? console.log;
   const error = runtime?.error ?? console.error;
@@ -179,9 +205,58 @@ export async function monitorWebSocket({
     let wsClient: Lark.WSClient | undefined;
     try {
       log(`feishu[${accountId}]: starting WebSocket connection...`);
-      wsClient = await createFeishuWSClient(account);
+      wsClient = await createFeishuWSClient(account, {
+        onReady: () => {
+          if (abortSignal?.aborted) {
+            return;
+          }
+          attempt = 0;
+          statusSink?.({
+            connected: true,
+            mode: "websocket",
+            healthState: "healthy",
+            lastConnectedAt: Date.now(),
+            lastError: null,
+          });
+        },
+        onReconnecting: () => {
+          if (abortSignal?.aborted) {
+            return;
+          }
+          publishFeishuDisconnectedStatus(statusSink, {
+            mode: "websocket",
+            healthState: "reconnecting",
+          });
+        },
+        onReconnected: () => {
+          if (abortSignal?.aborted) {
+            return;
+          }
+          attempt = 0;
+          statusSink?.({
+            connected: true,
+            mode: "websocket",
+            healthState: "healthy",
+            lastConnectedAt: Date.now(),
+            lastError: null,
+          });
+        },
+        onError: (err) => {
+          if (abortSignal?.aborted) {
+            return;
+          }
+          publishFeishuDisconnectedStatus(statusSink, {
+            mode: "websocket",
+            error: err,
+          });
+        },
+      });
       if (abortSignal?.aborted) {
         cleanupFeishuWsClient({ accountId, wsClient, error });
+        publishFeishuDisconnectedStatus(statusSink, {
+          mode: "websocket",
+          healthState: "stopped",
+        });
         break;
       }
       wsClients.set(accountId, wsClient);
@@ -191,9 +266,17 @@ export async function monitorWebSocket({
       await waitForFeishuWsAbort(abortSignal);
       log(`feishu[${accountId}]: abort signal received, stopping`);
       cleanupFeishuWsClient({ accountId, wsClient, error });
+      publishFeishuDisconnectedStatus(statusSink, {
+        mode: "websocket",
+        healthState: "stopped",
+      });
       return;
     } catch (err) {
       cleanupFeishuWsClient({ accountId, wsClient, error });
+      publishFeishuDisconnectedStatus(statusSink, {
+        mode: "websocket",
+        error: err,
+      });
       if (abortSignal?.aborted) {
         break;
       }
@@ -217,6 +300,7 @@ export async function monitorWebhook({
   runtime,
   abortSignal,
   eventDispatcher,
+  statusSink,
 }: MonitorTransportParams): Promise<void> {
   const log = runtime?.log ?? console.log;
   const error = runtime?.error ?? console.error;
@@ -295,6 +379,14 @@ export async function monitorWebhook({
           respondText(res, 400, "Invalid JSON");
           return;
         }
+        const receivedAt = Date.now();
+        statusSink?.({
+          connected: true,
+          mode: "webhook",
+          healthState: "healthy",
+          lastTransportActivityAt: receivedAt,
+          lastError: null,
+        });
 
         const { isChallenge, challenge } = Lark.generateChallenge(payload, {
           encryptKey,
@@ -305,6 +397,10 @@ export async function monitorWebhook({
           res.end(JSON.stringify(challenge));
           return;
         }
+        statusSink?.({
+          lastEventAt: receivedAt,
+          lastInboundAt: receivedAt,
+        });
 
         const value = await eventDispatcher.invoke(buildFeishuWebhookEnvelope(req, payload), {
           needCheck: false,
@@ -333,6 +429,10 @@ export async function monitorWebhook({
       httpServers.delete(accountId);
       botOpenIds.delete(accountId);
       botNames.delete(accountId);
+      publishFeishuDisconnectedStatus(statusSink, {
+        mode: "webhook",
+        healthState: "stopped",
+      });
     };
 
     const handleAbort = () => {
@@ -350,10 +450,21 @@ export async function monitorWebhook({
     abortSignal?.addEventListener("abort", handleAbort, { once: true });
 
     server.listen(port, host, () => {
+      statusSink?.({
+        connected: true,
+        mode: "webhook",
+        healthState: "healthy",
+        lastConnectedAt: Date.now(),
+        lastError: null,
+      });
       log(`feishu[${accountId}]: Webhook server listening on ${host}:${port}`);
     });
 
     server.on("error", (err) => {
+      publishFeishuDisconnectedStatus(statusSink, {
+        mode: "webhook",
+        error: err,
+      });
       error(`feishu[${accountId}]: Webhook server error: ${err}`);
       abortSignal?.removeEventListener("abort", handleAbort);
       reject(err);
