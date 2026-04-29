@@ -73,6 +73,8 @@ async function runNewWithPreviousSessionEntry(params: {
   sessionKey?: string;
   workspaceDirOverride?: string;
   timestamp?: Date;
+  commandSource?: string;
+  resetReason?: string;
 }): Promise<{ files: string[]; memoryContent: string }> {
   const event = createHookEvent(
     "command",
@@ -85,6 +87,8 @@ async function runNewWithPreviousSessionEntry(params: {
           agents: { defaults: { workspace: params.tempDir } },
         } satisfies OpenClawConfig),
       previousSessionEntry: params.previousSessionEntry,
+      ...(params.commandSource ? { commandSource: params.commandSource } : {}),
+      ...(params.resetReason ? { resetReason: params.resetReason } : {}),
       ...(params.workspaceDirOverride ? { workspaceDir: params.workspaceDirOverride } : {}),
     },
   );
@@ -250,6 +254,35 @@ describe("session-memory hook", () => {
     expect(files.length).toBe(1);
     expect(memoryContent).toContain("user: Please reset and keep notes");
     expect(memoryContent).toContain("assistant: Captured before reset");
+  });
+
+  it("creates memory file for automatic daily and idle reset events", async () => {
+    const sessionContent = createMockSessionContent([
+      { role: "user", content: "Context before the lazy reset" },
+      { role: "assistant", content: "Captured by automatic rollover" },
+    ]);
+    const { tempDir, activeSessionFile: sessionFile } = await createSessionMemoryWorkspace({
+      activeSession: {
+        name: "test-session.jsonl",
+        content: sessionContent,
+      },
+    });
+
+    const { files, memoryContent } = await runNewWithPreviousSessionEntry({
+      tempDir,
+      action: "reset",
+      commandSource: "session:idle",
+      resetReason: "idle",
+      previousSessionEntry: {
+        sessionId: "test-123",
+        sessionFile,
+      },
+    });
+
+    expect(files.length).toBe(1);
+    expect(memoryContent).toContain("- **Source**: session:idle");
+    expect(memoryContent).toContain("user: Context before the lazy reset");
+    expect(memoryContent).toContain("assistant: Captured by automatic rollover");
   });
 
   it("uses local timezone date and fallback time in memory filenames and headers", async () => {

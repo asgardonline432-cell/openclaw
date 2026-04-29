@@ -14,6 +14,7 @@ function loadRouteReplyRuntime() {
 }
 
 export type ResetCommandAction = "new" | "reset";
+export type ResetHookReason = ResetCommandAction | "daily" | "idle";
 
 function parseTranscriptMessages(content: string): unknown[] {
   const messages: unknown[] = [];
@@ -92,6 +93,71 @@ async function loadBeforeResetTranscript(params: {
   }
 }
 
+function emitBeforeResetPluginHook(params: {
+  reason: ResetHookReason;
+  sessionKey?: string;
+  previousSessionEntry?: HandleCommandsParams["previousSessionEntry"];
+  workspaceDir: string;
+}): void {
+  const hookRunner = getGlobalHookRunner();
+  if (!hookRunner?.hasHooks("before_reset")) {
+    return;
+  }
+
+  const prevEntry = params.previousSessionEntry;
+  void (async () => {
+    const { sessionFile, messages } = await loadBeforeResetTranscript({
+      sessionFile: prevEntry?.sessionFile,
+    });
+
+    try {
+      await hookRunner.runBeforeReset(
+        { sessionFile, messages, reason: params.reason },
+        {
+          agentId: resolveAgentIdFromSessionKey(params.sessionKey),
+          sessionKey: params.sessionKey,
+          sessionId: prevEntry?.sessionId,
+          workspaceDir: params.workspaceDir,
+        },
+      );
+    } catch (err: unknown) {
+      logVerbose(`before_reset hook failed: ${String(err)}`);
+    }
+  })();
+}
+
+export async function emitResetLifecycleHooks(params: {
+  action: ResetCommandAction;
+  cfg: HandleCommandsParams["cfg"];
+  commandSource: string;
+  senderId?: string;
+  sessionKey?: string;
+  sessionEntry?: HandleCommandsParams["sessionEntry"];
+  previousSessionEntry?: HandleCommandsParams["previousSessionEntry"];
+  workspaceDir: string;
+  resetReason?: ResetHookReason;
+}) {
+  const hookEvent = createInternalHookEvent("command", params.action, params.sessionKey ?? "", {
+    sessionEntry: params.sessionEntry,
+    previousSessionEntry: params.previousSessionEntry,
+    commandSource: params.commandSource,
+    senderId: params.senderId,
+    resetReason: params.resetReason ?? params.action,
+    workspaceDir: params.workspaceDir,
+    cfg: params.cfg,
+  });
+  await triggerInternalHook(hookEvent);
+
+  emitBeforeResetPluginHook({
+    reason: params.resetReason ?? params.action,
+    sessionKey: params.sessionKey,
+    previousSessionEntry: params.previousSessionEntry,
+    workspaceDir: params.workspaceDir,
+  });
+
+  return hookEvent;
+}
+
 export async function emitResetCommandHooks(params: {
   action: ResetCommandAction;
   ctx: HandleCommandsParams["ctx"];
@@ -105,15 +171,16 @@ export async function emitResetCommandHooks(params: {
   previousSessionEntry?: HandleCommandsParams["previousSessionEntry"];
   workspaceDir: string;
 }): Promise<{ routedReply: boolean }> {
-  const hookEvent = createInternalHookEvent("command", params.action, params.sessionKey ?? "", {
-    sessionEntry: params.sessionEntry,
-    previousSessionEntry: params.previousSessionEntry,
+  const hookEvent = await emitResetLifecycleHooks({
+    action: params.action,
+    cfg: params.cfg,
     commandSource: params.command.surface,
     senderId: params.command.senderId,
+    sessionKey: params.sessionKey,
+    sessionEntry: params.sessionEntry,
+    previousSessionEntry: params.previousSessionEntry,
     workspaceDir: params.workspaceDir,
-    cfg: params.cfg,
   });
-  await triggerInternalHook(hookEvent);
   params.command.resetHookTriggered = true;
 
   let routedReply = false;
@@ -139,28 +206,5 @@ export async function emitResetCommandHooks(params: {
     }
   }
 
-  const hookRunner = getGlobalHookRunner();
-  if (hookRunner?.hasHooks("before_reset")) {
-    const prevEntry = params.previousSessionEntry;
-    void (async () => {
-      const { sessionFile, messages } = await loadBeforeResetTranscript({
-        sessionFile: prevEntry?.sessionFile,
-      });
-
-      try {
-        await hookRunner.runBeforeReset(
-          { sessionFile, messages, reason: params.action },
-          {
-            agentId: resolveAgentIdFromSessionKey(params.sessionKey),
-            sessionKey: params.sessionKey,
-            sessionId: prevEntry?.sessionId,
-            workspaceDir: params.workspaceDir,
-          },
-        );
-      } catch (err: unknown) {
-        logVerbose(`before_reset hook failed: ${String(err)}`);
-      }
-    })();
-  }
   return { routedReply };
 }

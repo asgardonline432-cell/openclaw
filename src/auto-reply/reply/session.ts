@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { resolveSessionAgentId } from "../../agents/agent-scope.js";
+import { resolveAgentWorkspaceDir, resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { clearBootstrapSnapshotOnSessionRollover } from "../../agents/bootstrap-cache.js";
 import { getCliSessionBinding } from "../../agents/cli-session.js";
 import { resetRegisteredAgentHarnessSessions } from "../../agents/harness/registry.js";
@@ -50,6 +50,7 @@ import { normalizeSessionDeliveryFields } from "../../utils/delivery-context.sha
 import { normalizeCommandBody } from "../commands-registry.js";
 import type { MsgContext, TemplateContext } from "../templating.js";
 import { resolveEffectiveResetTargetSessionKey } from "./acp-reset-target.js";
+import { emitResetLifecycleHooks } from "./commands-reset-hooks.js";
 import { parseSoftResetCommand } from "./commands-reset-mode.js";
 import { resolveConversationBindingContextFromMessage } from "./conversation-binding-input.js";
 import { normalizeInboundTextNewlines } from "./inbound-text.js";
@@ -133,8 +134,7 @@ function resolveStaleSessionEndReason(params: {
   if (!params.entry || !params.freshness) {
     return undefined;
   }
-  const staleDaily =
-    params.freshness.dailyResetAt != null && params.entry.updatedAt < params.freshness.dailyResetAt;
+  const staleDaily = params.freshness.dailyResetAt != null && !params.freshness.fresh;
   const staleIdle =
     params.freshness.idleExpiresAt != null && params.now > params.freshness.idleExpiresAt;
   if (staleIdle) {
@@ -144,6 +144,12 @@ function resolveStaleSessionEndReason(params: {
     return "daily";
   }
   return undefined;
+}
+
+function isLazyResetHookReason(
+  reason: PluginHookSessionEndReason | undefined,
+): reason is "daily" | "idle" {
+  return reason === "daily" || reason === "idle";
 }
 
 function hasProviderOwnedSession(entry: SessionEntry | undefined): boolean {
@@ -848,6 +854,24 @@ export async function initSessionState(params: {
       onWarn: (message) => log.warn(message),
     }).catch((error) => {
       log.warn(`browser tab cleanup failed: ${String(error)}`);
+    });
+  }
+
+  if (previousSessionEntry && isLazyResetHookReason(previousSessionEndReason)) {
+    await emitResetLifecycleHooks({
+      action: "reset",
+      cfg,
+      commandSource: `session:${previousSessionEndReason}`,
+      resetReason: previousSessionEndReason,
+      sessionKey,
+      sessionEntry,
+      previousSessionEntry: previousSessionTranscript.sessionFile
+        ? {
+            ...previousSessionEntry,
+            sessionFile: previousSessionTranscript.sessionFile,
+          }
+        : previousSessionEntry,
+      workspaceDir: resolveAgentWorkspaceDir(cfg, agentId),
     });
   }
 
