@@ -64,8 +64,15 @@ function resolveTrustedNpmSpec(params: {
   if (!npmSpec) {
     return undefined;
   }
+  const expectedIntegrity = params.install?.expectedIntegrity?.trim();
+  if (!expectedIntegrity) {
+    return undefined;
+  }
   const parsed = parseRegistryNpmSpec(npmSpec);
-  return parsed ? npmSpec : undefined;
+  if (!parsed || parsed.selectorKind !== "exact-version") {
+    return undefined;
+  }
+  return npmSpec;
 }
 
 function resolveInstallInfo(params: {

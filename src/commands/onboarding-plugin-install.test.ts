@@ -137,7 +137,7 @@ describe("ensureOnboardingPluginInstalled", () => {
     );
   });
 
-  it("offers registry npm specs without requiring an exact version or integrity pin", async () => {
+  it("does not offer npm installs for unpinned or unverified registry specs", async () => {
     let captured:
       | {
           options: Array<{ value: "npm" | "local" | "skip"; label: string; hint?: string }>;
@@ -163,11 +163,31 @@ describe("ensureOnboardingPluginInstalled", () => {
       runtime: {} as never,
     });
 
-    expect(captured?.options).toEqual([
-      { value: "npm", label: "Download from npm (@demo/plugin)" },
-      { value: "skip", label: "Skip for now" },
-    ]);
-    expect(captured?.initialValue).toBe("npm");
+    expect(captured?.options).toEqual([{ value: "skip", label: "Skip for now" }]);
+    expect(captured?.initialValue).toBe("skip");
+    expect(installPluginFromNpmSpec).not.toHaveBeenCalled();
+
+    await ensureOnboardingPluginInstalled({
+      cfg: {},
+      entry: {
+        pluginId: "demo-plugin",
+        label: "Demo Plugin",
+        install: {
+          npmSpec: "@demo/plugin@latest",
+          expectedIntegrity: "sha512-demo",
+        },
+      },
+      prompter: {
+        select: vi.fn(async (input) => {
+          captured = input;
+          return "skip";
+        }),
+      } as never,
+      runtime: {} as never,
+    });
+
+    expect(captured?.options).toEqual([{ value: "skip", label: "Skip for now" }]);
+    expect(captured?.initialValue).toBe("skip");
     expect(installPluginFromNpmSpec).not.toHaveBeenCalled();
   });
 

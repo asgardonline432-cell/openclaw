@@ -196,8 +196,15 @@ function resolveNpmSpecForOnboarding(install: PluginPackageInstall): string | nu
   if (!npmSpec) {
     return null;
   }
+  const expectedIntegrity = install.expectedIntegrity?.trim();
+  if (!expectedIntegrity) {
+    return null;
+  }
   const parsed = parseRegistryNpmSpec(npmSpec);
-  return parsed ? npmSpec : null;
+  if (!parsed || parsed.selectorKind !== "exact-version") {
+    return null;
+  }
+  return npmSpec;
 }
 
 function resolveInstallDefaultChoice(params: {
