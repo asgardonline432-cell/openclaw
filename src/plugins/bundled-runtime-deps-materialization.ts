@@ -11,6 +11,7 @@ import {
 import { satisfies } from "./semver.runtime.js";
 
 const LEGACY_RETAINED_RUNTIME_DEPS_MANIFEST = ".openclaw-runtime-deps.json";
+const NODE_RESOLVED_ENTRY_FILE_EXTENSIONS = ["", ".js", ".json", ".node"];
 
 export function readGeneratedInstallManifestSpecs(installRoot: string): string[] | null {
   const parsed = readRuntimeDepsJsonObject(path.join(installRoot, "package.json"));
@@ -68,16 +69,87 @@ function readInstalledRuntimeDepPackage(
   }
 }
 
+function isPathInsideOrEqual(rootDir: string, candidatePath: string): boolean {
+  const relativePath = path.relative(rootDir, candidatePath);
+  return (
+    relativePath === "" ||
+    (relativePath !== ".." &&
+      !relativePath.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relativePath))
+  );
+}
+
+function resolveRuntimeDepEntryFile(entryPath: string): string | null {
+  for (const extension of NODE_RESOLVED_ENTRY_FILE_EXTENSIONS) {
+    const candidatePath = `${entryPath}${extension}`;
+    try {
+      if (fs.statSync(candidatePath).isFile()) {
+        return candidatePath;
+      }
+    } catch {
+      // Continue with the next Node-compatible extension candidate.
+    }
+  }
+  return null;
+}
+
+function resolveRuntimeDepEntryDirectory(
+  packageDir: string,
+  entryPath: string,
+  seenDirs: Set<string>,
+): string | null {
+  if (!isPathInsideOrEqual(packageDir, entryPath)) {
+    return null;
+  }
+  try {
+    if (!fs.statSync(entryPath).isDirectory()) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  if (seenDirs.has(entryPath)) {
+    return null;
+  }
+  seenDirs.add(entryPath);
+
+  const nestedPackageJson = readRuntimeDepsJsonObject(path.join(entryPath, "package.json"));
+  const nestedMain = nestedPackageJson?.main;
+  if (typeof nestedMain === "string" && nestedMain.trim() !== "") {
+    const resolvedMain = resolveRuntimeDepEntryPath(
+      packageDir,
+      path.resolve(entryPath, nestedMain),
+      seenDirs,
+    );
+    if (resolvedMain) {
+      return resolvedMain;
+    }
+  }
+
+  return resolveRuntimeDepEntryFile(path.join(entryPath, "index"));
+}
+
+function resolveRuntimeDepEntryPath(
+  packageDir: string,
+  entryPath: string,
+  seenDirs: Set<string>,
+): string | null {
+  const resolvedEntryPath = path.resolve(entryPath);
+  if (!isPathInsideOrEqual(packageDir, resolvedEntryPath)) {
+    return null;
+  }
+  return (
+    resolveRuntimeDepEntryFile(resolvedEntryPath) ??
+    resolveRuntimeDepEntryDirectory(packageDir, resolvedEntryPath, seenDirs)
+  );
+}
+
 function hasInstalledRuntimeDepEntryFiles(packageDir: string, packageJson: JsonObject): boolean {
   const main = packageJson.main;
   if (typeof main !== "string" || main.trim() === "") {
     return true;
   }
-  const mainPath = path.resolve(packageDir, main);
-  if (mainPath !== packageDir && !mainPath.startsWith(`${packageDir}${path.sep}`)) {
-    return false;
-  }
-  return fs.existsSync(mainPath);
+  return Boolean(resolveRuntimeDepEntryPath(packageDir, path.resolve(packageDir, main), new Set()));
 }
 
 export function isRuntimeDepSatisfied(

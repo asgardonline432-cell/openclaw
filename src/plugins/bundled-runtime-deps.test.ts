@@ -3250,6 +3250,60 @@ describe("ensureBundledPluginRuntimeDeps", () => {
     ]);
   });
 
+  it("accepts installed package main entries resolved through Node entry lookup", () => {
+    const packageRoot = makeTempDir();
+    const stageDir = makeTempDir();
+    fs.writeFileSync(
+      path.join(packageRoot, "package.json"),
+      JSON.stringify({
+        name: "openclaw",
+        version: "2026.4.27",
+        dependencies: { jszip: "3.10.1", "directory-runtime": "1.0.0" },
+        openclaw: {
+          bundle: {
+            mirroredRootRuntimeDependencies: ["directory-runtime", "jszip"],
+          },
+        },
+      }),
+    );
+    const pluginRoot = writeBundledPluginPackage({
+      packageRoot,
+      pluginId: "browser",
+      deps: {},
+      enabledByDefault: true,
+    });
+    const env = { OPENCLAW_PLUGIN_STAGE_DIR: stageDir };
+    const installRoot = resolveBundledRuntimeDependencyInstallRoot(pluginRoot, { env });
+    writeGeneratedRuntimeDepsManifest(installRoot, ["directory-runtime@1.0.0", "jszip@3.10.1"]);
+    const jszipRoot = path.join(installRoot, "node_modules", "jszip");
+    fs.mkdirSync(path.join(jszipRoot, "lib"), { recursive: true });
+    fs.writeFileSync(
+      path.join(jszipRoot, "package.json"),
+      JSON.stringify({ name: "jszip", version: "3.10.1", main: "./lib/index" }),
+    );
+    fs.writeFileSync(path.join(jszipRoot, "lib", "index.js"), "module.exports = {};\n");
+    const directoryRuntimeRoot = path.join(installRoot, "node_modules", "directory-runtime");
+    fs.mkdirSync(path.join(directoryRuntimeRoot, "dist"), { recursive: true });
+    fs.writeFileSync(
+      path.join(directoryRuntimeRoot, "package.json"),
+      JSON.stringify({ name: "directory-runtime", version: "1.0.0", main: "./dist" }),
+    );
+    fs.writeFileSync(path.join(directoryRuntimeRoot, "dist", "index.js"), "module.exports = {};\n");
+
+    const calls: BundledRuntimeDepsInstallParams[] = [];
+    const result = ensureBundledPluginRuntimeDeps({
+      env,
+      pluginId: "browser",
+      pluginRoot,
+      installDeps: (params) => {
+        calls.push(params);
+      },
+    });
+
+    expect(result.installedSpecs).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
   it("mirrors sqlite-vec into the packaged default memory runtime deps", () => {
     const packageRoot = makeTempDir();
     fs.writeFileSync(
