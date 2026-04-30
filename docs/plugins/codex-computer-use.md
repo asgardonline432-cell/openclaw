@@ -202,12 +202,29 @@ If you use a nonstandard Codex app path, set `computerUse.marketplacePath` to a
 local marketplace file path or run `/codex computer-use install --source
 <marketplace-source>` once.
 
-The native Mac node host also looks for the bundled Computer Use MCP manifest at
-the standard Codex app path. For local development or nonstandard installs, set
-`OPENCLAW_COMPUTER_USE_MCP_COMMAND` to the stdio MCP executable path and
-optionally set `OPENCLAW_COMPUTER_USE_MCP_ARGS` to a JSON array of arguments.
-When the env override is absent, OpenClaw.app reads the bundled `.mcp.json`
-manifest and launches the declared `computer-use` server.
+The native Mac node host does not launch the MCP backend directly from the
+Gateway. OpenClaw.app owns the permission-sensitive child process. It resolves
+the backend in this order:
+
+1. `OPENCLAW_COMPUTER_USE_MCP_COMMAND`, with optional
+   `OPENCLAW_COMPUTER_USE_MCP_ARGS` as a JSON array.
+2. `OPENCLAW_COMPUTER_USE_MCP_PACKAGE_DIR`, pointing at a package directory
+   that contains `.mcp.json`.
+3. The OpenClaw-managed package under
+   `~/Library/Application Support/OpenClaw/CodexComputerUseMCP/computer-use`.
+4. An approved Computer Use package bundled with OpenClaw.app resources at
+   `CodexComputerUseMCP/computer-use`.
+5. The standard Codex desktop bundle at
+   `/Applications/Codex.app/Contents/Resources/plugins/openai-bundled/plugins/computer-use`.
+
+When OpenClaw.app finds the approved Codex desktop bundle, it copies the whole
+`computer-use` package into OpenClaw-managed Application Support storage and
+launches the stdio server from that managed copy. Copying the package preserves
+relative resources and nested app helpers declared by `.mcp.json`; copying only
+the executable is not enough. OpenClaw refreshes the managed copy when the
+approved source package changes. Set `OPENCLAW_COMPUTER_USE_MCP_INSTALL_DIR`
+only for development or diagnostics when you need to override the managed
+install directory.
 
 ## Remote catalog limit
 

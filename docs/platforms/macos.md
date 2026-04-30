@@ -64,6 +64,9 @@ The Gateway may open one of those named servers and proxy MCP stdio bytes over
 the node WebSocket, but the Mac app owns the executable mapping, signing checks,
 TCC prompts, and child-process lifetime. This keeps CLI-hatched and remote
 Gateways working while preserving the app as the macOS permission boundary.
+For Codex Computer Use, OpenClaw.app launches an approved package from its own
+managed Application Support location, bootstrapping that package from the
+bundled app resources or the standard Codex desktop bundle when needed.
 
 Node service + app IPC:
 

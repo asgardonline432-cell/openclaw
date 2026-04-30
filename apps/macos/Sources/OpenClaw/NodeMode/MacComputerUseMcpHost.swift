@@ -6,12 +6,37 @@ import OSLog
 
 private let computerUseServerId = "computer-use"
 private let computerUseRequiredPermissions = [Capability.accessibility.rawValue, Capability.screenRecording.rawValue]
+private let computerUseEnvCommandKey = "OPENCLAW_COMPUTER_USE_MCP_COMMAND"
+private let computerUseEnvArgsKey = "OPENCLAW_COMPUTER_USE_MCP_ARGS"
+private let computerUseEnvPackageDirKey = "OPENCLAW_COMPUTER_USE_MCP_PACKAGE_DIR"
+private let computerUseEnvInstallDirKey = "OPENCLAW_COMPUTER_USE_MCP_INSTALL_DIR"
+private let computerUseAppSupportDirName = "CodexComputerUseMCP"
+private let computerUsePackageDirName = "computer-use"
+private let computerUseBundledResourcePath = "CodexComputerUseMCP/computer-use"
+private let computerUseManagedMetadataFileName = ".openclaw-computer-use-source.json"
 
-private struct MacMcpLaunchConfig {
+struct MacMcpLaunchConfig {
     var command: URL
     var args: [String]
     var cwd: URL?
     var source: String
+}
+
+private struct MacMcpPackageSource {
+    var directory: URL
+    var source: String
+}
+
+private struct MacMcpPackageFingerprint: Codable, Equatable {
+    var fileCount: Int
+    var totalSize: UInt64
+    var latestModifiedAt: TimeInterval
+}
+
+private struct MacMcpManagedPackageMetadata: Codable, Equatable {
+    var source: String
+    var sourcePath: String
+    var sourceFingerprint: MacMcpPackageFingerprint
 }
 
 private struct CodexMcpManifest: Decodable {
@@ -215,22 +240,101 @@ actor MacComputerUseMcpHost {
             ])
     }
 
-    private nonisolated static func resolveComputerUseLaunchConfig() -> MacMcpLaunchConfig? {
-        let env = ProcessInfo.processInfo.environment
-        if let rawCommand = env["OPENCLAW_COMPUTER_USE_MCP_COMMAND"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+    nonisolated static func resolveComputerUseLaunchConfig(
+        env: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default,
+        resourceURL: URL? = Bundle.main.resourceURL,
+        codexPluginDir: URL = URL(
+            fileURLWithPath: "/Applications/Codex.app/Contents/Resources/plugins/openai-bundled/plugins/computer-use"),
+        appSupportRoot: URL? = nil) -> MacMcpLaunchConfig?
+    {
+        if let rawCommand = env[computerUseEnvCommandKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !rawCommand.isEmpty
         {
             let command = URL(fileURLWithPath: NSString(string: rawCommand).expandingTildeInPath)
             return MacMcpLaunchConfig(
                 command: command,
-                args: Self.parseEnvArgs(env["OPENCLAW_COMPUTER_USE_MCP_ARGS"]) ?? ["mcp"],
+                args: Self.parseEnvArgs(env[computerUseEnvArgsKey]) ?? ["mcp"],
                 cwd: nil,
-                source: "env")
+                source: "env-command")
         }
 
-        let pluginDir = URL(
-            fileURLWithPath: "/Applications/Codex.app/Contents/Resources/plugins/openai-bundled/plugins/computer-use")
-        let manifestURL = pluginDir.appendingPathComponent(".mcp.json")
+        if let rawPackageDir = env[computerUseEnvPackageDirKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !rawPackageDir.isEmpty
+        {
+            let packageDir = URL(fileURLWithPath: NSString(string: rawPackageDir).expandingTildeInPath)
+            if let launch = Self.resolvePackageLaunchConfig(
+                packageDir: packageDir,
+                source: "env-package",
+                fileManager: fileManager)
+            {
+                return launch
+            }
+        }
+
+        let managedDir = Self.managedPackageDirectory(
+            env: env,
+            fileManager: fileManager,
+            appSupportRoot: appSupportRoot)
+        let managedLaunch = Self.resolvePackageLaunchConfig(
+            packageDir: managedDir,
+            source: "openclaw-managed",
+            fileManager: fileManager)
+        let source = Self.approvedPackageSources(
+            resourceURL: resourceURL,
+            codexPluginDir: codexPluginDir,
+            fileManager: fileManager).first
+
+        if let managedLaunch {
+            guard
+                let source,
+                Self.managedPackageNeedsRefresh(
+                    managedDir: managedDir,
+                    source: source,
+                    fileManager: fileManager)
+            else {
+                return managedLaunch
+            }
+        }
+
+        if let source,
+           Self.installManagedPackage(from: source, to: managedDir, fileManager: fileManager),
+           let launch = Self.resolvePackageLaunchConfig(
+               packageDir: managedDir,
+               source: "openclaw-managed:\(source.source)",
+               fileManager: fileManager)
+        {
+            return launch
+        }
+
+        return managedLaunch
+    }
+
+    private nonisolated static func approvedPackageSources(
+        resourceURL: URL?,
+        codexPluginDir: URL,
+        fileManager: FileManager) -> [MacMcpPackageSource]
+    {
+        [
+            resourceURL?.appendingPathComponent(computerUseBundledResourcePath, isDirectory: true)
+                .map { MacMcpPackageSource(directory: $0, source: "openclaw-bundled") },
+            MacMcpPackageSource(directory: codexPluginDir, source: "codex-bundled"),
+        ].compactMap { $0 }
+            .filter {
+                Self.resolvePackageLaunchConfig(
+                    packageDir: $0.directory,
+                    source: $0.source,
+                    fileManager: fileManager) != nil
+            }
+    }
+
+    private nonisolated static func resolvePackageLaunchConfig(
+        packageDir: URL,
+        source: String,
+        fileManager: FileManager) -> MacMcpLaunchConfig?
+    {
+        let manifestURL = packageDir.appendingPathComponent(".mcp.json", isDirectory: false)
         guard
             let data = try? Data(contentsOf: manifestURL),
             let manifest = try? JSONDecoder().decode(CodexMcpManifest.self, from: data),
@@ -238,13 +342,144 @@ actor MacComputerUseMcpHost {
         else {
             return nil
         }
-        let cwd = Self.resolvePath(server.cwd ?? ".", relativeTo: pluginDir)
+        let cwd = Self.resolvePath(server.cwd ?? ".", relativeTo: packageDir)
         let command = Self.resolvePath(server.command, relativeTo: cwd)
+        guard fileManager.isExecutableFile(atPath: command.path) else {
+            return nil
+        }
         return MacMcpLaunchConfig(
             command: command,
             args: server.args ?? [],
             cwd: cwd,
-            source: "codex-bundled")
+            source: source)
+    }
+
+    private nonisolated static func managedPackageDirectory(
+        env: [String: String],
+        fileManager: FileManager,
+        appSupportRoot: URL?) -> URL
+    {
+        if let rawInstallDir = env[computerUseEnvInstallDirKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !rawInstallDir.isEmpty
+        {
+            return URL(fileURLWithPath: NSString(string: rawInstallDir).expandingTildeInPath)
+        }
+        let base = appSupportRoot
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("OpenClaw", isDirectory: true)
+            ?? fileManager.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library", isDirectory: true)
+                .appendingPathComponent("Application Support", isDirectory: true)
+                .appendingPathComponent("OpenClaw", isDirectory: true)
+        return base
+            .appendingPathComponent(computerUseAppSupportDirName, isDirectory: true)
+            .appendingPathComponent(computerUsePackageDirName, isDirectory: true)
+    }
+
+    private nonisolated static func managedPackageNeedsRefresh(
+        managedDir: URL,
+        source: MacMcpPackageSource,
+        fileManager: FileManager) -> Bool
+    {
+        guard let sourceFingerprint = Self.packageFingerprint(
+            packageDir: source.directory,
+            fileManager: fileManager)
+        else {
+            return false
+        }
+        let metadataURL = managedDir.appendingPathComponent(
+            computerUseManagedMetadataFileName,
+            isDirectory: false)
+        guard
+            let data = try? Data(contentsOf: metadataURL),
+            let metadata = try? JSONDecoder().decode(MacMcpManagedPackageMetadata.self, from: data)
+        else {
+            return true
+        }
+        return metadata != MacMcpManagedPackageMetadata(
+            source: source.source,
+            sourcePath: source.directory.path,
+            sourceFingerprint: sourceFingerprint)
+    }
+
+    private nonisolated static func installManagedPackage(
+        from source: MacMcpPackageSource,
+        to destination: URL,
+        fileManager: FileManager) -> Bool
+    {
+        guard let sourceFingerprint = Self.packageFingerprint(
+            packageDir: source.directory,
+            fileManager: fileManager)
+        else {
+            return false
+        }
+        let parent = destination.deletingLastPathComponent()
+        let temp = parent.appendingPathComponent(
+            ".\(destination.lastPathComponent).\(UUID().uuidString).tmp",
+            isDirectory: true)
+
+        do {
+            try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+            if fileManager.fileExists(atPath: temp.path) {
+                try fileManager.removeItem(at: temp)
+            }
+            try fileManager.copyItem(at: source.directory, to: temp)
+            let metadata = MacMcpManagedPackageMetadata(
+                source: source.source,
+                sourcePath: source.directory.path,
+                sourceFingerprint: sourceFingerprint)
+            let metadataData = try JSONEncoder().encode(metadata)
+            try metadataData.write(
+                to: temp.appendingPathComponent(computerUseManagedMetadataFileName, isDirectory: false),
+                options: [.atomic])
+
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.moveItem(at: temp, to: destination)
+            return true
+        } catch {
+            try? fileManager.removeItem(at: temp)
+            return false
+        }
+    }
+
+    private nonisolated static func packageFingerprint(
+        packageDir: URL,
+        fileManager: FileManager) -> MacMcpPackageFingerprint?
+    {
+        guard let enumerator = fileManager.enumerator(
+            at: packageDir,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey],
+            options: [],
+            errorHandler: nil)
+        else {
+            return nil
+        }
+        var fileCount = 0
+        var totalSize: UInt64 = 0
+        var latestModifiedAt: TimeInterval = 0
+        for case let url as URL in enumerator {
+            guard let values = try? url.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+                .contentModificationDateKey,
+            ]), values.isRegularFile == true
+            else {
+                continue
+            }
+            fileCount += 1
+            totalSize += UInt64(values.fileSize ?? 0)
+            latestModifiedAt = max(
+                latestModifiedAt,
+                values.contentModificationDate?.timeIntervalSince1970 ?? 0)
+        }
+        guard fileCount > 0 else { return nil }
+        return MacMcpPackageFingerprint(
+            fileCount: fileCount,
+            totalSize: totalSize,
+            latestModifiedAt: latestModifiedAt)
     }
 
     private nonisolated static func parseEnvArgs(_ raw: String?) -> [String]? {
