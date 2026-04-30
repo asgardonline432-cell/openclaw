@@ -594,7 +594,7 @@ Current Slack message actions include `send`, `upload-file`, `download-file`, `r
 - `channels.slack.thread.historyScope` default is `thread`; `thread.inheritParent` default is `false`.
 - `channels.slack.thread.initialHistoryLimit` controls how many existing thread messages are fetched when a new thread session starts (default `20`; set `0` to disable).
 - `channels.slack.thread.requireExplicitMention` (default `false`): when `true`, suppress implicit thread mentions so the bot only responds to explicit `@bot` mentions inside threads, even when the bot already participated in the thread. Without this, replies in a bot-participated thread bypass `requireMention` gating.
-- Experimental restart-safe thread participation: set `plugins.entries.slack.config.experimentalPersistentState: true` to opt in to the SDK-backed persistent cache for bot-participated thread markers. The default remains the previous process-local cache.
+- Restart-safe thread participation: Slack uses best-effort SDK-backed persistent state behind the in-memory cache for bot-participated thread markers, so thread auto-reply context can survive a Gateway restart. If the persistent store is unavailable or fails, Slack logs the failure and keeps the previous process-local cache behavior.
 
 Reply threading controls:
 

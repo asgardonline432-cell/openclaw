@@ -266,7 +266,6 @@ export async function handleSlackAction(
             account.accountId,
             result.channelId,
             threadTs,
-            { cfg },
           );
         }
 
@@ -312,7 +311,6 @@ export async function handleSlackAction(
             account.accountId,
             result.channelId,
             threadTs,
-            { cfg },
           );
         }
 

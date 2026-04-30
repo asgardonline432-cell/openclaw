@@ -520,7 +520,6 @@ export const matrixApprovalNativeRuntime = createChannelApprovalNativeRuntimeAda
         return null;
       }
       registerMatrixApprovalReactionTarget({
-        cfg: params.cfg as CoreConfig,
         roomId: target.roomId,
         eventId: target.eventId,
         approvalId: params.pendingPayload.approvalId,
@@ -534,7 +533,7 @@ export const matrixApprovalNativeRuntime = createChannelApprovalNativeRuntimeAda
       if (!target) {
         return;
       }
-      unregisterMatrixApprovalReactionTarget({ ...target, cfg: params.cfg as CoreConfig });
+      unregisterMatrixApprovalReactionTarget(target);
     },
   },
 });

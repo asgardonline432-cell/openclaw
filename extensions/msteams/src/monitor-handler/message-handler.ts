@@ -98,7 +98,10 @@ import { extractMSTeamsPollVote } from "../polls.js";
 import { createMSTeamsReplyDispatcher } from "../reply-dispatcher.js";
 import { getMSTeamsRuntime } from "../runtime.js";
 import type { MSTeamsTurnContext } from "../sdk-types.js";
-import { recordMSTeamsSentMessage, wasMSTeamsMessageSentForConfig } from "../sent-message-cache.js";
+import {
+  recordMSTeamsSentMessage,
+  wasMSTeamsMessageSentWithPersistence,
+} from "../sent-message-cache.js";
 import { resolveMSTeamsSenderAccess } from "./access.js";
 import { resolveMSTeamsInboundMedia } from "./inbound-media.js";
 import { resolveMSTeamsRouteSessionKey } from "./thread-session.js";
@@ -814,7 +817,7 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
       textLimit,
       onSentMessageIds: (ids) => {
         for (const id of ids) {
-          recordMSTeamsSentMessage(conversationId, id, { cfg });
+          recordMSTeamsSentMessage(conversationId, id);
         }
       },
       tokenProvider,
@@ -986,7 +989,7 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
     const implicitMentionKinds: Array<"reply_to_bot"> =
       conversationId &&
       replyToId &&
-      (await wasMSTeamsMessageSentForConfig({ cfg, conversationId, messageId: replyToId }))
+      (await wasMSTeamsMessageSentWithPersistence({ conversationId, messageId: replyToId }))
         ? ["reply_to_bot"]
         : [];
 

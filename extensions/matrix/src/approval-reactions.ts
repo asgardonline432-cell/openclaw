@@ -1,8 +1,5 @@
 import type { ExecApprovalReplyDecision } from "openclaw/plugin-sdk/approval-runtime";
-import { resolvePluginConfigObject } from "openclaw/plugin-sdk/plugin-config-runtime";
-import type { OpenClawConfig } from "./runtime-api.js";
 import { getOptionalMatrixRuntime } from "./runtime.js";
-import type { CoreConfig } from "./types.js";
 
 const MATRIX_APPROVAL_REACTION_META = {
   "allow-once": {
@@ -60,10 +57,9 @@ type MatrixApprovalReactionStore = {
   delete(key: string): Promise<boolean>;
 };
 
-type MatrixPluginConfigLookup = Pick<OpenClawConfig, "plugins">;
-
 const matrixApprovalReactionTargets = new Map<string, MatrixApprovalReactionTarget>();
 let persistentStore: MatrixApprovalReactionStore | undefined;
+let persistentStoreDisabled = false;
 
 function buildReactionTargetKey(roomId: string, eventId: string): string | null {
   const normalizedRoomId = roomId.trim();
@@ -74,28 +70,6 @@ function buildReactionTargetKey(roomId: string, eventId: string): string | null 
   return `${normalizedRoomId}:${normalizedEventId}`;
 }
 
-function isPersistentApprovalReactionStateEnabled(
-  cfg: MatrixPluginConfigLookup | undefined,
-): boolean {
-  return resolvePluginConfigObject(cfg, "matrix")?.experimentalPersistentState === true;
-}
-
-function getPersistentApprovalReactionStore(): MatrixApprovalReactionStore | undefined {
-  if (persistentStore) {
-    return persistentStore;
-  }
-  const runtime = getOptionalMatrixRuntime();
-  if (!runtime) {
-    return undefined;
-  }
-  persistentStore = runtime.state.openKeyedStore<PersistedMatrixApprovalReactionTarget>({
-    namespace: PERSISTENT_NAMESPACE,
-    maxEntries: PERSISTENT_MAX_ENTRIES,
-    defaultTtlMs: DEFAULT_REACTION_TARGET_TTL_MS,
-  });
-  return persistentStore;
-}
-
 function reportPersistentApprovalReactionError(error: unknown): void {
   try {
     getOptionalMatrixRuntime()
@@ -103,6 +77,36 @@ function reportPersistentApprovalReactionError(error: unknown): void {
       .warn("Matrix persistent approval reaction state failed", { error: String(error) });
   } catch {
     // Best effort only: persistent state must never break Matrix reactions.
+  }
+}
+
+function disablePersistentApprovalReactionStore(error: unknown): void {
+  persistentStoreDisabled = true;
+  persistentStore = undefined;
+  reportPersistentApprovalReactionError(error);
+}
+
+function getPersistentApprovalReactionStore(): MatrixApprovalReactionStore | undefined {
+  if (persistentStoreDisabled) {
+    return undefined;
+  }
+  if (persistentStore) {
+    return persistentStore;
+  }
+  const runtime = getOptionalMatrixRuntime();
+  if (!runtime) {
+    return undefined;
+  }
+  try {
+    persistentStore = runtime.state.openKeyedStore<PersistedMatrixApprovalReactionTarget>({
+      namespace: PERSISTENT_NAMESPACE,
+      maxEntries: PERSISTENT_MAX_ENTRIES,
+      defaultTtlMs: DEFAULT_REACTION_TARGET_TTL_MS,
+    });
+    return persistentStore;
+  } catch (error) {
+    disablePersistentApprovalReactionStore(error);
+    return undefined;
   }
 }
 
@@ -120,68 +124,39 @@ function readPersistedTarget(value: unknown): MatrixApprovalReactionTarget | nul
 }
 
 function rememberPersistentApprovalReactionTarget(params: {
-  cfg?: CoreConfig;
   key: string;
   target: MatrixApprovalReactionTarget;
   ttlMs?: number;
 }): void {
-  if (!isPersistentApprovalReactionStateEnabled(params.cfg)) {
-    return;
-  }
   const ttlMs = params.ttlMs == null ? DEFAULT_REACTION_TARGET_TTL_MS : Math.max(1, params.ttlMs);
-  let store: MatrixApprovalReactionStore | undefined;
-  try {
-    store = getPersistentApprovalReactionStore();
-  } catch (error) {
-    reportPersistentApprovalReactionError(error);
-    return;
-  }
+  const store = getPersistentApprovalReactionStore();
   if (!store) {
     return;
   }
   void store
     .register(params.key, { version: 1, target: params.target }, { ttlMs })
-    .catch(reportPersistentApprovalReactionError);
+    .catch(disablePersistentApprovalReactionStore);
 }
 
-function forgetPersistentApprovalReactionTarget(params: { cfg?: CoreConfig; key: string }): void {
-  if (!isPersistentApprovalReactionStateEnabled(params.cfg)) {
-    return;
-  }
-  let store: MatrixApprovalReactionStore | undefined;
-  try {
-    store = getPersistentApprovalReactionStore();
-  } catch (error) {
-    reportPersistentApprovalReactionError(error);
-    return;
-  }
+function forgetPersistentApprovalReactionTarget(key: string): void {
+  const store = getPersistentApprovalReactionStore();
   if (!store) {
     return;
   }
-  void store.delete(params.key).catch(reportPersistentApprovalReactionError);
+  void store.delete(key).catch(disablePersistentApprovalReactionStore);
 }
 
-async function lookupPersistentApprovalReactionTarget(params: {
-  cfg?: CoreConfig;
-  key: string;
-}): Promise<MatrixApprovalReactionTarget | null> {
-  if (!isPersistentApprovalReactionStateEnabled(params.cfg)) {
-    return null;
-  }
-  let store: MatrixApprovalReactionStore | undefined;
-  try {
-    store = getPersistentApprovalReactionStore();
-  } catch (error) {
-    reportPersistentApprovalReactionError(error);
-    return null;
-  }
+async function lookupPersistentApprovalReactionTarget(
+  key: string,
+): Promise<MatrixApprovalReactionTarget | null> {
+  const store = getPersistentApprovalReactionStore();
   if (!store) {
     return null;
   }
   try {
-    return readPersistedTarget(await store.lookup(params.key));
+    return readPersistedTarget(await store.lookup(key));
   } catch (error) {
-    reportPersistentApprovalReactionError(error);
+    disablePersistentApprovalReactionStore(error);
     return null;
   }
 }
@@ -234,7 +209,6 @@ export function registerMatrixApprovalReactionTarget(params: {
   eventId: string;
   approvalId: string;
   allowedDecisions: readonly ExecApprovalReplyDecision[];
-  cfg?: CoreConfig;
   ttlMs?: number;
 }): void {
   const key = buildReactionTargetKey(params.roomId, params.eventId);
@@ -256,7 +230,6 @@ export function registerMatrixApprovalReactionTarget(params: {
   };
   matrixApprovalReactionTargets.set(key, target);
   rememberPersistentApprovalReactionTarget({
-    cfg: params.cfg,
     key,
     target,
     ttlMs: params.ttlMs,
@@ -266,14 +239,13 @@ export function registerMatrixApprovalReactionTarget(params: {
 export function unregisterMatrixApprovalReactionTarget(params: {
   roomId: string;
   eventId: string;
-  cfg?: CoreConfig;
 }): void {
   const key = buildReactionTargetKey(params.roomId, params.eventId);
   if (!key) {
     return;
   }
   matrixApprovalReactionTargets.delete(key);
-  forgetPersistentApprovalReactionTarget({ cfg: params.cfg, key });
+  forgetPersistentApprovalReactionTarget(key);
 }
 
 function resolveTarget(params: {
@@ -312,8 +284,7 @@ export function resolveMatrixApprovalReactionTarget(params: {
   });
 }
 
-export async function resolveMatrixApprovalReactionTargetForConfig(params: {
-  cfg?: CoreConfig;
+export async function resolveMatrixApprovalReactionTargetWithPersistence(params: {
   roomId: string;
   eventId: string;
   reactionKey: string;
@@ -330,7 +301,7 @@ export async function resolveMatrixApprovalReactionTargetForConfig(params: {
     return inMemory;
   }
   return resolveTarget({
-    target: await lookupPersistentApprovalReactionTarget({ cfg: params.cfg, key }),
+    target: await lookupPersistentApprovalReactionTarget(key),
     reactionKey: params.reactionKey,
   });
 }
@@ -338,4 +309,5 @@ export async function resolveMatrixApprovalReactionTargetForConfig(params: {
 export function clearMatrixApprovalReactionTargetsForTest(): void {
   matrixApprovalReactionTargets.clear();
   persistentStore = undefined;
+  persistentStoreDisabled = false;
 }

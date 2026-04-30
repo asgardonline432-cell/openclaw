@@ -237,6 +237,5 @@ export type CoreConfig = {
     ackReactionScope?: "group-mentions" | "group-all" | "direct" | "all" | "none" | "off";
   };
   secrets?: OpenClawConfig["secrets"];
-  plugins?: OpenClawConfig["plugins"];
   [key: string]: unknown;
 };

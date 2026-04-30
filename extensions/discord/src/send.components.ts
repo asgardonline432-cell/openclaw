@@ -170,13 +170,11 @@ type DiscordComponentSendOpts = {
 export function registerBuiltDiscordComponentMessage(params: {
   buildResult: DiscordComponentBuildResult;
   messageId: string;
-  cfg?: OpenClawConfig;
 }): void {
   registerDiscordComponentEntries({
     entries: params.buildResult.entries,
     modals: params.buildResult.modals,
     messageId: params.messageId,
-    cfg: params.cfg,
   });
 }
 
@@ -317,7 +315,6 @@ export async function sendDiscordComponentMessage(
   registerBuiltDiscordComponentMessage({
     buildResult,
     messageId: result.id,
-    cfg,
   });
 
   recordChannelActivity({
@@ -371,7 +368,6 @@ export async function editDiscordComponentMessage(
   registerBuiltDiscordComponentMessage({
     buildResult,
     messageId: result.id ?? messageId,
-    cfg,
   });
 
   recordChannelActivity({

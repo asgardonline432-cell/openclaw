@@ -1,6 +1,4 @@
 import { resolveGlobalDedupeCache } from "openclaw/plugin-sdk/dedupe-runtime";
-import { resolvePluginConfigObject } from "openclaw/plugin-sdk/plugin-config-runtime";
-import type { OpenClawConfig } from "./runtime-api.js";
 import { getOptionalSlackRuntime } from "./runtime.js";
 
 /**
@@ -39,29 +37,10 @@ const threadParticipation = resolveGlobalDedupeCache(SLACK_THREAD_PARTICIPATION_
 });
 
 let persistentStore: SlackThreadParticipationStore | undefined;
+let persistentStoreDisabled = false;
 
 function makeKey(accountId: string, channelId: string, threadTs: string): string {
   return `${accountId}:${channelId}:${threadTs}`;
-}
-
-function isPersistentThreadParticipationEnabled(cfg: OpenClawConfig | undefined): boolean {
-  return resolvePluginConfigObject(cfg, "slack")?.experimentalPersistentState === true;
-}
-
-function getPersistentThreadParticipationStore(): SlackThreadParticipationStore | undefined {
-  if (persistentStore) {
-    return persistentStore;
-  }
-  const runtime = getOptionalSlackRuntime();
-  if (!runtime) {
-    return undefined;
-  }
-  persistentStore = runtime.state.openKeyedStore<SlackThreadParticipationRecord>({
-    namespace: PERSISTENT_NAMESPACE,
-    maxEntries: PERSISTENT_MAX_ENTRIES,
-    defaultTtlMs: TTL_MS,
-  });
-  return persistentStore;
 }
 
 function reportPersistentThreadParticipationError(error: unknown): void {
@@ -74,21 +53,38 @@ function reportPersistentThreadParticipationError(error: unknown): void {
   }
 }
 
-function rememberPersistentThreadParticipation(params: {
-  cfg?: OpenClawConfig;
-  key: string;
-  agentId?: string;
-}): void {
-  if (!isPersistentThreadParticipationEnabled(params.cfg)) {
-    return;
+function disablePersistentThreadParticipation(error: unknown): void {
+  persistentStoreDisabled = true;
+  persistentStore = undefined;
+  reportPersistentThreadParticipationError(error);
+}
+
+function getPersistentThreadParticipationStore(): SlackThreadParticipationStore | undefined {
+  if (persistentStoreDisabled) {
+    return undefined;
   }
-  let store: SlackThreadParticipationStore | undefined;
+  if (persistentStore) {
+    return persistentStore;
+  }
+  const runtime = getOptionalSlackRuntime();
+  if (!runtime) {
+    return undefined;
+  }
   try {
-    store = getPersistentThreadParticipationStore();
+    persistentStore = runtime.state.openKeyedStore<SlackThreadParticipationRecord>({
+      namespace: PERSISTENT_NAMESPACE,
+      maxEntries: PERSISTENT_MAX_ENTRIES,
+      defaultTtlMs: TTL_MS,
+    });
+    return persistentStore;
   } catch (error) {
-    reportPersistentThreadParticipationError(error);
-    return;
+    disablePersistentThreadParticipation(error);
+    return undefined;
   }
+}
+
+function rememberPersistentThreadParticipation(params: { key: string; agentId?: string }): void {
+  const store = getPersistentThreadParticipationStore();
   if (!store) {
     return;
   }
@@ -98,30 +94,18 @@ function rememberPersistentThreadParticipation(params: {
       ...(params.agentId ? { agentId: params.agentId } : {}),
       repliedAt: Date.now(),
     })
-    .catch(reportPersistentThreadParticipationError);
+    .catch(disablePersistentThreadParticipation);
 }
 
-async function lookupPersistentThreadParticipation(params: {
-  cfg?: OpenClawConfig;
-  key: string;
-}): Promise<boolean> {
-  if (!isPersistentThreadParticipationEnabled(params.cfg)) {
-    return false;
-  }
-  let store: SlackThreadParticipationStore | undefined;
-  try {
-    store = getPersistentThreadParticipationStore();
-  } catch (error) {
-    reportPersistentThreadParticipationError(error);
-    return false;
-  }
+async function lookupPersistentThreadParticipation(key: string): Promise<boolean> {
+  const store = getPersistentThreadParticipationStore();
   if (!store) {
     return false;
   }
   try {
-    return Boolean(await store.lookup(params.key));
+    return Boolean(await store.lookup(key));
   } catch (error) {
-    reportPersistentThreadParticipationError(error);
+    disablePersistentThreadParticipation(error);
     return false;
   }
 }
@@ -130,14 +114,14 @@ export function recordSlackThreadParticipation(
   accountId: string,
   channelId: string,
   threadTs: string,
-  opts?: { cfg?: OpenClawConfig; agentId?: string },
+  opts?: { agentId?: string },
 ): void {
   if (!accountId || !channelId || !threadTs) {
     return;
   }
   const key = makeKey(accountId, channelId, threadTs);
   threadParticipation.check(key);
-  rememberPersistentThreadParticipation({ cfg: opts?.cfg, key, agentId: opts?.agentId });
+  rememberPersistentThreadParticipation({ key, agentId: opts?.agentId });
 }
 
 export function hasSlackThreadParticipation(
@@ -151,8 +135,7 @@ export function hasSlackThreadParticipation(
   return threadParticipation.peek(makeKey(accountId, channelId, threadTs));
 }
 
-export async function hasSlackThreadParticipationForConfig(params: {
-  cfg?: OpenClawConfig;
+export async function hasSlackThreadParticipationWithPersistence(params: {
   accountId: string;
   channelId: string;
   threadTs: string;
@@ -164,7 +147,7 @@ export async function hasSlackThreadParticipationForConfig(params: {
   if (threadParticipation.peek(key)) {
     return true;
   }
-  const found = await lookupPersistentThreadParticipation({ cfg: params.cfg, key });
+  const found = await lookupPersistentThreadParticipation(key);
   if (found) {
     threadParticipation.check(key);
   }
@@ -174,4 +157,5 @@ export async function hasSlackThreadParticipationForConfig(params: {
 export function clearSlackThreadParticipationCache(): void {
   threadParticipation.clear();
   persistentStore = undefined;
+  persistentStoreDisabled = false;
 }

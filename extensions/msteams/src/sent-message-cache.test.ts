@@ -4,7 +4,7 @@ import {
   clearMSTeamsSentMessageCache,
   recordMSTeamsSentMessage,
   wasMSTeamsMessageSent,
-  wasMSTeamsMessageSentForConfig,
+  wasMSTeamsMessageSentWithPersistence,
 } from "./sent-message-cache.js";
 
 describe("msteams sent message cache", () => {
@@ -19,7 +19,7 @@ describe("msteams sent message cache", () => {
     expect(wasMSTeamsMessageSent("conv-1", "msg-2")).toBe(false);
   });
 
-  it("persists sent message ids only when opted in", async () => {
+  it("persists sent message ids when runtime state is available", async () => {
     const register = vi.fn().mockResolvedValue(undefined);
     const lookup = vi.fn().mockResolvedValue({ sentAt: 123 });
     const openKeyedStore = vi.fn(() => ({
@@ -35,29 +35,40 @@ describe("msteams sent message cache", () => {
       logging: { getChildLogger: () => ({ warn: vi.fn() }) },
     } as never);
 
-    recordMSTeamsSentMessage("conv-1", "msg-1");
-    expect(openKeyedStore).not.toHaveBeenCalled();
-
-    const cfg = {
-      plugins: { entries: { msteams: { config: { experimentalPersistentState: true } } } },
-    };
-    recordMSTeamsSentMessage("conv-1", "msg-2", { cfg });
+    recordMSTeamsSentMessage("conv-1", "msg-2");
 
     await vi.waitFor(() => expect(register).toHaveBeenCalledTimes(1));
     expect(register).toHaveBeenCalledWith("conv-1:msg-2", { sentAt: expect.any(Number) });
 
     clearMSTeamsSentMessageCache();
     await expect(
-      wasMSTeamsMessageSentForConfig({ cfg, conversationId: "conv-1", messageId: "msg-2" }),
+      wasMSTeamsMessageSentWithPersistence({ conversationId: "conv-1", messageId: "msg-2" }),
     ).resolves.toBe(true);
     expect(openKeyedStore).toHaveBeenCalledTimes(2);
     expect(lookup).toHaveBeenCalledWith("conv-1:msg-2");
 
     lookup.mockClear();
     await expect(
-      wasMSTeamsMessageSentForConfig({ cfg, conversationId: "conv-1", messageId: "msg-2" }),
+      wasMSTeamsMessageSentWithPersistence({ conversationId: "conv-1", messageId: "msg-2" }),
     ).resolves.toBe(true);
     expect(wasMSTeamsMessageSent("conv-1", "msg-2")).toBe(true);
     expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("falls back to in-memory sent-message markers when persistent state cannot open", () => {
+    const warn = vi.fn();
+    setMSTeamsRuntime({
+      state: {
+        openKeyedStore: vi.fn(() => {
+          throw new Error("sqlite unavailable");
+        }),
+      },
+      logging: { getChildLogger: () => ({ warn }) },
+    } as never);
+
+    recordMSTeamsSentMessage("conv-1", "msg-3");
+
+    expect(wasMSTeamsMessageSent("conv-1", "msg-3")).toBe(true);
+    expect(warn).toHaveBeenCalled();
   });
 });

@@ -5,7 +5,7 @@ import {
   listMatrixApprovalReactionBindings,
   registerMatrixApprovalReactionTarget,
   resolveMatrixApprovalReactionTarget,
-  resolveMatrixApprovalReactionTargetForConfig,
+  resolveMatrixApprovalReactionTargetWithPersistence,
   unregisterMatrixApprovalReactionTarget,
 } from "./approval-reactions.js";
 import { setMatrixRuntime } from "./runtime.js";
@@ -108,7 +108,7 @@ describe("matrix approval reactions", () => {
     ).toBeNull();
   });
 
-  it("persists approval reaction targets only when opted in", async () => {
+  it("persists approval reaction targets when runtime state is available", async () => {
     const register = vi.fn().mockResolvedValue(undefined);
     const lookup = vi.fn().mockResolvedValue({
       version: 1,
@@ -129,18 +129,6 @@ describe("matrix approval reactions", () => {
 
     registerMatrixApprovalReactionTarget({
       roomId: "!ops:example.org",
-      eventId: "$approval-msg",
-      approvalId: "req-ignored",
-      allowedDecisions: ["deny"],
-    });
-    expect(openKeyedStore).not.toHaveBeenCalled();
-
-    const cfg = {
-      plugins: { entries: { matrix: { config: { experimentalPersistentState: true } } } },
-    };
-    registerMatrixApprovalReactionTarget({
-      cfg,
-      roomId: "!ops:example.org",
       eventId: "$approval-msg-2",
       approvalId: "req-123",
       allowedDecisions: ["allow-once", "deny"],
@@ -159,8 +147,7 @@ describe("matrix approval reactions", () => {
 
     clearMatrixApprovalReactionTargetsForTest();
     await expect(
-      resolveMatrixApprovalReactionTargetForConfig({
-        cfg,
+      resolveMatrixApprovalReactionTargetWithPersistence({
         roomId: "!ops:example.org",
         eventId: "$approval-msg-2",
         reactionKey: "❌",
@@ -168,5 +155,33 @@ describe("matrix approval reactions", () => {
     ).resolves.toEqual({ approvalId: "req-persisted", decision: "deny" });
     expect(openKeyedStore).toHaveBeenCalledTimes(2);
     expect(lookup).toHaveBeenCalledWith("!ops:example.org:$approval-msg-2");
+  });
+
+  it("falls back to in-memory approval reaction targets when persistent state cannot open", () => {
+    const warn = vi.fn();
+    setMatrixRuntime({
+      state: {
+        openKeyedStore: vi.fn(() => {
+          throw new Error("sqlite unavailable");
+        }),
+      },
+      logging: { getChildLogger: () => ({ warn }) },
+    } as never);
+
+    registerMatrixApprovalReactionTarget({
+      roomId: "!ops:example.org",
+      eventId: "$approval-msg-3",
+      approvalId: "req-fallback",
+      allowedDecisions: ["deny"],
+    });
+
+    expect(
+      resolveMatrixApprovalReactionTarget({
+        roomId: "!ops:example.org",
+        eventId: "$approval-msg-3",
+        reactionKey: "❌",
+      }),
+    ).toEqual({ approvalId: "req-fallback", decision: "deny" });
+    expect(warn).toHaveBeenCalled();
   });
 });

@@ -348,7 +348,7 @@ Supported blocks:
 
 By default, components are single use. Set `components.reusable=true` to allow buttons, selects, and forms to be used multiple times until they expire.
 
-Set `plugins.entries.discord.config.experimentalPersistentState: true` to opt in to the experimental SDK-backed persistent component/modal registry, so valid buttons, selects, and forms can survive a Gateway restart until their normal TTL expires. The default remains the previous process-local registry.
+Discord component and modal registries use best-effort SDK-backed persistent state behind the in-memory registry, so valid buttons, selects, and forms can survive a Gateway restart until their normal TTL expires. If the persistent store is unavailable or fails, Discord logs the failure and keeps the previous process-local registry behavior.
 
 To restrict who can click a button, set `allowedUsers` on that button (Discord user IDs, tags, or `*`). When configured, unmatched users receive an ephemeral denial.
 

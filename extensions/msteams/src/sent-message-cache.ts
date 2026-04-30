@@ -1,5 +1,3 @@
-import { resolvePluginConfigObject } from "openclaw/plugin-sdk/plugin-config-runtime";
-import type { OpenClawConfig } from "../runtime-api.js";
 import { getOptionalMSTeamsRuntime } from "./runtime.js";
 
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -18,6 +16,7 @@ type MSTeamsSentMessageStore = {
 
 let sentMessageCache: Map<string, Map<string, number>> | undefined;
 let persistentStore: MSTeamsSentMessageStore | undefined;
+let persistentStoreDisabled = false;
 
 function getSentMessageCache(): Map<string, Map<string, number>> {
   if (!sentMessageCache) {
@@ -34,26 +33,6 @@ function makePersistentKey(conversationId: string, messageId: string): string {
   return `${conversationId}:${messageId}`;
 }
 
-function isPersistentSentMessageCacheEnabled(cfg: OpenClawConfig | undefined): boolean {
-  return resolvePluginConfigObject(cfg, "msteams")?.experimentalPersistentState === true;
-}
-
-function getPersistentSentMessageStore(): MSTeamsSentMessageStore | undefined {
-  if (persistentStore) {
-    return persistentStore;
-  }
-  const runtime = getOptionalMSTeamsRuntime();
-  if (!runtime) {
-    return undefined;
-  }
-  persistentStore = runtime.state.openKeyedStore<MSTeamsSentMessageRecord>({
-    namespace: PERSISTENT_NAMESPACE,
-    maxEntries: PERSISTENT_MAX_ENTRIES,
-    defaultTtlMs: TTL_MS,
-  });
-  return persistentStore;
-}
-
 function reportPersistentSentMessageError(error: unknown): void {
   try {
     getOptionalMSTeamsRuntime()
@@ -61,6 +40,36 @@ function reportPersistentSentMessageError(error: unknown): void {
       .warn("Microsoft Teams persistent sent-message state failed", { error: String(error) });
   } catch {
     // Best effort only: persistent state must never break Teams routing.
+  }
+}
+
+function disablePersistentSentMessageStore(error: unknown): void {
+  persistentStoreDisabled = true;
+  persistentStore = undefined;
+  reportPersistentSentMessageError(error);
+}
+
+function getPersistentSentMessageStore(): MSTeamsSentMessageStore | undefined {
+  if (persistentStoreDisabled) {
+    return undefined;
+  }
+  if (persistentStore) {
+    return persistentStore;
+  }
+  const runtime = getOptionalMSTeamsRuntime();
+  if (!runtime) {
+    return undefined;
+  }
+  try {
+    persistentStore = runtime.state.openKeyedStore<MSTeamsSentMessageRecord>({
+      namespace: PERSISTENT_NAMESPACE,
+      maxEntries: PERSISTENT_MAX_ENTRIES,
+      defaultTtlMs: TTL_MS,
+    });
+    return persistentStore;
+  } catch (error) {
+    disablePersistentSentMessageStore(error);
+    return undefined;
   }
 }
 
@@ -93,66 +102,42 @@ function rememberSentMessageInMemory(
 }
 
 function rememberPersistentSentMessage(params: {
-  cfg?: OpenClawConfig;
   conversationId: string;
   messageId: string;
   sentAt: number;
 }): void {
-  if (!isPersistentSentMessageCacheEnabled(params.cfg)) {
-    return;
-  }
-  let store: MSTeamsSentMessageStore | undefined;
-  try {
-    store = getPersistentSentMessageStore();
-  } catch (error) {
-    reportPersistentSentMessageError(error);
-    return;
-  }
+  const store = getPersistentSentMessageStore();
   if (!store) {
     return;
   }
   void store
     .register(makePersistentKey(params.conversationId, params.messageId), { sentAt: params.sentAt })
-    .catch(reportPersistentSentMessageError);
+    .catch(disablePersistentSentMessageStore);
 }
 
 async function lookupPersistentSentMessage(params: {
-  cfg?: OpenClawConfig;
   conversationId: string;
   messageId: string;
 }): Promise<boolean> {
-  if (!isPersistentSentMessageCacheEnabled(params.cfg)) {
-    return false;
-  }
-  let store: MSTeamsSentMessageStore | undefined;
-  try {
-    store = getPersistentSentMessageStore();
-  } catch (error) {
-    reportPersistentSentMessageError(error);
-    return false;
-  }
+  const store = getPersistentSentMessageStore();
   if (!store) {
     return false;
   }
   try {
     return Boolean(await store.lookup(makePersistentKey(params.conversationId, params.messageId)));
   } catch (error) {
-    reportPersistentSentMessageError(error);
+    disablePersistentSentMessageStore(error);
     return false;
   }
 }
 
-export function recordMSTeamsSentMessage(
-  conversationId: string,
-  messageId: string,
-  opts?: { cfg?: OpenClawConfig },
-): void {
+export function recordMSTeamsSentMessage(conversationId: string, messageId: string): void {
   if (!conversationId || !messageId) {
     return;
   }
   const now = Date.now();
   rememberSentMessageInMemory(conversationId, messageId, now);
-  rememberPersistentSentMessage({ cfg: opts?.cfg, conversationId, messageId, sentAt: now });
+  rememberPersistentSentMessage({ conversationId, messageId, sentAt: now });
 }
 
 export function wasMSTeamsMessageSent(conversationId: string, messageId: string): boolean {
@@ -164,8 +149,7 @@ export function wasMSTeamsMessageSent(conversationId: string, messageId: string)
   return entry.has(messageId);
 }
 
-export async function wasMSTeamsMessageSentForConfig(params: {
-  cfg?: OpenClawConfig;
+export async function wasMSTeamsMessageSentWithPersistence(params: {
   conversationId: string;
   messageId: string;
 }): Promise<boolean> {
@@ -185,4 +169,5 @@ export async function wasMSTeamsMessageSentForConfig(params: {
 export function clearMSTeamsSentMessageCache(): void {
   getSentMessageCache().clear();
   persistentStore = undefined;
+  persistentStoreDisabled = false;
 }

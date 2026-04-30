@@ -1,7 +1,7 @@
 import { logError } from "openclaw/plugin-sdk/text-runtime";
 import {
-  resolveDiscordComponentEntryForConfig,
-  resolveDiscordModalEntryForConfig,
+  resolveDiscordComponentEntryWithPersistence,
+  resolveDiscordModalEntryWithPersistence,
 } from "../components-registry.js";
 import type { ButtonInteraction, ComponentData } from "../internal/discord.js";
 import {
@@ -49,8 +49,7 @@ async function handleDiscordComponentEvent(params: {
     return;
   }
 
-  const entry = await resolveDiscordComponentEntryForConfig({
-    cfg: params.ctx.cfg,
+  const entry = await resolveDiscordComponentEntryWithPersistence({
     id: parsed.componentId,
     consume: false,
   });
@@ -100,8 +99,7 @@ async function handleDiscordComponentEvent(params: {
   if (!componentAllowed) {
     return;
   }
-  const consumed = await resolveDiscordComponentEntryForConfig({
-    cfg: params.ctx.cfg,
+  const consumed = await resolveDiscordComponentEntryWithPersistence({
     id: parsed.componentId,
     consume: !entry.reusable,
   });
@@ -201,8 +199,7 @@ async function handleDiscordModalTrigger(params: {
     }
     return;
   }
-  const entry = await resolveDiscordComponentEntryForConfig({
-    cfg: params.ctx.cfg,
+  const entry = await resolveDiscordComponentEntryWithPersistence({
     id: parsed.componentId,
     consume: false,
   });
@@ -258,8 +255,7 @@ async function handleDiscordModalTrigger(params: {
     return;
   }
 
-  const consumed = await resolveDiscordComponentEntryForConfig({
-    cfg: params.ctx.cfg,
+  const consumed = await resolveDiscordComponentEntryWithPersistence({
     id: parsed.componentId,
     consume: !entry.reusable,
   });
@@ -276,8 +272,7 @@ async function handleDiscordModalTrigger(params: {
   }
 
   const resolvedModalId = consumed.modalId ?? modalId;
-  const modalEntry = await resolveDiscordModalEntryForConfig({
-    cfg: params.ctx.cfg,
+  const modalEntry = await resolveDiscordModalEntryWithPersistence({
     id: resolvedModalId,
     consume: false,
   });

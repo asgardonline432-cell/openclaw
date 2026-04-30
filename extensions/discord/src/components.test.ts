@@ -4,9 +4,9 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 let clearDiscordComponentEntries: typeof import("./components-registry.js").clearDiscordComponentEntries;
 let registerDiscordComponentEntries: typeof import("./components-registry.js").registerDiscordComponentEntries;
 let resolveDiscordComponentEntry: typeof import("./components-registry.js").resolveDiscordComponentEntry;
-let resolveDiscordComponentEntryForConfig: typeof import("./components-registry.js").resolveDiscordComponentEntryForConfig;
+let resolveDiscordComponentEntryWithPersistence: typeof import("./components-registry.js").resolveDiscordComponentEntryWithPersistence;
 let resolveDiscordModalEntry: typeof import("./components-registry.js").resolveDiscordModalEntry;
-let resolveDiscordModalEntryForConfig: typeof import("./components-registry.js").resolveDiscordModalEntryForConfig;
+let resolveDiscordModalEntryWithPersistence: typeof import("./components-registry.js").resolveDiscordModalEntryWithPersistence;
 let buildDiscordComponentMessage: typeof import("./components.js").buildDiscordComponentMessage;
 let buildDiscordComponentMessageFlags: typeof import("./components.js").buildDiscordComponentMessageFlags;
 let readDiscordComponentSpec: typeof import("./components.js").readDiscordComponentSpec;
@@ -16,9 +16,9 @@ beforeAll(async () => {
     clearDiscordComponentEntries,
     registerDiscordComponentEntries,
     resolveDiscordComponentEntry,
-    resolveDiscordComponentEntryForConfig,
+    resolveDiscordComponentEntryWithPersistence,
     resolveDiscordModalEntry,
-    resolveDiscordModalEntryForConfig,
+    resolveDiscordModalEntryWithPersistence,
   } = await import("./components-registry.js"));
   ({ buildDiscordComponentMessage, buildDiscordComponentMessageFlags, readDiscordComponentSpec } =
     await import("./components.js"));
@@ -142,7 +142,7 @@ describe("discord component registry", () => {
     second.clearDiscordComponentEntries();
   });
 
-  it("persists component and modal entries only when opted in", async () => {
+  it("persists component and modal entries when runtime state is available", async () => {
     const componentRegister = vi.fn().mockResolvedValue(undefined);
     const modalRegister = vi.fn().mockResolvedValue(undefined);
     const componentLookup = vi.fn().mockResolvedValue({
@@ -179,16 +179,6 @@ describe("discord component registry", () => {
     } as never);
 
     registerDiscordComponentEntries({
-      entries: [{ id: "btn_ignored", kind: "button", label: "Ignored" }],
-      modals: [],
-    });
-    expect(openKeyedStore).not.toHaveBeenCalled();
-
-    const cfg = {
-      plugins: { entries: { discord: { config: { experimentalPersistentState: true } } } },
-    };
-    registerDiscordComponentEntries({
-      cfg,
       entries: [{ id: "btn_1", kind: "button", label: "Confirm" }],
       modals: [{ id: "mdl_1", title: "Details", fields: [] }],
       ttlMs: 1000,
@@ -208,13 +198,37 @@ describe("discord component registry", () => {
 
     clearDiscordComponentEntries();
     await expect(
-      resolveDiscordComponentEntryForConfig({ cfg, id: "btn_persisted", consume: false }),
+      resolveDiscordComponentEntryWithPersistence({ id: "btn_persisted", consume: false }),
     ).resolves.toMatchObject({ id: "btn_persisted" });
     await expect(
-      resolveDiscordModalEntryForConfig({ cfg, id: "mdl_persisted", consume: false }),
+      resolveDiscordModalEntryWithPersistence({ id: "mdl_persisted", consume: false }),
     ).resolves.toMatchObject({ id: "mdl_persisted" });
     expect(componentLookup).toHaveBeenCalledWith("btn_persisted");
     expect(modalLookup).toHaveBeenCalledWith("mdl_persisted");
     expect(openKeyedStore).toHaveBeenCalledTimes(4);
+  });
+
+  it("falls back to the in-memory registry when persistent state cannot open", async () => {
+    const warn = vi.fn();
+    const { setDiscordRuntime } = await import("./runtime.js");
+    setDiscordRuntime({
+      state: {
+        openKeyedStore: vi.fn(() => {
+          throw new Error("sqlite unavailable");
+        }),
+      },
+      logging: { getChildLogger: () => ({ warn }) },
+    } as never);
+
+    registerDiscordComponentEntries({
+      entries: [{ id: "btn_fallback", kind: "button", label: "Fallback" }],
+      modals: [],
+    });
+
+    expect(resolveDiscordComponentEntry({ id: "btn_fallback", consume: false })).toMatchObject({
+      id: "btn_fallback",
+      label: "Fallback",
+    });
+    expect(warn).toHaveBeenCalled();
   });
 });

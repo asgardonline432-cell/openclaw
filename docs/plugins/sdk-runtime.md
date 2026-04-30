@@ -414,7 +414,7 @@ Provider and channel execution paths must use the active runtime config snapshot
 
     Keyed stores survive restarts and are isolated by the runtime-bound plugin id. Limits: `maxEntries` per namespace, 1,000 live rows per plugin, JSON values under 64KB, and optional TTL expiry.
 
-    Early bundled-plugin migrations are deliberately opt-in. Set `plugins.entries.<pluginId>.config.experimentalPersistentState: true` to let Slack thread participation, Discord component/modal registries, Microsoft Teams sent-message markers, or Matrix approval reaction targets use this SDK-backed store; otherwise those plugins keep their previous process-local caches.
+    Early bundled-plugin migrations use the store as best-effort durability behind existing in-memory caches. Slack thread participation, Discord component/modal registries, Microsoft Teams sent-message markers, and Matrix approval reaction targets try this SDK-backed store automatically after their plugin runtime is available; if SQLite is unavailable or an operation fails, they log and keep the previous process-local behavior.
 
     <Warning>
     Bundled plugins only in this release.

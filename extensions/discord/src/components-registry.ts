@@ -1,7 +1,5 @@
 import { resolveGlobalMap } from "openclaw/plugin-sdk/global-singleton";
-import { resolvePluginConfigObject } from "openclaw/plugin-sdk/plugin-config-runtime";
 import type { DiscordComponentEntry, DiscordModalEntry } from "./components.js";
-import type { OpenClawConfig } from "./runtime-api.js";
 import { getOptionalDiscordRuntime } from "./runtime.js";
 
 const DEFAULT_COMPONENT_TTL_MS = 30 * 60 * 1000;
@@ -12,14 +10,9 @@ const PERSISTENT_MODAL_MAX_ENTRIES = 500;
 const DISCORD_COMPONENT_ENTRIES_KEY = Symbol.for("openclaw.discord.componentEntries");
 const DISCORD_MODAL_ENTRIES_KEY = Symbol.for("openclaw.discord.modalEntries");
 
-type PersistedDiscordComponentEntry = {
+type PersistedDiscordRegistryEntry<T extends { id: string }> = {
   version: 1;
-  entry: DiscordComponentEntry;
-};
-
-type PersistedDiscordModalEntry = {
-  version: 1;
-  entry: DiscordModalEntry;
+  entry: T;
 };
 
 type DiscordPersistentStore<T> = {
@@ -29,14 +22,15 @@ type DiscordPersistentStore<T> = {
   delete(key: string): Promise<boolean>;
 };
 
-type DiscordComponentStore = DiscordPersistentStore<PersistedDiscordComponentEntry>;
-
-type DiscordModalStore = DiscordPersistentStore<PersistedDiscordModalEntry>;
+type DiscordRegistryStore<T extends { id: string }> = DiscordPersistentStore<
+  PersistedDiscordRegistryEntry<T>
+>;
 
 let componentEntries: Map<string, DiscordComponentEntry> | undefined;
 let modalEntries: Map<string, DiscordModalEntry> | undefined;
-let persistentComponentStore: DiscordComponentStore | undefined;
-let persistentModalStore: DiscordModalStore | undefined;
+let persistentComponentStore: DiscordRegistryStore<DiscordComponentEntry> | undefined;
+let persistentModalStore: DiscordRegistryStore<DiscordModalEntry> | undefined;
+let persistentRegistryDisabled = false;
 
 function getComponentEntries(): Map<string, DiscordComponentEntry> {
   componentEntries ??= resolveGlobalMap<string, DiscordComponentEntry>(
@@ -50,42 +44,6 @@ function getModalEntries(): Map<string, DiscordModalEntry> {
   return modalEntries;
 }
 
-function isPersistentComponentRegistryEnabled(cfg: OpenClawConfig | undefined): boolean {
-  return resolvePluginConfigObject(cfg, "discord")?.experimentalPersistentState === true;
-}
-
-function getPersistentComponentStore(): DiscordComponentStore | undefined {
-  if (persistentComponentStore) {
-    return persistentComponentStore;
-  }
-  const runtime = getOptionalDiscordRuntime();
-  if (!runtime) {
-    return undefined;
-  }
-  persistentComponentStore = runtime.state.openKeyedStore<PersistedDiscordComponentEntry>({
-    namespace: PERSISTENT_COMPONENT_NAMESPACE,
-    maxEntries: PERSISTENT_COMPONENT_MAX_ENTRIES,
-    defaultTtlMs: DEFAULT_COMPONENT_TTL_MS,
-  });
-  return persistentComponentStore;
-}
-
-function getPersistentModalStore(): DiscordModalStore | undefined {
-  if (persistentModalStore) {
-    return persistentModalStore;
-  }
-  const runtime = getOptionalDiscordRuntime();
-  if (!runtime) {
-    return undefined;
-  }
-  persistentModalStore = runtime.state.openKeyedStore<PersistedDiscordModalEntry>({
-    namespace: PERSISTENT_MODAL_NAMESPACE,
-    maxEntries: PERSISTENT_MODAL_MAX_ENTRIES,
-    defaultTtlMs: DEFAULT_COMPONENT_TTL_MS,
-  });
-  return persistentModalStore;
-}
-
 function reportPersistentComponentRegistryError(error: unknown): void {
   try {
     getOptionalDiscordRuntime()
@@ -93,6 +51,65 @@ function reportPersistentComponentRegistryError(error: unknown): void {
       .warn("Discord persistent component registry state failed", { error: String(error) });
   } catch {
     // Best effort only: persistent state must never break Discord interactions.
+  }
+}
+
+function disablePersistentComponentRegistry(error: unknown): void {
+  persistentRegistryDisabled = true;
+  persistentComponentStore = undefined;
+  persistentModalStore = undefined;
+  reportPersistentComponentRegistryError(error);
+}
+
+function getPersistentComponentStore(): DiscordRegistryStore<DiscordComponentEntry> | undefined {
+  if (persistentRegistryDisabled) {
+    return undefined;
+  }
+  if (persistentComponentStore) {
+    return persistentComponentStore;
+  }
+  const runtime = getOptionalDiscordRuntime();
+  if (!runtime) {
+    return undefined;
+  }
+  try {
+    persistentComponentStore = runtime.state.openKeyedStore<
+      PersistedDiscordRegistryEntry<DiscordComponentEntry>
+    >({
+      namespace: PERSISTENT_COMPONENT_NAMESPACE,
+      maxEntries: PERSISTENT_COMPONENT_MAX_ENTRIES,
+      defaultTtlMs: DEFAULT_COMPONENT_TTL_MS,
+    });
+    return persistentComponentStore;
+  } catch (error) {
+    disablePersistentComponentRegistry(error);
+    return undefined;
+  }
+}
+
+function getPersistentModalStore(): DiscordRegistryStore<DiscordModalEntry> | undefined {
+  if (persistentRegistryDisabled) {
+    return undefined;
+  }
+  if (persistentModalStore) {
+    return persistentModalStore;
+  }
+  const runtime = getOptionalDiscordRuntime();
+  if (!runtime) {
+    return undefined;
+  }
+  try {
+    persistentModalStore = runtime.state.openKeyedStore<
+      PersistedDiscordRegistryEntry<DiscordModalEntry>
+    >({
+      namespace: PERSISTENT_MODAL_NAMESPACE,
+      maxEntries: PERSISTENT_MODAL_MAX_ENTRIES,
+      defaultTtlMs: DEFAULT_COMPONENT_TTL_MS,
+    });
+    return persistentModalStore;
+  } catch (error) {
+    disablePersistentComponentRegistry(error);
+    return undefined;
   }
 }
 
@@ -149,103 +166,77 @@ function resolveEntry<T extends { expiresAt?: number }>(
   return entry;
 }
 
-function readPersistedComponentEntry(value: unknown): DiscordComponentEntry | null {
-  const persisted = value as PersistedDiscordComponentEntry | undefined;
-  if (persisted?.version !== 1 || !persisted.entry || typeof persisted.entry.id !== "string") {
+function readPersistedRegistryEntry<T extends { id: string }>(
+  persisted: PersistedDiscordRegistryEntry<T> | undefined,
+): T | null {
+  if (persisted?.version !== 1 || typeof persisted.entry?.id !== "string") {
     return null;
   }
   return persisted.entry;
 }
 
-function readPersistedModalEntry(value: unknown): DiscordModalEntry | null {
-  const persisted = value as PersistedDiscordModalEntry | undefined;
-  if (persisted?.version !== 1 || !persisted.entry || typeof persisted.entry.id !== "string") {
-    return null;
+function registerPersistentRegistryEntries<T extends { id: string }>(params: {
+  entries: T[];
+  ttlMs: number;
+  openStore: () => DiscordRegistryStore<T> | undefined;
+}): void {
+  if (params.entries.length === 0) {
+    return;
   }
-  return persisted.entry;
+  const store = params.openStore();
+  if (!store) {
+    return;
+  }
+  for (const entry of params.entries) {
+    void store
+      .register(entry.id, { version: 1, entry }, { ttlMs: params.ttlMs })
+      .catch(disablePersistentComponentRegistry);
+  }
 }
 
 function registerPersistentEntries(params: {
-  cfg?: OpenClawConfig;
   entries: DiscordComponentEntry[];
   modals: DiscordModalEntry[];
   ttlMs: number;
 }): void {
-  if (!isPersistentComponentRegistryEnabled(params.cfg)) {
-    return;
-  }
-  let componentStore: DiscordComponentStore | undefined;
-  let modalStore: DiscordModalStore | undefined;
-  try {
-    componentStore = getPersistentComponentStore();
-    modalStore = getPersistentModalStore();
-  } catch (error) {
-    reportPersistentComponentRegistryError(error);
-    return;
-  }
-  if (componentStore) {
-    for (const entry of params.entries) {
-      void componentStore
-        .register(entry.id, { version: 1, entry }, { ttlMs: params.ttlMs })
-        .catch(reportPersistentComponentRegistryError);
-    }
-  }
-  if (modalStore) {
-    for (const entry of params.modals) {
-      void modalStore
-        .register(entry.id, { version: 1, entry }, { ttlMs: params.ttlMs })
-        .catch(reportPersistentComponentRegistryError);
-    }
-  }
+  registerPersistentRegistryEntries({
+    entries: params.entries,
+    ttlMs: params.ttlMs,
+    openStore: getPersistentComponentStore,
+  });
+  registerPersistentRegistryEntries({
+    entries: params.modals,
+    ttlMs: params.ttlMs,
+    openStore: getPersistentModalStore,
+  });
 }
 
-function deletePersistentEntry(params: {
-  cfg?: OpenClawConfig;
+function deletePersistentEntry<T extends { id: string }>(params: {
   id: string;
-  openStore: () => DiscordComponentStore | DiscordModalStore | undefined;
+  openStore: () => DiscordRegistryStore<T> | undefined;
 }): void {
-  if (!isPersistentComponentRegistryEnabled(params.cfg)) {
-    return;
-  }
-  let store: DiscordComponentStore | DiscordModalStore | undefined;
-  try {
-    store = params.openStore();
-  } catch (error) {
-    reportPersistentComponentRegistryError(error);
-    return;
-  }
+  const store = params.openStore();
   if (!store) {
     return;
   }
-  void store.delete(params.id).catch(reportPersistentComponentRegistryError);
+  void store.delete(params.id).catch(disablePersistentComponentRegistry);
 }
 
-async function resolvePersistentEntry<T>(params: {
-  cfg?: OpenClawConfig;
+async function resolvePersistentRegistryEntry<T extends { id: string }>(params: {
   id: string;
   consume?: boolean;
-  openStore: () => DiscordComponentStore | DiscordModalStore | undefined;
-  read: (value: unknown) => T | null;
+  openStore: () => DiscordRegistryStore<T> | undefined;
 }): Promise<T | null> {
-  if (!isPersistentComponentRegistryEnabled(params.cfg)) {
-    return null;
-  }
-  let store: DiscordComponentStore | DiscordModalStore | undefined;
-  try {
-    store = params.openStore();
-  } catch (error) {
-    reportPersistentComponentRegistryError(error);
-    return null;
-  }
+  const store = params.openStore();
   if (!store) {
     return null;
   }
   try {
     const value =
       params.consume === false ? await store.lookup(params.id) : await store.consume(params.id);
-    return params.read(value);
+    return readPersistedRegistryEntry(value);
   } catch (error) {
-    reportPersistentComponentRegistryError(error);
+    disablePersistentComponentRegistry(error);
     return null;
   }
 }
@@ -255,7 +246,6 @@ export function registerDiscordComponentEntries(params: {
   modals: DiscordModalEntry[];
   ttlMs?: number;
   messageId?: string;
-  cfg?: OpenClawConfig;
 }): void {
   const now = Date.now();
   const ttlMs = params.ttlMs ?? DEFAULT_COMPONENT_TTL_MS;
@@ -270,7 +260,6 @@ export function registerDiscordComponentEntries(params: {
     messageId: params.messageId,
   });
   registerPersistentEntries({
-    cfg: params.cfg,
     entries: normalizedEntries,
     modals: normalizedModals,
     ttlMs,
@@ -284,8 +273,7 @@ export function resolveDiscordComponentEntry(params: {
   return resolveEntry(getComponentEntries(), params);
 }
 
-export async function resolveDiscordComponentEntryForConfig(params: {
-  cfg?: OpenClawConfig;
+export async function resolveDiscordComponentEntryWithPersistence(params: {
   id: string;
   consume?: boolean;
 }): Promise<DiscordComponentEntry | null> {
@@ -296,10 +284,9 @@ export async function resolveDiscordComponentEntryForConfig(params: {
     }
     return inMemory;
   }
-  return await resolvePersistentEntry({
+  return await resolvePersistentRegistryEntry({
     ...params,
     openStore: getPersistentComponentStore,
-    read: readPersistedComponentEntry,
   });
 }
 
@@ -310,8 +297,7 @@ export function resolveDiscordModalEntry(params: {
   return resolveEntry(getModalEntries(), params);
 }
 
-export async function resolveDiscordModalEntryForConfig(params: {
-  cfg?: OpenClawConfig;
+export async function resolveDiscordModalEntryWithPersistence(params: {
   id: string;
   consume?: boolean;
 }): Promise<DiscordModalEntry | null> {
@@ -322,10 +308,9 @@ export async function resolveDiscordModalEntryForConfig(params: {
     }
     return inMemory;
   }
-  return await resolvePersistentEntry({
+  return await resolvePersistentRegistryEntry({
     ...params,
     openStore: getPersistentModalStore,
-    read: readPersistedModalEntry,
   });
 }
 
@@ -334,4 +319,5 @@ export function clearDiscordComponentEntries(): void {
   getModalEntries().clear();
   persistentComponentStore = undefined;
   persistentModalStore = undefined;
+  persistentRegistryDisabled = false;
 }

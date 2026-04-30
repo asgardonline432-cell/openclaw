@@ -710,7 +710,7 @@ Key settings (see `/gateway/configuration` for shared channel patterns):
 - `channels.msteams.managedIdentityClientId`: client ID for user-assigned managed identity.
 - `channels.msteams.sharePointSiteId`: SharePoint site ID for file uploads in group chats/channels (see [Sending files in group chats](#sending-files-in-group-chats)).
 
-Set `plugins.entries.msteams.config.experimentalPersistentState: true` to opt in to the experimental SDK-backed persistent sent-message cache. With the opt-in, replies to recent bot-sent Teams messages can still be classified as `reply_to_bot` after a Gateway restart; by default OpenClaw keeps the previous process-local cache.
+Microsoft Teams sent-message markers use best-effort SDK-backed persistent state behind the in-memory cache. Replies to recent bot-sent Teams messages can still be classified as `reply_to_bot` after a Gateway restart; if the persistent store is unavailable or fails, OpenClaw logs the failure and keeps the previous process-local cache behavior.
 
 ## Routing & Sessions
 
