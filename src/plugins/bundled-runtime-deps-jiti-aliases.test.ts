@@ -42,8 +42,10 @@ describe("bundled runtime dependency Jiti aliases", () => {
     const rootDir = makeTempRoot();
     writeJson(path.join(rootDir, "package.json"), {
       dependencies: {
+        "esm-only": "1.0.0",
         plain: "1.0.0",
         wild: "1.0.0",
+        ws: "8.20.0",
         "@scope/pkg": "1.0.0",
       },
     });
@@ -56,7 +58,26 @@ describe("bundled runtime dependency Jiti aliases", () => {
       },
     });
     writeFile(path.join(plainRoot, "esm/index.js"));
+    writeFile(path.join(plainRoot, "cjs/index.js"));
     writeFile(path.join(plainRoot, "features/feature.js"));
+
+    const wsRoot = packageRoot(rootDir, "ws");
+    writeJson(path.join(wsRoot, "package.json"), {
+      exports: {
+        ".": { browser: "./browser.js", import: "./wrapper.mjs", require: "./index.js" },
+      },
+    });
+    writeFile(path.join(wsRoot, "browser.js"));
+    writeFile(path.join(wsRoot, "wrapper.mjs"));
+    writeFile(path.join(wsRoot, "index.js"));
+
+    const esmOnlyRoot = packageRoot(rootDir, "esm-only");
+    writeJson(path.join(esmOnlyRoot, "package.json"), {
+      exports: {
+        ".": { import: "./dist/index.mjs" },
+      },
+    });
+    writeFile(path.join(esmOnlyRoot, "dist/index.mjs"));
 
     const wildRoot = packageRoot(rootDir, "wild");
     writeJson(path.join(wildRoot, "package.json"), {
@@ -80,7 +101,9 @@ describe("bundled runtime dependency Jiti aliases", () => {
       "plain/feature": path.join(plainRoot, "features/feature.js"),
       "@scope/pkg": path.join(scopedRoot, "index.mjs"),
       "wild/sub/a": path.join(wildRoot, "dist/a.js"),
-      plain: path.join(plainRoot, "esm/index.js"),
+      "esm-only": path.join(esmOnlyRoot, "dist/index.mjs"),
+      plain: path.join(plainRoot, "cjs/index.js"),
+      ws: path.join(wsRoot, "index.js"),
     });
   });
 

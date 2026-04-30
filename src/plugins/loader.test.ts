@@ -1594,6 +1594,101 @@ module.exports = {
     expect(registry.plugins.find((entry) => entry.id === "alpha")?.status).toBe("loaded");
   });
 
+  it("preserves CommonJS constructor semantics for staged ws runtime deps", () => {
+    const bundledDir = makeTempDir();
+    const stageDir = makeTempDir();
+    const plugin = writePlugin({
+      id: "alpha",
+      dir: path.join(bundledDir, "alpha"),
+      filename: "index.ts",
+      body: `
+        const WebSocket = require("ws");
+        export default {
+          id: "alpha",
+          register() {
+            if (typeof WebSocket !== "function") {
+              throw new Error(\`expected ws constructor, got \${typeof WebSocket}\`);
+            }
+            new WebSocket();
+          }
+        };
+      `,
+    });
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledDir;
+    process.env.OPENCLAW_PLUGIN_STAGE_DIR = stageDir;
+    fs.writeFileSync(
+      path.join(plugin.dir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@openclaw/alpha",
+          version: "1.0.0",
+          dependencies: {
+            ws: "8.20.0",
+          },
+          openclaw: { extensions: ["./index.ts"] },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(plugin.dir, "openclaw.plugin.json"),
+      JSON.stringify(
+        {
+          id: "alpha",
+          enabledByDefault: true,
+          configSchema: EMPTY_PLUGIN_SCHEMA,
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          enabled: true,
+        },
+      },
+      bundledRuntimeDepsInstaller: ({ installRoot }) => {
+        const depRoot = path.join(installRoot, "node_modules", "ws");
+        fs.mkdirSync(depRoot, { recursive: true });
+        fs.writeFileSync(
+          path.join(depRoot, "package.json"),
+          JSON.stringify({
+            name: "ws",
+            version: "8.20.0",
+            main: "index.cjs",
+            exports: {
+              ".": {
+                browser: "./browser.js",
+                import: "./wrapper.mjs",
+                require: "./index.cjs",
+              },
+            },
+          }),
+          "utf-8",
+        );
+        fs.writeFileSync(path.join(depRoot, "browser.js"), "export default null;\n", "utf-8");
+        fs.writeFileSync(
+          path.join(depRoot, "wrapper.mjs"),
+          "function WebSocket() {}; export default WebSocket; export { WebSocket as WebSocket };\n",
+          "utf-8",
+        );
+        fs.writeFileSync(
+          path.join(depRoot, "index.cjs"),
+          "function WebSocket() {}; WebSocket.WebSocket = WebSocket; module.exports = WebSocket;\n",
+          "utf-8",
+        );
+      },
+    });
+
+    expect(registry.plugins.find((entry) => entry.id === "alpha")?.status).toBe("loaded");
+  });
+
   it("loads bundled plugins from symlinked package roots with an external stage dir", () => {
     const packageRoot = makeTempDir();
     const stageDir = makeTempDir();

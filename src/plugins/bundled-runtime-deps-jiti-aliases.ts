@@ -32,13 +32,13 @@ function collectRuntimeDependencyNames(pkg: RuntimeDependencyPackageJson): strin
   ].toSorted((left, right) => left.localeCompare(right));
 }
 
-function resolveRuntimePackageImportTarget(exportsField: unknown): string | null {
+function resolveRuntimePackageJitiRequireTarget(exportsField: unknown): string | null {
   if (typeof exportsField === "string") {
     return exportsField;
   }
   if (Array.isArray(exportsField)) {
     for (const entry of exportsField) {
-      const resolved = resolveRuntimePackageImportTarget(entry);
+      const resolved = resolveRuntimePackageJitiRequireTarget(entry);
       if (resolved) {
         return resolved;
       }
@@ -50,10 +50,26 @@ function resolveRuntimePackageImportTarget(exportsField: unknown): string | null
   }
   const record = exportsField as Record<string, unknown>;
   if (Object.prototype.hasOwnProperty.call(record, ".")) {
-    return resolveRuntimePackageImportTarget(record["."]);
+    return resolveRuntimePackageJitiRequireTarget(record["."]);
   }
-  for (const condition of ["import", "node", "default"] as const) {
-    const resolved = resolveRuntimePackageImportTarget(record[condition]);
+  for (const conditions of [new Set(["node", "require"]), new Set(["node", "import"])] as const) {
+    const resolved = resolveRuntimePackageConditionalTarget(record, conditions);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function resolveRuntimePackageConditionalTarget(
+  record: Record<string, unknown>,
+  conditions: ReadonlySet<string>,
+): string | null {
+  for (const [condition, target] of Object.entries(record)) {
+    if (condition !== "default" && !conditions.has(condition)) {
+      continue;
+    }
+    const resolved = resolveRuntimePackageJitiRequireTarget(target);
     if (resolved) {
       return resolved;
     }
@@ -133,7 +149,7 @@ function collectRuntimePackageImportTargets(
       if (!exportKey.startsWith(".")) {
         continue;
       }
-      const resolved = resolveRuntimePackageImportTarget(exportValue);
+      const resolved = resolveRuntimePackageJitiRequireTarget(exportValue);
       if (resolved) {
         if (exportKey.includes("*")) {
           for (const [wildcardExportKey, targetPath] of collectRuntimePackageWildcardImportTargets(
@@ -150,7 +166,7 @@ function collectRuntimePackageImportTargets(
     }
     return targets;
   }
-  const rootEntry = resolveRuntimePackageImportTarget(exportsField) ?? pkg.module ?? pkg.main;
+  const rootEntry = resolveRuntimePackageJitiRequireTarget(exportsField) ?? pkg.module ?? pkg.main;
   if (rootEntry) {
     targets.set(".", rootEntry);
   }
