@@ -13,6 +13,7 @@ import {
   refreshCodexAppServerAuthTokens,
   resolveCodexAppServerHomeDir,
   resolveCodexAppServerNativeHomeDir,
+  resolveDefaultCodexAppServerAuthProfileId,
 } from "./auth-bridge.js";
 import type { CodexAppServerStartOptions } from "./config.js";
 
@@ -213,6 +214,30 @@ describe("bridgeCodexAppServerStartOptions", () => {
       await expect(fs.access(path.join(agentDir, "harness-auth"))).rejects.toMatchObject({
         code: "ENOENT",
       });
+    } finally {
+      await fs.rm(agentDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves the default Codex app-server auth profile when it exists", async () => {
+    const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-codex-app-server-"));
+    try {
+      expect(resolveDefaultCodexAppServerAuthProfileId({ agentDir })).toBeUndefined();
+
+      upsertAuthProfile({
+        agentDir,
+        profileId: "openai-codex:default",
+        credential: {
+          type: "oauth",
+          provider: "openai-codex",
+          access: "access-token",
+          refresh: "refresh-token",
+          expires: Date.now() + 24 * 60 * 60_000,
+          accountId: "account-123",
+        },
+      });
+
+      expect(resolveDefaultCodexAppServerAuthProfileId({ agentDir })).toBe("openai-codex:default");
     } finally {
       await fs.rm(agentDir, { recursive: true, force: true });
     }

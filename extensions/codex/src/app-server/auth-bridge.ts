@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   ensureAuthProfileStore,
   loadAuthProfileStoreForSecretsRuntime,
+  resolveOpenClawAgentDir,
   resolveProviderIdForAuth,
   resolveApiKeyForProfile,
   resolvePersistedAuthProfileOwnerAgentDir,
@@ -128,6 +129,18 @@ export function resolveCodexAppServerAuthProfileLoginParams(params: {
   authProfileId?: string;
 }): Promise<LoginAccountParams | undefined> {
   return resolveCodexAppServerAuthProfileLoginParamsInternal(params);
+}
+
+export function resolveDefaultCodexAppServerAuthProfileId(
+  params: { agentDir?: string } = {},
+): string | undefined {
+  const store = ensureAuthProfileStore(params.agentDir ?? resolveOpenClawAgentDir(), {
+    allowKeychainPrompt: false,
+  });
+  const credential = store.profiles[OPENAI_CODEX_DEFAULT_PROFILE_ID];
+  return credential && isCodexAppServerAuthProvider(credential.provider)
+    ? OPENAI_CODEX_DEFAULT_PROFILE_ID
+    : undefined;
 }
 
 export async function refreshCodexAppServerAuthTokens(params: {

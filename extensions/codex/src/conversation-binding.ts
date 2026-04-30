@@ -5,6 +5,7 @@ import type {
   PluginHookInboundClaimEvent,
 } from "openclaw/plugin-sdk/plugin-entry";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
+import { resolveDefaultCodexAppServerAuthProfileId } from "./app-server/auth-bridge.js";
 import { CODEX_CONTROL_METHODS } from "./app-server/capabilities.js";
 import {
   codexSandboxPolicyForTurn,
@@ -163,9 +164,12 @@ async function attachExistingThread(params: {
   modelProvider?: string;
 }): Promise<void> {
   const runtime = resolveCodexAppServerRuntimeOptions({ pluginConfig: params.pluginConfig });
+  const authProfileId =
+    runtime.start.transport === "stdio" ? resolveDefaultCodexAppServerAuthProfileId() : undefined;
   const client = await getSharedCodexAppServerClient({
     startOptions: runtime.start,
     timeoutMs: runtime.requestTimeoutMs,
+    authProfileId,
   });
   const response: CodexThreadResumeResponse = await client.request(
     CODEX_CONTROL_METHODS.resumeThread,
@@ -187,6 +191,7 @@ async function attachExistingThread(params: {
     cwd: thread.cwd ?? params.workspaceDir,
     model: response.model ?? params.model,
     modelProvider: response.modelProvider ?? params.modelProvider,
+    authProfileId,
     approvalPolicy: runtime.approvalPolicy,
     sandbox: runtime.sandbox,
     serviceTier: runtime.serviceTier,
@@ -201,9 +206,12 @@ async function createThread(params: {
   modelProvider?: string;
 }): Promise<void> {
   const runtime = resolveCodexAppServerRuntimeOptions({ pluginConfig: params.pluginConfig });
+  const authProfileId =
+    runtime.start.transport === "stdio" ? resolveDefaultCodexAppServerAuthProfileId() : undefined;
   const client = await getSharedCodexAppServerClient({
     startOptions: runtime.start,
     timeoutMs: runtime.requestTimeoutMs,
+    authProfileId,
   });
   const response: CodexThreadStartResponse = await client.request(
     "thread/start",
@@ -227,6 +235,7 @@ async function createThread(params: {
     cwd: response.thread.cwd ?? params.workspaceDir,
     model: response.model ?? params.model,
     modelProvider: response.modelProvider ?? params.modelProvider,
+    authProfileId,
     approvalPolicy: runtime.approvalPolicy,
     sandbox: runtime.sandbox,
     serviceTier: runtime.serviceTier,
