@@ -367,16 +367,15 @@ actor MacComputerUseMcpHost {
         {
             return URL(fileURLWithPath: NSString(string: rawInstallDir).expandingTildeInPath)
         }
-        let base: URL
-        if let appSupportRoot {
-            base = appSupportRoot
+        let base = if let appSupportRoot {
+            appSupportRoot
         } else if let applicationSupportRoot = fileManager
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first
         {
-            base = applicationSupportRoot.appendingPathComponent("OpenClaw", isDirectory: true)
+            applicationSupportRoot.appendingPathComponent("OpenClaw", isDirectory: true)
         } else {
-            base = fileManager.homeDirectoryForCurrentUser
+            fileManager.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library", isDirectory: true)
                 .appendingPathComponent("Application Support", isDirectory: true)
                 .appendingPathComponent("OpenClaw", isDirectory: true)
