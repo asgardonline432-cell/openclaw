@@ -66,12 +66,14 @@ function sendNodeMcpRequest(params: {
   token: string;
   nodeId?: string;
   serverId?: string;
+  clientId?: string;
   body: unknown;
   signal?: AbortSignal;
 }) {
   const nodeId = encodeURIComponent(params.nodeId ?? "mac-node");
   const serverId = encodeURIComponent(params.serverId ?? "computer-use");
-  return fetch(`http://127.0.0.1:${params.port}/mcp/node/${nodeId}/${serverId}`, {
+  const clientSuffix = params.clientId ? `/${encodeURIComponent(params.clientId)}` : "";
+  return fetch(`http://127.0.0.1:${params.port}/mcp/node/${nodeId}/${serverId}${clientSuffix}`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${params.token}`,
@@ -159,6 +161,95 @@ describe("node MCP loopback proxy", () => {
         serverInfo: { name: "mock-computer-use" },
       },
     });
+  });
+
+  it("isolates node MCP sessions by loopback client id", async () => {
+    const registry = new NodeRegistry();
+    const { client, sent } = createNodeClient({
+      mcpServers: [{ id: "computer-use", displayName: "Computer Use", status: "ready" }],
+    });
+    registry.register(client, {});
+    const server = await startMcpLoopbackServer(0, {
+      createNodeMcpClientTransport: (options) => new NodeMcpClientTransport(registry, options),
+    });
+    const runtime = getActiveMcpLoopbackRuntime();
+    expect(runtime).toBeTruthy();
+    const token = resolveMcpLoopbackBearerToken(runtime!, true);
+
+    const firstResponsePromise = sendNodeMcpRequest({
+      port: server.port,
+      token,
+      clientId: "thread-a",
+      body: { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    });
+    const secondResponsePromise = sendNodeMcpRequest({
+      port: server.port,
+      token,
+      clientId: "thread-b",
+      body: { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    });
+
+    await vi.waitFor(() => {
+      expect(sent.filter((entry) => entry.event === "node.mcp.session.open")).toHaveLength(2);
+    });
+    const openPayloads = sent
+      .filter((entry) => entry.event === "node.mcp.session.open")
+      .map((entry) => entry.payload as { sessionId?: string });
+    expect(new Set(openPayloads.map((entry) => entry.sessionId)).size).toBe(2);
+    for (const openPayload of openPayloads) {
+      expect(openPayload.sessionId).toBeTruthy();
+      registry.handleMcpSessionOpenResult({
+        sessionId: openPayload.sessionId!,
+        nodeId: "mac-node",
+        serverId: "computer-use",
+        ok: true,
+        pid: 42,
+      });
+    }
+
+    await vi.waitFor(() => {
+      expect(sent.filter((entry) => entry.event === "node.mcp.session.input")).toHaveLength(2);
+    });
+    const inputPayloads = sent
+      .filter((entry) => entry.event === "node.mcp.session.input")
+      .map(
+        (entry) =>
+          entry.payload as {
+            dataBase64?: string;
+            seq?: number;
+            sessionId?: string;
+          },
+      );
+    for (const inputPayload of inputPayloads) {
+      expect(Buffer.from(inputPayload.dataBase64 ?? "", "base64").toString("utf8")).toBe(
+        serializeMessage({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+      );
+      registry.handleMcpSessionOutput({
+        sessionId: inputPayload.sessionId!,
+        nodeId: "mac-node",
+        seq: inputPayload.seq ?? 0,
+        stream: "stdout",
+        dataBase64: Buffer.from(
+          serializeMessage({
+            jsonrpc: "2.0",
+            id: 1,
+            result: {
+              protocolVersion: "2025-03-26",
+              capabilities: {},
+              serverInfo: { name: `mock-${inputPayload.sessionId}`, version: "1" },
+            },
+          }),
+        ).toString("base64"),
+      });
+    }
+
+    const responses = await Promise.all([firstResponsePromise, secondResponsePromise]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    const bodies = await Promise.all(responses.map((response) => response.json()));
+    expect(bodies).toEqual([
+      expect.objectContaining({ id: 1, result: expect.any(Object) }),
+      expect.objectContaining({ id: 1, result: expect.any(Object) }),
+    ]);
   });
 
   it("closes node MCP startup when the HTTP request aborts before open resolves", async () => {

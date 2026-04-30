@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { AgentThreadMcpServers } from "../agents/thread-mcp.js";
 import { isNodeMcpServerOpenable, type NodeMcpServerDescriptor } from "../shared/node-mcp-types.js";
 import {
@@ -53,10 +54,11 @@ export async function resolveNodeHostedThreadMcpServers(params: {
     }
     const nodeId = encodeURIComponent(node.nodeId);
     const serverId = encodeURIComponent(descriptor.id);
+    const clientId = encodeURIComponent(randomUUID());
     return {
       [COMPUTER_USE_MCP_SERVER_ID]: {
         transport: "http",
-        url: `http://127.0.0.1:${server.port}/mcp/node/${nodeId}/${serverId}`,
+        url: `http://127.0.0.1:${server.port}/mcp/node/${nodeId}/${serverId}/${clientId}`,
         headers: {
           Authorization: `Bearer ${resolveMcpLoopbackBearerToken(runtime, true)}`,
         },

@@ -25,6 +25,7 @@ type PendingResponse = {
 type NodeMcpLoopbackTarget = {
   nodeId: string;
   serverId: string;
+  clientId?: string;
 };
 
 type NodeMcpTransportCallbacks = Pick<Transport, "onmessage" | "onerror" | "onclose">;
@@ -90,10 +91,10 @@ function parseNodeMcpLoopbackPath(pathname: string): NodeMcpLoopbackTarget | nul
   }
   const suffix = pathname.slice(NODE_MCP_LOOPBACK_PREFIX.length);
   const parts = suffix.split("/");
-  if (parts.length !== 2) {
+  if (parts.length !== 2 && parts.length !== 3) {
     return null;
   }
-  const [rawNodeId, rawServerId] = parts;
+  const [rawNodeId, rawServerId, rawClientId] = parts;
   if (!rawNodeId || !rawServerId) {
     return null;
   }
@@ -101,6 +102,7 @@ function parseNodeMcpLoopbackPath(pathname: string): NodeMcpLoopbackTarget | nul
     return {
       nodeId: decodeURIComponent(rawNodeId),
       serverId: decodeURIComponent(rawServerId),
+      ...(rawClientId ? { clientId: decodeURIComponent(rawClientId) } : {}),
     };
   } catch {
     return null;
@@ -374,7 +376,7 @@ export class NodeMcpHttpProxyManager {
     if (!factory) {
       return [jsonRpcError(null, -32000, "Node MCP loopback proxy is unavailable")];
     }
-    const key = `${target.nodeId}\0${target.serverId}`;
+    const key = `${target.nodeId}\0${target.serverId}\0${target.clientId ?? ""}`;
     let session = this.sessions.get(key);
     if (!session) {
       session = new NodeMcpProxySession(target, factory, () => {
