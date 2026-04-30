@@ -237,7 +237,6 @@ export function setGatewayDedupeEntry(params: {
 }) {
   const existing = params.dedupe.get(params.key);
   const existingSnapshot = existing ? readTerminalSnapshotFromDedupeEntry(existing) : null;
-  const incomingSnapshot = readTerminalSnapshotFromDedupeEntry(params.entry);
   if (existingSnapshot?.status === "timeout" && existingSnapshot.stopReason === "rpc") {
     return;
   }
@@ -246,6 +245,7 @@ export function setGatewayDedupeEntry(params: {
   if (!runId) {
     return;
   }
+  const incomingSnapshot = readTerminalSnapshotFromDedupeEntry(params.entry);
   if (!incomingSnapshot) {
     return;
   }

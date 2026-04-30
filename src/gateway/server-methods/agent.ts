@@ -464,6 +464,8 @@ function dispatchAgentRunFromGateway(params: {
         key: `agent:${params.idempotencyKey}`,
         entry: {
           ts: Date.now(),
+          // Aborts are not error outcomes: ok:true lets readTerminalSnapshotFromDedupeEntry
+          // read the payload status ("timeout") instead of forcing status:"error".
           ok: aborted,
           payload,
           ...(aborted ? {} : { error }),
