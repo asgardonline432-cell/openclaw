@@ -316,17 +316,19 @@ actor MacComputerUseMcpHost {
         codexPluginDir: URL,
         fileManager: FileManager) -> [MacMcpPackageSource]
     {
-        [
-            resourceURL?.appendingPathComponent(computerUseBundledResourcePath, isDirectory: true)
-                .map { MacMcpPackageSource(directory: $0, source: "openclaw-bundled") },
-            MacMcpPackageSource(directory: codexPluginDir, source: "codex-bundled"),
-        ].compactMap { $0 }
-            .filter {
-                Self.resolvePackageLaunchConfig(
-                    packageDir: $0.directory,
-                    source: $0.source,
-                    fileManager: fileManager) != nil
-            }
+        var sources: [MacMcpPackageSource] = []
+        if let resourceURL {
+            sources.append(MacMcpPackageSource(
+                directory: resourceURL.appendingPathComponent(computerUseBundledResourcePath, isDirectory: true),
+                source: "openclaw-bundled"))
+        }
+        sources.append(MacMcpPackageSource(directory: codexPluginDir, source: "codex-bundled"))
+        return sources.filter {
+            Self.resolvePackageLaunchConfig(
+                packageDir: $0.directory,
+                source: $0.source,
+                fileManager: fileManager) != nil
+        }
     }
 
     private nonisolated static func resolvePackageLaunchConfig(
@@ -365,13 +367,20 @@ actor MacComputerUseMcpHost {
         {
             return URL(fileURLWithPath: NSString(string: rawInstallDir).expandingTildeInPath)
         }
-        let base = appSupportRoot
-            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-                .appendingPathComponent("OpenClaw", isDirectory: true)
-            ?? fileManager.homeDirectoryForCurrentUser
+        let base: URL
+        if let appSupportRoot {
+            base = appSupportRoot
+        } else if let applicationSupportRoot = fileManager
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first
+        {
+            base = applicationSupportRoot.appendingPathComponent("OpenClaw", isDirectory: true)
+        } else {
+            base = fileManager.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library", isDirectory: true)
                 .appendingPathComponent("Application Support", isDirectory: true)
                 .appendingPathComponent("OpenClaw", isDirectory: true)
+        }
         return base
             .appendingPathComponent(computerUseAppSupportDirName, isDirectory: true)
             .appendingPathComponent(computerUsePackageDirName, isDirectory: true)
@@ -382,7 +391,7 @@ actor MacComputerUseMcpHost {
         source: MacMcpPackageSource,
         fileManager: FileManager) -> Bool
     {
-        guard let sourceFingerprint = Self.packageFingerprint(
+        guard let sourceFingerprint = packageFingerprint(
             packageDir: source.directory,
             fileManager: fileManager)
         else {
@@ -408,7 +417,7 @@ actor MacComputerUseMcpHost {
         to destination: URL,
         fileManager: FileManager) -> Bool
     {
-        guard let sourceFingerprint = Self.packageFingerprint(
+        guard let sourceFingerprint = packageFingerprint(
             packageDir: source.directory,
             fileManager: fileManager)
         else {
