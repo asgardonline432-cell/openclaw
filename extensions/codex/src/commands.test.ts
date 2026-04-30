@@ -102,6 +102,7 @@ describe("codex command", () => {
     const sessionFile = path.join(tempDir, "session.jsonl");
     const requests: Array<{ method: string; params: unknown }> = [];
     const deps = createDeps({
+      resolveCodexControlAuthProfileId: vi.fn(() => "openai-codex:default"),
       codexControlRequest: vi.fn(
         async (_pluginConfig: unknown, method: string, requestParams: unknown) => {
           requests.push({ method, params: requestParams });
@@ -126,9 +127,20 @@ describe("codex command", () => {
         params: { threadId: "thread-123", persistExtendedHistory: true },
       },
     ]);
-    await expect(fs.readFile(`${sessionFile}.codex-app-server.json`, "utf8")).resolves.toContain(
-      '"threadId": "thread-123"',
+    expect(deps.codexControlRequest).toHaveBeenCalledWith(
+      undefined,
+      CODEX_CONTROL_METHODS.resumeThread,
+      { threadId: "thread-123", persistExtendedHistory: true },
+      { authProfileId: "openai-codex:default" },
     );
+    const sidecar = JSON.parse(
+      await fs.readFile(`${sessionFile}.codex-app-server.json`, "utf8"),
+    ) as {
+      threadId?: unknown;
+      authProfileId?: unknown;
+    };
+    expect(sidecar.threadId).toBe("thread-123");
+    expect(sidecar.authProfileId).toBe("openai-codex:default");
   });
 
   it("shows model ids from Codex app-server", async () => {

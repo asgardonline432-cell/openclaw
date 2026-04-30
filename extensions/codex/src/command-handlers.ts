@@ -28,6 +28,7 @@ import {
   codexControlRequest,
   readCodexStatusProbes,
   requestOptions,
+  resolveCodexControlAuthProfileId,
   safeCodexControlRequest,
   type SafeValue,
 } from "./command-rpc.js";
@@ -52,6 +53,7 @@ export type CodexCommandDeps = {
   codexControlRequest: CodexControlRequestFn;
   listCodexAppServerModels: typeof listAllCodexAppServerModels;
   readCodexStatusProbes: typeof readCodexStatusProbes;
+  resolveCodexControlAuthProfileId: typeof resolveCodexControlAuthProfileId;
   readCodexAppServerBinding: typeof readCodexAppServerBinding;
   requestOptions: typeof requestOptions;
   safeCodexControlRequest: SafeCodexControlRequestFn;
@@ -73,6 +75,7 @@ type CodexControlRequestFn = (
   pluginConfig: unknown,
   method: CodexControlMethod,
   requestParams: JsonValue | undefined,
+  options?: { authProfileId?: string },
 ) => Promise<JsonValue | undefined>;
 
 type SafeCodexControlRequestFn = (
@@ -85,6 +88,7 @@ const defaultCodexCommandDeps: CodexCommandDeps = {
   codexControlRequest,
   listCodexAppServerModels: listAllCodexAppServerModels,
   readCodexStatusProbes,
+  resolveCodexControlAuthProfileId,
   readCodexAppServerBinding,
   requestOptions,
   safeCodexControlRequest,
@@ -432,6 +436,7 @@ async function resumeThread(
   if (!ctx.sessionFile) {
     return "Cannot attach a Codex thread because this command did not include an OpenClaw session file.";
   }
+  const authProfileId = deps.resolveCodexControlAuthProfileId(pluginConfig);
   const response = await deps.codexControlRequest(
     pluginConfig,
     CODEX_CONTROL_METHODS.resumeThread,
@@ -439,6 +444,7 @@ async function resumeThread(
       threadId: normalizedThreadId,
       persistExtendedHistory: true,
     },
+    { authProfileId },
   );
   const thread = isJsonObject(response) && isJsonObject(response.thread) ? response.thread : {};
   const effectiveThreadId = readString(thread, "id") ?? normalizedThreadId;
@@ -447,6 +453,7 @@ async function resumeThread(
     cwd: readString(thread, "cwd") ?? "",
     model: isJsonObject(response) ? readString(response, "model") : undefined,
     modelProvider: isJsonObject(response) ? readString(response, "modelProvider") : undefined,
+    authProfileId,
   });
   return `Attached this OpenClaw session to Codex thread ${effectiveThreadId}.`;
 }

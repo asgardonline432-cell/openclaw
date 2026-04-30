@@ -1,3 +1,4 @@
+import { resolveDefaultCodexAppServerAuthProfileId } from "./app-server/auth-bridge.js";
 import {
   CODEX_CONTROL_METHODS,
   describeControlFailure,
@@ -25,21 +26,34 @@ export function requestOptions(pluginConfig: unknown, limit: number) {
 }
 
 type CodexControlRequestMethod = CodexControlMethod & CodexAppServerRequestMethod;
+type CodexControlRequestOptions = {
+  authProfileId?: string;
+};
+
+export function resolveCodexControlAuthProfileId(pluginConfig: unknown): string | undefined {
+  const runtime = resolveCodexAppServerRuntimeOptions({ pluginConfig });
+  return runtime.start.transport === "stdio"
+    ? resolveDefaultCodexAppServerAuthProfileId()
+    : undefined;
+}
 
 export function codexControlRequest<M extends CodexControlRequestMethod>(
   pluginConfig: unknown,
   method: M,
   requestParams: CodexAppServerRequestParams<M>,
+  options?: CodexControlRequestOptions,
 ): Promise<CodexAppServerRequestResult<M>>;
 export function codexControlRequest(
   pluginConfig: unknown,
   method: CodexControlMethod,
   requestParams?: JsonValue,
+  options?: CodexControlRequestOptions,
 ): Promise<JsonValue | undefined>;
 export async function codexControlRequest(
   pluginConfig: unknown,
   method: CodexControlMethod,
   requestParams?: unknown,
+  options: CodexControlRequestOptions = {},
 ) {
   const runtime = resolveCodexAppServerRuntimeOptions({ pluginConfig });
   return await requestCodexAppServerJson({
@@ -47,6 +61,7 @@ export async function codexControlRequest(
     requestParams,
     timeoutMs: runtime.requestTimeoutMs,
     startOptions: runtime.start,
+    authProfileId: options.authProfileId,
   });
 }
 
