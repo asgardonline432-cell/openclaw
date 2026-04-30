@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { splitTrailingAuthProfile } from "../agents/model-ref-profile.js";
-import { normalizeProviderId } from "../agents/provider-id.js";
+import { findNormalizedProviderValue, normalizeProviderId } from "../agents/provider-id.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
+import { resolveUserPath } from "../utils.js";
 import { readRuntimeDepsJsonObject, type JsonObject } from "./bundled-runtime-deps-json.js";
 import {
   collectPackageRuntimeDeps,
@@ -377,13 +378,79 @@ function collectConfiguredProviderIds(config: OpenClawConfig): Set<string> {
   return collectConfiguredRuntimeDepsTargets(config).providerIds;
 }
 
-function memorySearchConfigUsesProvider(
-  value: { enabled?: boolean; provider?: string } | undefined,
-  providerId: string,
-): boolean {
+type MemorySearchRuntimeDepsConfig = {
+  enabled?: boolean;
+  provider?: string;
+  fallback?: string;
+  local?: {
+    modelPath?: string;
+  };
+};
+
+function resolveMemorySearchRuntimeDepsProvider(
+  providerId: string | undefined,
+  config: OpenClawConfig,
+): string | undefined {
+  if (!providerId) {
+    return undefined;
+  }
+  const normalized = normalizeProviderId(providerId);
+  const ownerApi = findNormalizedProviderValue(config.models?.providers, providerId)?.api?.trim();
+  if (!ownerApi) {
+    return normalized;
+  }
+  const normalizedOwner = normalizeProviderId(ownerApi);
+  return normalizedOwner && normalizedOwner !== normalized ? normalizedOwner : normalized;
+}
+
+function hasUsableLocalMemoryEmbeddingModelPath(modelPath?: string): boolean {
+  const trimmed = modelPath?.trim();
+  if (!trimmed || /^(hf:|https?:)/i.test(trimmed)) {
+    return false;
+  }
+  try {
+    return fs.statSync(resolveUserPath(trimmed)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function memorySearchConfigCanUseProvider(params: {
+  config: OpenClawConfig;
+  value: MemorySearchRuntimeDepsConfig | undefined;
+  providerId: string;
+}): boolean {
+  if (params.value?.enabled === false) {
+    return false;
+  }
+  const provider =
+    resolveMemorySearchRuntimeDepsProvider(params.value?.provider, params.config) ?? "auto";
+  const fallback = resolveMemorySearchRuntimeDepsProvider(params.value?.fallback, params.config);
+  if (provider === params.providerId || fallback === params.providerId) {
+    return true;
+  }
   return (
-    value?.enabled !== false && normalizeOptionalLowercaseString(value?.provider) === providerId
+    provider === "auto" &&
+    params.providerId === "local" &&
+    hasUsableLocalMemoryEmbeddingModelPath(params.value?.local?.modelPath)
   );
+}
+
+function mergeMemorySearchRuntimeDepsConfig(
+  defaults: MemorySearchRuntimeDepsConfig | undefined,
+  overrides: MemorySearchRuntimeDepsConfig | undefined,
+): MemorySearchRuntimeDepsConfig | undefined {
+  if (!defaults && !overrides) {
+    return undefined;
+  }
+  return {
+    enabled: overrides?.enabled ?? defaults?.enabled,
+    provider: overrides?.provider ?? defaults?.provider,
+    fallback: overrides?.fallback ?? defaults?.fallback,
+    local: {
+      modelPath: overrides?.local?.modelPath ?? defaults?.local?.modelPath,
+    },
+  };
 }
 
 function isMemoryEmbeddingProviderConfiguredForRuntimeDeps(
@@ -393,12 +460,29 @@ function isMemoryEmbeddingProviderConfiguredForRuntimeDeps(
   if (!config) {
     return false;
   }
-  if (memorySearchConfigUsesProvider(config.agents?.defaults?.memorySearch, providerId)) {
+  const normalizedProviderId = normalizeProviderId(providerId);
+  const defaults = config.agents?.defaults?.memorySearch;
+  if (
+    memorySearchConfigCanUseProvider({
+      config,
+      value: defaults,
+      providerId: normalizedProviderId,
+    })
+  ) {
     return true;
   }
-  return (config.agents?.list ?? []).some((agent) =>
-    memorySearchConfigUsesProvider(agent.memorySearch, providerId),
-  );
+  for (const agent of config.agents?.list ?? []) {
+    if (
+      memorySearchConfigCanUseProvider({
+        config,
+        value: mergeMemorySearchRuntimeDepsConfig(defaults, agent.memorySearch),
+        providerId: normalizedProviderId,
+      })
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function matchesBundledRuntimeDepsModelSupport(
