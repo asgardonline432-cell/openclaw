@@ -1279,14 +1279,17 @@ export async function resolveGatewayModelSupportsImages(params: {
 
     const cached = await evaluateCatalog("cacheOnly");
     const cachedSupport = resolveImageSupport(cached);
-    if (cachedSupport !== undefined) {
-      return cachedSupport;
+    if (cachedSupport === true) {
+      return true;
     }
 
     const discovered = await evaluateCatalog("runtimeDiscovery");
     const discoveredSupport = resolveImageSupport(discovered);
     if (discoveredSupport !== undefined) {
       return discoveredSupport;
+    }
+    if (cachedSupport !== undefined) {
+      return cachedSupport;
     }
     return false;
   } catch {

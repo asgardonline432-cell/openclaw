@@ -11,6 +11,7 @@ import {
   resolveAllowedModelRefMock,
   resolveConfiguredModelRefMock,
   resolveCronSessionMock,
+  resolveThinkingDefaultMock,
   resolveSupportedThinkingLevelMock,
   resetRunCronIsolatedAgentTurnHarness,
   restoreFastTestEnv,
@@ -252,6 +253,135 @@ describe("runCronIsolatedAgentTurn — cron model override forwarding (#58065)",
     );
     expect(runEmbeddedPiAgentMock).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "ollama", model: "qwen3:0.6b", thinkLevel: "medium" }),
+    );
+  });
+
+  it("falls back to runtime discovery when cache-only thinking metadata says the selected model has no reasoning", async () => {
+    resolveAllowedModelRefMock.mockImplementation(() => ({
+      ref: { provider: "ollama", model: "qwen3:0.6b" },
+    }));
+    loadModelCatalogMock
+      .mockResolvedValueOnce([
+        {
+          provider: "ollama",
+          id: "qwen3:0.6b",
+          name: "qwen3:0.6b",
+          reasoning: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          provider: "ollama",
+          id: "qwen3:0.6b",
+          name: "qwen3:0.6b",
+          reasoning: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          provider: "ollama",
+          id: "qwen3:0.6b",
+          name: "qwen3:0.6b",
+          reasoning: true,
+        },
+      ]);
+    isThinkingLevelSupportedMock.mockImplementation(
+      ({ catalog, level }: { catalog?: Array<{ reasoning?: boolean }>; level?: string }) =>
+        level === "medium" && catalog?.[0]?.reasoning === true,
+    );
+    resolveSupportedThinkingLevelMock.mockReturnValue("off");
+    runWithModelFallbackMock.mockImplementation(async ({ provider, model, run }) => {
+      const result = await run(provider, model);
+      return { result, provider, model, attempts: [] };
+    });
+
+    await runCronIsolatedAgentTurn(
+      makeParams({
+        job: makeJob({
+          payload: {
+            kind: "agentTurn",
+            message: "summarize",
+            model: "ollama/qwen3:0.6b",
+            thinking: "medium",
+          },
+        }),
+      }),
+    );
+
+    expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ intent: "cacheOnly", source: "cron.model-selection" }),
+    );
+    expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ intent: "cacheOnly", source: "cron.thinking" }),
+    );
+    expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ intent: "runtimeDiscovery", source: "cron.thinking.discovery" }),
+    );
+    expect(runEmbeddedPiAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "ollama", model: "qwen3:0.6b", thinkLevel: "medium" }),
+    );
+  });
+
+  it("falls back to runtime discovery before keeping an off thinking default from stale cache-only metadata", async () => {
+    resolveAllowedModelRefMock.mockImplementation(() => ({
+      ref: { provider: "ollama", model: "qwen3:0.6b" },
+    }));
+    loadModelCatalogMock
+      .mockResolvedValueOnce([
+        {
+          provider: "ollama",
+          id: "qwen3:0.6b",
+          name: "qwen3:0.6b",
+          reasoning: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          provider: "ollama",
+          id: "qwen3:0.6b",
+          name: "qwen3:0.6b",
+          reasoning: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          provider: "ollama",
+          id: "qwen3:0.6b",
+          name: "qwen3:0.6b",
+          reasoning: true,
+        },
+      ]);
+    resolveThinkingDefaultMock.mockImplementation(
+      ({ catalog }: { catalog?: Array<{ reasoning?: boolean }> }) =>
+        catalog?.[0]?.reasoning === true ? "low" : "off",
+    );
+    isThinkingLevelSupportedMock.mockReturnValue(true);
+    runWithModelFallbackMock.mockImplementation(async ({ provider, model, run }) => {
+      const result = await run(provider, model);
+      return { result, provider, model, attempts: [] };
+    });
+
+    await runCronIsolatedAgentTurn(
+      makeParams({
+        job: makeJob({
+          payload: {
+            kind: "agentTurn",
+            message: "summarize",
+            model: "ollama/qwen3:0.6b",
+          },
+        }),
+      }),
+    );
+
+    expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ intent: "runtimeDiscovery", source: "cron.thinking.discovery" }),
+    );
+    expect(runEmbeddedPiAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "ollama", model: "qwen3:0.6b", thinkLevel: "low" }),
     );
   });
 

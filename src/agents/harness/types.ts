@@ -23,6 +23,15 @@ export type AgentHarnessResetParams = {
   reason?: "new" | "reset" | "idle" | "daily" | "compaction" | "deleted" | "unknown";
 };
 
+export type AgentHarnessReplyRuntimeReadinessParams = {
+  config: import("../../config/types.openclaw.js").OpenClawConfig;
+  agentDir: string;
+  workspaceDir: string;
+  provider: string;
+  modelId: string;
+  authProfileId?: string;
+};
+
 export type AgentHarnessResultClassification =
   | "ok"
   | NonNullable<AgentHarnessAttemptResult["agentHarnessResultClassification"]>;
@@ -41,6 +50,7 @@ export type AgentHarness = {
   pluginId?: string;
   deliveryDefaults?: AgentHarnessDeliveryDefaults;
   supports(ctx: AgentHarnessSupportContext): AgentHarnessSupport;
+  prepareReplyRuntime?(params: AgentHarnessReplyRuntimeReadinessParams): Promise<void> | void;
   runAttempt(params: AgentHarnessAttemptParams): Promise<AgentHarnessAttemptResult>;
   classify?(
     result: AgentHarnessAttemptResult,

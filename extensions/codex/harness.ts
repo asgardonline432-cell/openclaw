@@ -36,6 +36,13 @@ export function createCodexAppServerAgentHarness(options?: {
         reason: `provider is not one of: ${[...providerIds].toSorted().join(", ")}`,
       };
     },
+    prepareReplyRuntime: async (params) => {
+      const { getSharedCodexAppServerClient } = await import("./src/app-server/shared-client.js");
+      await getSharedCodexAppServerClient({
+        agentDir: params.agentDir,
+        authProfileId: params.authProfileId,
+      });
+    },
     runAttempt: async (params) => {
       const { runCodexAppServerAttempt } = await import("./src/app-server/run-attempt.js");
       return runCodexAppServerAttempt(params, { pluginConfig: options?.pluginConfig });

@@ -88,6 +88,34 @@ async function resolveSelectedReplyModel(params: {
   };
 }
 
+function resolveSelectedHarnessAuthProfileId(params: {
+  cfg: OpenClawConfig;
+  agentDir: string;
+  provider: string;
+  workspaceDir: string;
+  harnessId: string;
+}): string | undefined {
+  const runtimeAuthPlan = buildAgentRuntimeAuthPlan({
+    provider: params.provider,
+    config: params.cfg,
+    workspaceDir: params.workspaceDir,
+    harnessId: params.harnessId,
+    harnessRuntime: params.harnessId,
+    allowHarnessAuthProfileForwarding: true,
+  });
+  if (!runtimeAuthPlan.harnessAuthProvider) {
+    return undefined;
+  }
+  const authStore = ensureAuthProfileStore(params.agentDir, {
+    allowKeychainPrompt: false,
+  });
+  return resolveAuthProfileOrder({
+    cfg: params.cfg,
+    store: authStore,
+    provider: runtimeAuthPlan.harnessAuthProvider,
+  })[0]?.trim();
+}
+
 export async function prepareReplyRuntimeForChannels(params: {
   cfg: OpenClawConfig;
   workspaceDir?: string;
@@ -103,12 +131,7 @@ export async function prepareReplyRuntimeForChannels(params: {
     defaultProvider: DEFAULT_PROVIDER,
     defaultModel: DEFAULT_MODEL,
   });
-  const selectedHarness = selectAgentHarness({
-    provider: selected.provider,
-    modelId: selected.model,
-    config: params.cfg,
-    agentId: defaultAgentId,
-  });
+  let selectedHarness: ReturnType<typeof selectAgentHarness> | undefined;
   let selectedRuntimeModel:
     | import("@mariozechner/pi-ai").Model<import("@mariozechner/pi-ai").Api>
     | undefined;
@@ -172,6 +195,12 @@ export async function prepareReplyRuntimeForChannels(params: {
       reasons,
     };
   }
+  selectedHarness = selectAgentHarness({
+    provider: selected.provider,
+    modelId: selected.model,
+    config: params.cfg,
+    agentId: defaultAgentId,
+  });
 
   if (
     !(await runPhase(
@@ -242,23 +271,25 @@ export async function prepareReplyRuntimeForChannels(params: {
 
   if (
     !(await runPhase("selected-provider-auth", selected.provider, async () => {
+      if (!selectedHarness) {
+        throw new Error(`No harness selected for ${selected.provider}/${selected.model}.`);
+      }
       if (selectedHarness.id !== "pi") {
-        const runtimeAuthPlan = buildAgentRuntimeAuthPlan({
+        const authProfileId = resolveSelectedHarnessAuthProfileId({
+          cfg: params.cfg,
+          agentDir,
           provider: selected.provider,
-          config: params.cfg,
           workspaceDir,
           harnessId: selectedHarness.id,
-          harnessRuntime: selectedHarness.id,
-          allowHarnessAuthProfileForwarding: true,
         });
-        if (runtimeAuthPlan.harnessAuthProvider) {
-          const authStore = ensureAuthProfileStore(agentDir, {
-            allowKeychainPrompt: false,
-          });
-          resolveAuthProfileOrder({
-            cfg: params.cfg,
-            store: authStore,
-            provider: runtimeAuthPlan.harnessAuthProvider,
+        if (selectedHarness.prepareReplyRuntime) {
+          await selectedHarness.prepareReplyRuntime({
+            config: params.cfg,
+            agentDir,
+            workspaceDir,
+            provider: selected.provider,
+            modelId: selected.model,
+            ...(authProfileId ? { authProfileId } : {}),
           });
         }
         return;

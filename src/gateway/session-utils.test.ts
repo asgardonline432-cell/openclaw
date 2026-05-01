@@ -1694,4 +1694,36 @@ describe("resolveGatewayModelSupportsImages", () => {
     expect(loadGatewayModelCatalog).toHaveBeenNthCalledWith(1, { mode: "cacheOnly" });
     expect(loadGatewayModelCatalog).toHaveBeenNthCalledWith(2, { mode: "runtimeDiscovery" });
   });
+
+  test("retries with runtime discovery when cache-only metadata says text-only for the active model", async () => {
+    const loadGatewayModelCatalog = vi
+      .fn()
+      .mockImplementationOnce(async () => [
+        {
+          id: "gpt-4.1-vision",
+          name: "GPT-4.1 Vision",
+          provider: "openai",
+          input: ["text"],
+        },
+      ])
+      .mockImplementationOnce(async () => [
+        {
+          id: "gpt-4.1-vision",
+          name: "GPT-4.1 Vision",
+          provider: "openai",
+          input: ["text", "image"],
+        },
+      ]);
+
+    await expect(
+      resolveGatewayModelSupportsImages({
+        model: "gpt-4.1-vision",
+        provider: "openai",
+        loadGatewayModelCatalog,
+      }),
+    ).resolves.toBe(true);
+
+    expect(loadGatewayModelCatalog).toHaveBeenNthCalledWith(1, { mode: "cacheOnly" });
+    expect(loadGatewayModelCatalog).toHaveBeenNthCalledWith(2, { mode: "runtimeDiscovery" });
+  });
 });

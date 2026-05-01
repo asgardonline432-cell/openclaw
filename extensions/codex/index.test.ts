@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { createCodexAppServerAgentHarness } from "./harness.js";
 import plugin from "./index.js";
 
+const mocks = vi.hoisted(() => ({
+  getSharedCodexAppServerClient: vi.fn(async () => undefined),
+}));
+
+vi.mock("./src/app-server/shared-client.js", () => ({
+  getSharedCodexAppServerClient: mocks.getSharedCodexAppServerClient,
+}));
+
 describe("codex plugin", () => {
   it("is opt-in by default", () => {
     const manifest = JSON.parse(
@@ -102,5 +110,23 @@ describe("codex plugin", () => {
         requestedRuntime: "auto",
       }),
     ).toMatchObject({ supported: false });
+  });
+
+  it("warms the shared app-server through the harness readiness hook", async () => {
+    const harness = createCodexAppServerAgentHarness();
+
+    await harness.prepareReplyRuntime?.({
+      config: {} as never,
+      agentDir: "/tmp/openclaw-agent-codex",
+      workspaceDir: "/tmp/openclaw-workspace",
+      provider: "openai",
+      modelId: "gpt-5.4",
+      authProfileId: "openai-codex:work",
+    });
+
+    expect(mocks.getSharedCodexAppServerClient).toHaveBeenCalledWith({
+      agentDir: "/tmp/openclaw-agent-codex",
+      authProfileId: "openai-codex:work",
+    });
   });
 });

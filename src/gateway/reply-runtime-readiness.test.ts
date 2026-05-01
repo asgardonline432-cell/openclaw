@@ -309,8 +309,23 @@ describe("reply-runtime readiness", () => {
     );
   });
 
-  it("uses harness auth readiness for non-pi runtimes without forcing provider api-key auth", async () => {
-    hoisted.selectAgentHarness.mockReturnValueOnce({ id: "codex", label: "Codex" });
+  it("loads runtime plugins before selecting and warming a non-pi harness", async () => {
+    const callOrder: string[] = [];
+    const prepareReplyRuntime = vi.fn(async () => {
+      callOrder.push("prepareReplyRuntime");
+    });
+    hoisted.ensureRuntimePluginsLoaded.mockImplementation(() => {
+      callOrder.push("ensureRuntimePluginsLoaded");
+    });
+    hoisted.resolveAuthProfileOrder.mockReturnValueOnce(["openai-codex:work"]);
+    hoisted.selectAgentHarness.mockImplementationOnce(() => {
+      callOrder.push("selectAgentHarness");
+      return {
+        id: "codex",
+        label: "Codex",
+        prepareReplyRuntime,
+      };
+    });
 
     const result = await prepareReplyRuntimeForChannels({
       cfg: {
@@ -333,6 +348,25 @@ describe("reply-runtime readiness", () => {
         provider: "openai-codex",
       }),
     );
+    expect(prepareReplyRuntime).toHaveBeenCalledWith({
+      config: expect.objectContaining({
+        agents: expect.objectContaining({
+          defaults: expect.objectContaining({
+            model: expect.objectContaining({ primary: "openai/gpt-5.4" }),
+          }),
+        }),
+      }),
+      agentDir: expect.any(String),
+      workspaceDir: "/tmp/openclaw-workspace",
+      provider: "openai",
+      modelId: "gpt-5.4",
+      authProfileId: "openai-codex:work",
+    });
+    expect(callOrder).toEqual([
+      "ensureRuntimePluginsLoaded",
+      "selectAgentHarness",
+      "prepareReplyRuntime",
+    ]);
   });
 
   it("keeps createOpenClawTools contracts unchanged before and after readiness warmup", async () => {
