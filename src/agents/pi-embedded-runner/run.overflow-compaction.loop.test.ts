@@ -268,7 +268,10 @@ describe("overflow compaction in run loop", () => {
       )
       .mockResolvedValueOnce(makeAttemptResult({ promptError: null }));
 
-    const result = await runEmbeddedPiAgent(baseParams);
+    const result = await runEmbeddedPiAgent({
+      ...baseParams,
+      transcriptPrompt: "original visible ask",
+    });
 
     expect(mockedCompactDirect).not.toHaveBeenCalled();
     expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(2);
@@ -278,9 +281,15 @@ describe("overflow compaction in run loop", () => {
         prompt: expect.stringContaining("Continue from the current transcript"),
       }),
     );
+    expect(mockedRunEmbeddedAttempt).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        transcriptPrompt: expect.stringContaining("Continue from the current transcript"),
+      }),
+    );
     expect(mockedRunEmbeddedAttempt).not.toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ prompt: baseParams.prompt }),
+      expect.objectContaining({ transcriptPrompt: "original visible ask" }),
     );
     expect(mockedLog.info).toHaveBeenCalledWith(
       expect.stringContaining("retrying from current transcript"),
@@ -342,7 +351,10 @@ describe("overflow compaction in run loop", () => {
       }),
     );
 
-    const result = await runEmbeddedPiAgent(baseParams);
+    const result = await runEmbeddedPiAgent({
+      ...baseParams,
+      transcriptPrompt: "original visible ask",
+    });
 
     expect(mockedCompactDirect).toHaveBeenCalledTimes(1);
     expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(2);
@@ -352,9 +364,15 @@ describe("overflow compaction in run loop", () => {
         prompt: expect.stringContaining("Continue from the current transcript"),
       }),
     );
+    expect(mockedRunEmbeddedAttempt).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        transcriptPrompt: expect.stringContaining("Continue from the current transcript"),
+      }),
+    );
     expect(mockedRunEmbeddedAttempt).not.toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ prompt: baseParams.prompt }),
+      expect.objectContaining({ transcriptPrompt: "original visible ask" }),
     );
     expect(result.meta.error).toBeUndefined();
   });

@@ -965,8 +965,9 @@ export async function runEmbeddedPiAgent(
           attemptedThinking.add(thinkLevel);
           await fs.mkdir(resolvedWorkspace, { recursive: true });
 
+          const attemptPromptOverride = nextAttemptPromptOverride;
           const basePrompt =
-            nextAttemptPromptOverride ??
+            attemptPromptOverride ??
             (provider === "anthropic" ? scrubAnthropicRefusalMagic(params.prompt) : params.prompt);
           nextAttemptPromptOverride = null;
           const promptAdditions = [
@@ -1047,7 +1048,7 @@ export async function runEmbeddedPiAgent(
             contextTokenBudget: ctxInfo.tokens,
             skillsSnapshot: params.skillsSnapshot,
             prompt,
-            transcriptPrompt: params.transcriptPrompt,
+            transcriptPrompt: attemptPromptOverride ?? params.transcriptPrompt,
             images: params.images,
             imageOrder: params.imageOrder,
             clientTools: params.clientTools,
