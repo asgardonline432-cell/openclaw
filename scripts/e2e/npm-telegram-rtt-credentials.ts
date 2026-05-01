@@ -1,7 +1,6 @@
 #!/usr/bin/env -S node --import tsx
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 type CredentialSource = "convex" | "env";
@@ -402,102 +401,6 @@ async function postLeaseAction(action: "heartbeat" | "release", lease: LeaseMeta
   assertOk(payload, action);
 }
 
-function quoteShell(value: string) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-async function writeEnvFile(pathname: string, payload: TelegramCredentialPayload) {
-  const lines = [
-    `export OPENCLAW_QA_TELEGRAM_GROUP_ID=${quoteShell(payload.groupId)}`,
-    `export OPENCLAW_QA_TELEGRAM_DRIVER_BOT_TOKEN=${quoteShell(payload.driverToken)}`,
-    `export OPENCLAW_QA_TELEGRAM_SUT_BOT_TOKEN=${quoteShell(payload.sutToken)}`,
-  ];
-  await fs.writeFile(pathname, `${lines.join("\n")}\n`, { mode: 0o600 });
-}
-
-async function writeLeaseFile(pathname: string, lease: LeaseMetadata) {
-  await fs.writeFile(pathname, `${JSON.stringify(lease)}\n`, { mode: 0o600 });
-}
-
-async function readLeaseFile(pathname: string): Promise<LeaseMetadata> {
-  const raw = JSON.parse(await fs.readFile(pathname, "utf8")) as unknown;
-  const parsed = asRecord(raw);
-  const source = parsed.source === "convex" ? "convex" : "env";
-  return {
-    source,
-    kind: "telegram",
-    actorRole:
-      parsed.actorRole === "ci" || parsed.actorRole === "maintainer" ? parsed.actorRole : undefined,
-    ownerId: typeof parsed.ownerId === "string" ? parsed.ownerId : undefined,
-    credentialId: typeof parsed.credentialId === "string" ? parsed.credentialId : undefined,
-    leaseToken: typeof parsed.leaseToken === "string" ? parsed.leaseToken : undefined,
-    leaseTtlMs: typeof parsed.leaseTtlMs === "number" ? parsed.leaseTtlMs : 0,
-    heartbeatIntervalMs:
-      typeof parsed.heartbeatIntervalMs === "number" ? parsed.heartbeatIntervalMs : 0,
-  };
-}
-
-async function acquireCommand(args: string[]) {
-  const envFileIndex = args.indexOf("--env-file");
-  const leaseFileIndex = args.indexOf("--lease-file");
-  const envFile = envFileIndex >= 0 ? args[envFileIndex + 1] : undefined;
-  const leaseFile = leaseFileIndex >= 0 ? args[leaseFileIndex + 1] : undefined;
-  if (!envFile || !leaseFile) {
-    throw new Error("usage: acquire --env-file PATH --lease-file PATH");
-  }
-  const source = resolveCredentialSource(process.env);
-  const acquired =
-    source === "convex"
-      ? await acquireConvex(process.env)
-      : {
-          payload: resolveEnvPayload(process.env),
-          lease: {
-            source: "env" as const,
-            kind: "telegram" as const,
-            leaseTtlMs: 0,
-            heartbeatIntervalMs: 0,
-          },
-        };
-  await writeEnvFile(envFile, acquired.payload);
-  await writeLeaseFile(leaseFile, acquired.lease);
-  process.stderr.write(`[rtt] credential source: ${acquired.lease.source}\n`);
-}
-
-async function heartbeatCommand(args: string[]) {
-  const leaseFileIndex = args.indexOf("--lease-file");
-  const leaseFile = leaseFileIndex >= 0 ? args[leaseFileIndex + 1] : undefined;
-  if (!leaseFile) {
-    throw new Error("usage: heartbeat --lease-file PATH");
-  }
-  const lease = await readLeaseFile(leaseFile);
-  if (lease.source !== "convex" || lease.heartbeatIntervalMs < 1) {
-    return;
-  }
-  let stopped = false;
-  process.once("SIGTERM", () => {
-    stopped = true;
-  });
-  process.once("SIGINT", () => {
-    stopped = true;
-  });
-  while (!stopped) {
-    await new Promise((resolve) => setTimeout(resolve, lease.heartbeatIntervalMs));
-    if (!stopped) {
-      await postLeaseAction("heartbeat", lease);
-    }
-  }
-}
-
-async function releaseCommand(args: string[]) {
-  const leaseFileIndex = args.indexOf("--lease-file");
-  const leaseFile = leaseFileIndex >= 0 ? args[leaseFileIndex + 1] : undefined;
-  if (!leaseFile) {
-    throw new Error("usage: release --lease-file PATH");
-  }
-  const lease = await readLeaseFile(leaseFile);
-  await postLeaseAction("release", lease);
-}
-
 async function runCommand(args: string[]) {
   const separator = args.indexOf("--");
   const command = separator >= 0 ? args[separator + 1] : undefined;
@@ -564,16 +467,10 @@ async function runCommand(args: string[]) {
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
-  if (command === "acquire") {
-    await acquireCommand(args);
-  } else if (command === "heartbeat") {
-    await heartbeatCommand(args);
-  } else if (command === "release") {
-    await releaseCommand(args);
-  } else if (command === "run") {
+  if (command === "run") {
     await runCommand(args);
   } else {
-    throw new Error("usage: npm-telegram-rtt-credentials.ts <acquire|heartbeat|release|run>");
+    throw new Error("usage: npm-telegram-rtt-credentials.ts run -- COMMAND [ARGS...]");
   }
 }
 

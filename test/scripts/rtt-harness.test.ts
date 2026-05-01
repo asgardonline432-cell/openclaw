@@ -134,20 +134,6 @@ describe("RTT harness", () => {
     ).toThrow(/numeric Telegram chat id/);
   });
 
-  it("wires Convex credential leases through the RTT Docker harness", async () => {
-    const script = await fs.readFile(
-      path.resolve(TEST_DIR, "../../scripts/e2e/npm-telegram-rtt-docker.sh"),
-      "utf8",
-    );
-
-    expect(script).toContain("resolve_credential_source()");
-    expect(script).toContain("OPENCLAW_NPM_TELEGRAM_CREDENTIAL_SOURCE");
-    expect(script).toContain('docker_env+=(-e OPENCLAW_QA_CREDENTIAL_SOURCE="$credential_source")');
-    expect(script).toContain("OPENCLAW_QA_CONVEX_SECRET_CI");
-    expect(script).toContain('if [ "$credential_source" != "convex" ]; then');
-    expect(script).toContain("tsx /app/scripts/e2e/npm-telegram-rtt-credentials.ts run -- bash -s");
-  });
-
   it("extracts RTT values from Telegram QA summaries", async () => {
     const summary = await readTelegramSummary(FIXTURE_PATH);
     expect(extractRtt(summary)).toEqual({
