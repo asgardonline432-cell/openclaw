@@ -5,6 +5,8 @@ import { defaultRuntime } from "../runtime.js";
 const agentCommandFromIngressMock = vi.fn();
 const loadGatewayModelCatalogMock = vi.fn();
 const resolveVisibleModelCatalogMock = vi.fn(({ catalog }: { catalog: unknown[] }) => catalog);
+const resolveThinkingDefaultMock = vi.fn(() => undefined);
+const loadSessionEntryMock = vi.fn();
 let registeredListener: ((evt: unknown) => void) | undefined;
 
 vi.mock("../agents/agent-command.js", () => ({
@@ -49,7 +51,7 @@ vi.mock("../agents/model-catalog-visibility.js", () => ({
 
 vi.mock("../agents/model-selection.js", () => ({
   buildAllowedModelSet: ({ catalog }: { catalog: unknown[] }) => ({ allowedCatalog: catalog }),
-  resolveThinkingDefault: () => undefined,
+  resolveThinkingDefault: (...args: unknown[]) => resolveThinkingDefaultMock(...args),
 }));
 
 vi.mock("../agents/workspace.js", () => ({
@@ -90,11 +92,7 @@ vi.mock("../gateway/session-utils.js", () => ({
     storePath: "/tmp/openclaw-sessions.json",
     store: {},
   }),
-  loadSessionEntry: (sessionKey: string) => ({
-    cfg: {},
-    canonicalKey: sessionKey,
-    entry: {},
-  }),
+  loadSessionEntry: (sessionKey: string) => loadSessionEntryMock(sessionKey),
   migrateAndPruneGatewaySessionStoreKey: ({ key }: { key: string }) => ({ primaryKey: key }),
   readSessionMessages: () => [],
   resolveGatewaySessionStoreTarget: ({ key }: { key: string }) => ({
@@ -147,9 +145,15 @@ describe("EmbeddedTuiBackend", () => {
   beforeEach(() => {
     agentCommandFromIngressMock.mockReset();
     loadGatewayModelCatalogMock.mockReset().mockResolvedValue([]);
+    resolveThinkingDefaultMock.mockReset().mockReturnValue(undefined);
     resolveVisibleModelCatalogMock
       .mockReset()
       .mockImplementation(({ catalog }: { catalog: unknown[] }) => catalog);
+    loadSessionEntryMock.mockReset().mockImplementation((sessionKey: string) => ({
+      cfg: {},
+      canonicalKey: sessionKey,
+      entry: {},
+    }));
     registeredListener = undefined;
     setEmbeddedMode(false);
     defaultRuntime.log = originalRuntimeLog;
@@ -492,5 +496,29 @@ describe("EmbeddedTuiBackend", () => {
         reasoning: undefined,
       },
     ]);
+  });
+
+  it("uses cachePreferred catalog policy for embedded history thinking defaults", async () => {
+    const { EmbeddedTuiBackend } = await import("./embedded-backend.js");
+    loadSessionEntryMock.mockReturnValueOnce({
+      cfg: {},
+      canonicalKey: "agent:main:main",
+      entry: {},
+    });
+    loadGatewayModelCatalogMock.mockResolvedValueOnce([
+      { provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+    ]);
+    resolveThinkingDefaultMock.mockReturnValueOnce("adaptive");
+
+    const backend = new EmbeddedTuiBackend();
+    const history = (await backend.loadHistory({
+      sessionKey: "agent:main:main",
+      limit: 50,
+    })) as {
+      thinkingLevel?: string;
+    };
+
+    expect(loadGatewayModelCatalogMock).toHaveBeenCalledWith({ mode: "cachePreferred" });
+    expect(history.thinkingLevel).toBe("adaptive");
   });
 });

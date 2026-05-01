@@ -452,6 +452,31 @@ describe("createModelSelectionState respects session model override", () => {
     expect(state.model).toBe("kimi-code");
   });
 
+  it("uses runtime discovery for stored override metadata when cache-only misses the selected model", async () => {
+    vi.mocked(loadModelCatalog).mockClear();
+    vi.mocked(loadModelCatalog).mockImplementationOnce(async (params?: { intent?: string }) =>
+      params?.intent === "runtimeDiscovery"
+        ? [{ provider: "openai", id: "gpt-5.4", name: "GPT-5.4", reasoning: true }]
+        : [{ provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" }],
+    );
+
+    const state = await resolveState(
+      makeEntry({
+        providerOverride: "openai",
+        modelOverride: "gpt-5.4",
+      }),
+    );
+
+    await expect(state.resolveDefaultReasoningLevel()).resolves.toBe("on");
+    await expect(state.resolveDefaultThinkingLevel()).resolves.toBe("medium");
+    expect(loadModelCatalog).toHaveBeenCalledOnce();
+    expect(loadModelCatalog).toHaveBeenCalledWith({
+      config: {} as OpenClawConfig,
+      intent: "runtimeDiscovery",
+      source: "auto-reply.default-reasoning",
+    });
+  });
+
   it("falls back to default when no modelOverride is set", async () => {
     const state = await resolveState(makeEntry());
 

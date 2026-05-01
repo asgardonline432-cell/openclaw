@@ -132,6 +132,7 @@ export async function createModelSelectionState(params: {
   let modelCatalog: ModelCatalog | null = null;
   let resetModelOverride = false;
   let resetModelOverrideRef: string | undefined;
+  let selectedModelUsesStoredOverride = false;
   const agentEntry = params.agentId ? resolveAgentConfig(cfg, params.agentId) : undefined;
   const directStoredOverride = resolvePersistedOverrideModelRef({
     defaultProvider,
@@ -228,6 +229,7 @@ export async function createModelSelectionState(params: {
     if (allowedModelKeys.size === 0 || allowedModelKeys.has(key)) {
       provider = normalizedStoredOverride.provider;
       model = normalizedStoredOverride.model;
+      selectedModelUsesStoredOverride = true;
     }
   }
 
@@ -250,6 +252,22 @@ export async function createModelSelectionState(params: {
   }
 
   let thinkingCatalog: ModelCatalog | undefined;
+  const loadSelectedModelMetadataCatalog = async (
+    source: "auto-reply.default-thinking" | "auto-reply.default-reasoning",
+  ) => {
+    modelCatalog = await (
+      await loadModelCatalogRuntime()
+    ).loadModelCatalog({
+      config: cfg,
+      intent: selectedModelUsesStoredOverride ? "runtimeDiscovery" : "cacheOnly",
+      source,
+    });
+    logStage(
+      `catalog-loaded-${source.endsWith("thinking") ? "for-thinking" : "for-reasoning"}`,
+      `entries=${modelCatalog.length}`,
+    );
+    return modelCatalog;
+  };
   const resolveThinkingCatalog = async () => {
     if (thinkingCatalog) {
       return thinkingCatalog;
@@ -262,14 +280,7 @@ export async function createModelSelectionState(params: {
     const shouldHydrateRuntimeCatalog =
       !modelCatalog && (!selectedCatalogEntry || selectedCatalogEntry.reasoning === undefined);
     if (shouldHydrateRuntimeCatalog) {
-      modelCatalog = await (
-        await loadModelCatalogRuntime()
-      ).loadModelCatalog({
-        config: cfg,
-        intent: "cacheOnly",
-        source: "auto-reply.default-thinking",
-      });
-      logStage("catalog-loaded-for-thinking", `entries=${modelCatalog.length}`);
+      modelCatalog = await loadSelectedModelMetadataCatalog("auto-reply.default-thinking");
       const runtimeSelectedEntry = modelCatalog.find(
         (entry) => entry.provider === provider && entry.id === model,
       );
@@ -309,15 +320,16 @@ export async function createModelSelectionState(params: {
 
   const resolveDefaultReasoningLevel = async (): Promise<"on" | "off"> => {
     let catalogForReasoning = modelCatalog ?? allowedModelCatalog;
-    if (!catalogForReasoning || catalogForReasoning.length === 0) {
-      modelCatalog = await (
-        await loadModelCatalogRuntime()
-      ).loadModelCatalog({
-        config: cfg,
-        intent: "cacheOnly",
-        source: "auto-reply.default-reasoning",
-      });
-      logStage("catalog-loaded-for-reasoning", `entries=${modelCatalog.length}`);
+    const selectedCatalogEntry = catalogForReasoning?.find(
+      (entry) => entry.provider === provider && entry.id === model,
+    );
+    const shouldHydrateRuntimeCatalog =
+      !catalogForReasoning ||
+      catalogForReasoning.length === 0 ||
+      (selectedModelUsesStoredOverride &&
+        (!selectedCatalogEntry || selectedCatalogEntry.reasoning === undefined));
+    if (shouldHydrateRuntimeCatalog) {
+      modelCatalog = await loadSelectedModelMetadataCatalog("auto-reply.default-reasoning");
       catalogForReasoning = modelCatalog;
     }
     return resolveReasoningDefault({
