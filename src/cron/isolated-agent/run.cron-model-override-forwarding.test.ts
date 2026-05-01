@@ -200,6 +200,61 @@ describe("runCronIsolatedAgentTurn — cron model override forwarding (#58065)",
     );
   });
 
+  it("falls back to runtime discovery when cache-only thinking metadata omits the selected model", async () => {
+    resolveAllowedModelRefMock.mockImplementation(() => ({
+      ref: { provider: "ollama", model: "qwen3:0.6b" },
+    }));
+    loadModelCatalogMock
+      .mockResolvedValueOnce([{ provider: "openai", id: "gpt-5.4", name: "GPT-5.4" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          provider: "ollama",
+          id: "qwen3:0.6b",
+          name: "qwen3:0.6b",
+          reasoning: true,
+        },
+      ]);
+    isThinkingLevelSupportedMock.mockImplementation(
+      ({ catalog, level }: { catalog?: Array<{ reasoning?: boolean }>; level?: string }) =>
+        level === "medium" && catalog?.[0]?.reasoning === true,
+    );
+    resolveSupportedThinkingLevelMock.mockReturnValue("off");
+    runWithModelFallbackMock.mockImplementation(async ({ provider, model, run }) => {
+      const result = await run(provider, model);
+      return { result, provider, model, attempts: [] };
+    });
+
+    await runCronIsolatedAgentTurn(
+      makeParams({
+        job: makeJob({
+          payload: {
+            kind: "agentTurn",
+            message: "summarize",
+            model: "ollama/qwen3:0.6b",
+            thinking: "medium",
+          },
+        }),
+      }),
+    );
+
+    expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ intent: "cacheOnly", source: "cron.model-selection" }),
+    );
+    expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ intent: "cacheOnly", source: "cron.thinking" }),
+    );
+    expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ intent: "runtimeDiscovery", source: "cron.thinking.discovery" }),
+    );
+    expect(runEmbeddedPiAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "ollama", model: "qwen3:0.6b", thinkLevel: "medium" }),
+    );
+  });
+
   it("does not add agent primary model as fallback when cron payload model is set", async () => {
     // No per-agent fallbacks configured — resolveAgentModelFallbacksOverride
     // returns undefined in that case. Before the fix, this caused

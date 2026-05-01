@@ -1205,38 +1205,62 @@ export async function resolveGatewayModelSupportsImages(params: {
   if (!params.model) {
     return true;
   }
+  const modelId = params.model;
 
   try {
-    const catalog = await params.loadGatewayModelCatalog();
-    const modelEntry = findModelCatalogEntry(catalog, {
-      provider: params.provider,
-      modelId: params.model,
-    });
-    const normalizedProvider = normalizeOptionalLowercaseString(
-      params.provider ?? modelEntry?.provider,
-    );
-    const normalizedCandidates = [
-      normalizeLowercaseStringOrEmpty(params.model),
-      normalizeLowercaseStringOrEmpty(modelEntry?.name),
-    ].filter(Boolean);
-    if (modelEntry) {
-      if (modelSupportsInput(modelEntry, "image")) {
-        return true;
-      }
-      // Legacy safety shim for stale persisted Foundry rows that predate
-      // provider-owned capability normalization.
-      if (
-        normalizedProvider === "microsoft-foundry" &&
-        normalizedCandidates.some(
-          (candidate) =>
-            candidate.startsWith("gpt-") ||
-            candidate.startsWith("o1") ||
-            candidate.startsWith("o3") ||
-            candidate.startsWith("o4") ||
-            candidate === "computer-use-preview",
-        )
-      ) {
-        return true;
+    const evaluateCatalog = async (mode: "cacheOnly" | "runtimeDiscovery") => {
+      const catalog = await params.loadGatewayModelCatalog({ mode });
+      const modelEntry = findModelCatalogEntry(catalog, {
+        provider: params.provider,
+        modelId,
+      });
+      const normalizedProvider = normalizeOptionalLowercaseString(
+        params.provider ?? modelEntry?.provider,
+      );
+      const normalizedCandidates = [
+        normalizeLowercaseStringOrEmpty(modelId),
+        normalizeLowercaseStringOrEmpty(modelEntry?.name),
+      ].filter(Boolean);
+      return { modelEntry, normalizedProvider, normalizedCandidates };
+    };
+    const resolveImageSupport = (state: {
+      modelEntry?: ModelCatalogEntry;
+      normalizedProvider?: string;
+      normalizedCandidates: string[];
+    }): boolean | undefined => {
+      const { modelEntry, normalizedProvider, normalizedCandidates } = state;
+      if (modelEntry) {
+        if (modelSupportsInput(modelEntry, "image")) {
+          return true;
+        }
+        // Legacy safety shim for stale persisted Foundry rows that predate
+        // provider-owned capability normalization.
+        if (
+          normalizedProvider === "microsoft-foundry" &&
+          normalizedCandidates.some(
+            (candidate) =>
+              candidate.startsWith("gpt-") ||
+              candidate.startsWith("o1") ||
+              candidate.startsWith("o3") ||
+              candidate.startsWith("o4") ||
+              candidate === "computer-use-preview",
+          )
+        ) {
+          return true;
+        }
+        if (
+          normalizedProvider === "claude-cli" &&
+          normalizedCandidates.some(
+            (candidate) =>
+              candidate === "opus" ||
+              candidate === "sonnet" ||
+              candidate === "haiku" ||
+              candidate.startsWith("claude-"),
+          )
+        ) {
+          return true;
+        }
+        return false;
       }
       if (
         normalizedProvider === "claude-cli" &&
@@ -1250,19 +1274,19 @@ export async function resolveGatewayModelSupportsImages(params: {
       ) {
         return true;
       }
-      return false;
+      return undefined;
+    };
+
+    const cached = await evaluateCatalog("cacheOnly");
+    const cachedSupport = resolveImageSupport(cached);
+    if (cachedSupport !== undefined) {
+      return cachedSupport;
     }
-    if (
-      normalizedProvider === "claude-cli" &&
-      normalizedCandidates.some(
-        (candidate) =>
-          candidate === "opus" ||
-          candidate === "sonnet" ||
-          candidate === "haiku" ||
-          candidate.startsWith("claude-"),
-      )
-    ) {
-      return true;
+
+    const discovered = await evaluateCatalog("runtimeDiscovery");
+    const discoveredSupport = resolveImageSupport(discovered);
+    if (discoveredSupport !== undefined) {
+      return discoveredSupport;
     }
     return false;
   } catch {

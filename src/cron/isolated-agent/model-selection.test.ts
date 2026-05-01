@@ -74,4 +74,48 @@ describe("resolveCronModelSelection", () => {
       source: "cron.model-selection",
     });
   });
+
+  it("falls back to runtime discovery when cache-only validation rejects an explicit model", async () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          model: { primary: "openai/gpt-5.4" },
+        },
+      },
+    } as OpenClawConfig;
+    hoisted.loadModelCatalog
+      .mockResolvedValueOnce([{ provider: "openai", id: "gpt-5.4", name: "GPT-5.4" }])
+      .mockResolvedValueOnce([{ provider: "ollama", id: "qwen3:0.6b", name: "qwen3:0.6b" }]);
+    hoisted.resolveAllowedModelRef
+      .mockReturnValueOnce({ error: "model not allowed: ollama/qwen3:0.6b" })
+      .mockReturnValueOnce({
+        ref: { provider: "ollama", model: "qwen3:0.6b" },
+        key: "ollama/qwen3:0.6b",
+      });
+
+    const result = await resolveCronModelSelection({
+      cfg,
+      cfgWithAgentDefaults: cfg,
+      agentConfigOverride: undefined,
+      sessionEntry: {},
+      payload: {
+        kind: "agentTurn",
+        message: "hi",
+        model: "ollama/qwen3:0.6b",
+      } as never,
+      isGmailHook: false,
+    });
+
+    expect(result).toEqual({ ok: true, provider: "ollama", model: "qwen3:0.6b" });
+    expect(hoisted.loadModelCatalog).toHaveBeenNthCalledWith(1, {
+      config: cfg,
+      intent: "cacheOnly",
+      source: "cron.model-selection",
+    });
+    expect(hoisted.loadModelCatalog).toHaveBeenNthCalledWith(2, {
+      config: cfg,
+      intent: "runtimeDiscovery",
+      source: "cron.model-selection.discovery",
+    });
+  });
 });

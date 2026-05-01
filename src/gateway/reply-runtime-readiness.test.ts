@@ -21,10 +21,13 @@ const hoisted = vi.hoisted(() => ({
     mode: "api-key",
     profileId: "default",
   })),
+  ensureAuthProfileStore: vi.fn(() => ({ version: 1, profiles: {} })),
+  resolveAuthProfileOrder: vi.fn(() => []),
   loadModelCatalog: vi.fn(async () => [
     { provider: "openai", id: "gpt-5.4", name: "GPT-5.4", reasoning: true },
     { provider: "google", id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", reasoning: true },
   ]),
+  selectAgentHarness: vi.fn(() => ({ id: "pi", label: "PI", supports: vi.fn() })),
   resolveProviderRuntimePlugin: vi.fn(() => ({ id: "mock-provider-plugin" })),
   prepareProviderRuntimeAuth: vi.fn(async () => undefined),
   resolveOwningPluginIdsForProvider: vi.fn(() => ["mock-provider-plugin"]),
@@ -51,9 +54,15 @@ vi.mock("../agents/model-auth.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../agents/model-auth.js")>();
   return {
     ...actual,
+    ensureAuthProfileStore: hoisted.ensureAuthProfileStore,
     getApiKeyForModel: hoisted.getApiKeyForModel,
+    resolveAuthProfileOrder: hoisted.resolveAuthProfileOrder,
   };
 });
+
+vi.mock("../agents/harness/selection.js", () => ({
+  selectAgentHarness: hoisted.selectAgentHarness,
+}));
 
 vi.mock("../agents/model-catalog.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../agents/model-catalog.js")>();
@@ -246,8 +255,11 @@ describe("reply-runtime readiness", () => {
   beforeEach(() => {
     resetReplyRuntimeReadinessMonitorForTest();
     hoisted.ensureRuntimePluginsLoaded.mockClear();
+    hoisted.ensureAuthProfileStore.mockClear();
     hoisted.getApiKeyForModel.mockClear();
     hoisted.loadModelCatalog.mockClear();
+    hoisted.resolveAuthProfileOrder.mockClear();
+    hoisted.selectAgentHarness.mockReset().mockReturnValue({ id: "pi", label: "PI" });
     hoisted.resolveProviderRuntimePlugin.mockClear();
     hoisted.prepareProviderRuntimeAuth.mockClear();
     hoisted.resolveOwningPluginIdsForProvider.mockClear();
@@ -293,6 +305,32 @@ describe("reply-runtime readiness", () => {
           apiKey: "__aws_sdk_auth__",
           authMode: "aws-sdk",
         }),
+      }),
+    );
+  });
+
+  it("uses harness auth readiness for non-pi runtimes without forcing provider api-key auth", async () => {
+    hoisted.selectAgentHarness.mockReturnValueOnce({ id: "codex", label: "Codex" });
+
+    const result = await prepareReplyRuntimeForChannels({
+      cfg: {
+        agents: {
+          defaults: {
+            model: { primary: "openai/gpt-5.4" },
+            agentRuntime: { id: "codex", fallback: "none" },
+          },
+        },
+      } as OpenClawConfig,
+      workspaceDir: "/tmp/openclaw-workspace",
+    });
+
+    expect(result.status).toBe("ready");
+    expect(hoisted.getApiKeyForModel).not.toHaveBeenCalled();
+    expect(hoisted.prepareProviderRuntimeAuth).not.toHaveBeenCalled();
+    expect(hoisted.ensureAuthProfileStore).toHaveBeenCalled();
+    expect(hoisted.resolveAuthProfileOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "openai-codex",
       }),
     );
   });

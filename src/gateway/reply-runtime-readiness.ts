@@ -4,10 +4,16 @@ import {
   resolveDefaultAgentId,
 } from "../agents/agent-scope.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
-import { getApiKeyForModel } from "../agents/model-auth.js";
+import { selectAgentHarness } from "../agents/harness/selection.js";
+import {
+  ensureAuthProfileStore,
+  getApiKeyForModel,
+  resolveAuthProfileOrder,
+} from "../agents/model-auth.js";
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import { resolveConfiguredModelRef } from "../agents/model-selection.js";
 import { createOpenClawTools } from "../agents/openclaw-tools.js";
+import { buildAgentRuntimeAuthPlan } from "../agents/runtime-plan/auth.js";
 import { ensureRuntimePluginsLoaded } from "../agents/runtime-plugins.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { formatErrorMessage } from "../infra/errors.js";
@@ -96,6 +102,12 @@ export async function prepareReplyRuntimeForChannels(params: {
     cfg: params.cfg,
     defaultProvider: DEFAULT_PROVIDER,
     defaultModel: DEFAULT_MODEL,
+  });
+  const selectedHarness = selectAgentHarness({
+    provider: selected.provider,
+    modelId: selected.model,
+    config: params.cfg,
+    agentId: defaultAgentId,
   });
   let selectedRuntimeModel:
     | import("@mariozechner/pi-ai").Model<import("@mariozechner/pi-ai").Api>
@@ -230,6 +242,27 @@ export async function prepareReplyRuntimeForChannels(params: {
 
   if (
     !(await runPhase("selected-provider-auth", selected.provider, async () => {
+      if (selectedHarness.id !== "pi") {
+        const runtimeAuthPlan = buildAgentRuntimeAuthPlan({
+          provider: selected.provider,
+          config: params.cfg,
+          workspaceDir,
+          harnessId: selectedHarness.id,
+          harnessRuntime: selectedHarness.id,
+          allowHarnessAuthProfileForwarding: true,
+        });
+        if (runtimeAuthPlan.harnessAuthProvider) {
+          const authStore = ensureAuthProfileStore(agentDir, {
+            allowKeychainPrompt: false,
+          });
+          resolveAuthProfileOrder({
+            cfg: params.cfg,
+            store: authStore,
+            provider: runtimeAuthPlan.harnessAuthProvider,
+          });
+        }
+        return;
+      }
       const auth = await getApiKeyForModel({
         model: await resolveRuntimeModel(),
         cfg: params.cfg,

@@ -112,6 +112,37 @@ describe("loadGatewayModelCatalog", () => {
     });
   });
 
+  it("does not let a cache-only subset satisfy cache-preferred requests", async () => {
+    const cacheOnlyCatalog = [model("gpt-5.4")];
+    const runtimeDiscoveryCatalog = [model("gpt-5.4"), model("claude-opus-4.6")];
+    const loadModelCatalog = vi
+      .fn<LoadModelCatalogForTest>()
+      .mockResolvedValueOnce(cacheOnlyCatalog)
+      .mockResolvedValueOnce(runtimeDiscoveryCatalog);
+
+    await expect(loadGatewayModelCatalog({ getConfig, loadModelCatalog })).resolves.toBe(
+      cacheOnlyCatalog,
+    );
+    await expect(
+      loadGatewayModelCatalog({
+        getConfig,
+        loadModelCatalog,
+        mode: "cachePreferred",
+      }),
+    ).resolves.toBe(runtimeDiscoveryCatalog);
+
+    expect(loadModelCatalog).toHaveBeenNthCalledWith(1, {
+      config: getConfig(),
+      intent: "cacheOnly",
+      source: "gateway.model-catalog",
+    });
+    expect(loadModelCatalog).toHaveBeenNthCalledWith(2, {
+      config: getConfig(),
+      intent: "runtimeDiscovery",
+      source: "gateway.model-catalog.runtime-discovery",
+    });
+  });
+
   it("does not cache an empty catalog so the next request retries", async () => {
     const emptyCatalog: GatewayModelChoice[] = [];
     const freshCatalog = [model("gpt-5.5")];

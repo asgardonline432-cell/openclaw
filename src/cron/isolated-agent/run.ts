@@ -490,10 +490,27 @@ async function prepareCronRunContext(params: {
     ...input.cfg,
     agents: Object.assign({}, input.cfg.agents, { defaults: agentCfg }),
   };
-  let catalog: Awaited<ReturnType<CronModelCatalogRuntime["loadModelCatalog"]>> | undefined;
-  const loadCatalog = async () => {
-    if (!catalog) {
-      catalog = await (
+  let cacheOnlyCatalog:
+    | Awaited<ReturnType<CronModelCatalogRuntime["loadModelCatalog"]>>
+    | undefined;
+  let runtimeDiscoveryCatalog:
+    | Awaited<ReturnType<CronModelCatalogRuntime["loadModelCatalog"]>>
+    | undefined;
+  const loadCatalog = async (intent: "cacheOnly" | "runtimeDiscovery" = "cacheOnly") => {
+    if (intent === "runtimeDiscovery") {
+      if (!runtimeDiscoveryCatalog) {
+        runtimeDiscoveryCatalog = await (
+          await loadCronModelCatalogRuntime()
+        ).loadModelCatalog({
+          config: cfgWithAgentDefaults,
+          intent: "runtimeDiscovery",
+          source: "cron.thinking.discovery",
+        });
+      }
+      return runtimeDiscoveryCatalog;
+    }
+    if (!cacheOnlyCatalog) {
+      cacheOnlyCatalog = await (
         await loadCronModelCatalogRuntime()
       ).loadModelCatalog({
         config: cfgWithAgentDefaults,
@@ -501,7 +518,7 @@ async function prepareCronRunContext(params: {
         source: "cron.thinking",
       });
     }
-    return catalog;
+    return cacheOnlyCatalog;
   };
 
   const baseSessionKey = (input.sessionKey?.trim() || `cron:${input.job.id}`).trim();
@@ -579,6 +596,18 @@ async function prepareCronRunContext(params: {
   }
   let provider = resolvedModelSelection.provider;
   let model = resolvedModelSelection.model;
+  const loadThinkingCatalog = async () => {
+    const cached = await loadCatalog("cacheOnly");
+    const cachedEntry = cached.find((entry) => entry.provider === provider && entry.id === model);
+    if (cachedEntry && typeof cachedEntry.reasoning === "boolean") {
+      return cached;
+    }
+    const discovered = await loadCatalog("runtimeDiscovery");
+    const discoveredEntry = discovered.find(
+      (entry) => entry.provider === provider && entry.id === model,
+    );
+    return discoveredEntry ? discovered : cached;
+  };
 
   const preflight = await (
     await loadCronModelPreflightRuntime()
@@ -608,7 +637,7 @@ async function prepareCronRunContext(params: {
   );
   let thinkLevel: ThinkLevel | undefined = jobThink ?? hooksGmailThinking;
   if (!thinkLevel) {
-    const thinkingCatalog = await loadCatalog();
+    const thinkingCatalog = await loadThinkingCatalog();
     thinkLevel = resolveThinkingDefault({
       cfg: cfgWithAgentDefaults,
       provider,
@@ -616,7 +645,7 @@ async function prepareCronRunContext(params: {
       catalog: thinkingCatalog,
     });
   }
-  const thinkingCatalog = await loadCatalog();
+  const thinkingCatalog = await loadThinkingCatalog();
   if (!isThinkingLevelSupported({ provider, model, level: thinkLevel, catalog: thinkingCatalog })) {
     const fallbackThinkLevel = resolveSupportedThinkingLevel({
       provider,

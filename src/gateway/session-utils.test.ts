@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { resetConfigRuntimeState, setRuntimeConfigSnapshot } from "../config/config.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions.js";
@@ -1668,5 +1668,30 @@ describe("resolveGatewayModelSupportsImages", () => {
         ],
       }),
     ).resolves.toBe(false);
+  });
+
+  test("retries with runtime discovery when cache-only catalog misses the active model", async () => {
+    const loadGatewayModelCatalog = vi
+      .fn()
+      .mockImplementationOnce(async () => [])
+      .mockImplementationOnce(async () => [
+        {
+          id: "gpt-4.1-vision",
+          name: "GPT-4.1 Vision",
+          provider: "openai",
+          input: ["text", "image"],
+        },
+      ]);
+
+    await expect(
+      resolveGatewayModelSupportsImages({
+        model: "gpt-4.1-vision",
+        provider: "openai",
+        loadGatewayModelCatalog,
+      }),
+    ).resolves.toBe(true);
+
+    expect(loadGatewayModelCatalog).toHaveBeenNthCalledWith(1, { mode: "cacheOnly" });
+    expect(loadGatewayModelCatalog).toHaveBeenNthCalledWith(2, { mode: "runtimeDiscovery" });
   });
 });

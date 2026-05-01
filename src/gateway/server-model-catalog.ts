@@ -15,24 +15,31 @@ type LoadGatewayModelCatalogParams = {
   mode?: GatewayModelCatalogMode;
 };
 
-let lastSuccessfulCatalog: GatewayModelChoice[] | null = null;
+let lastSuccessfulCacheOnlyCatalog: GatewayModelChoice[] | null = null;
 let lastSuccessfulRuntimeDiscoveryCatalog: GatewayModelChoice[] | null = null;
 let inFlightRefresh: Promise<GatewayModelChoice[]> | null = null;
 let inFlightRuntimeDiscoveryRefresh: Promise<GatewayModelChoice[]> | null = null;
 let staleGeneration = 0;
-let appliedGeneration = 0;
+let appliedCacheOnlyGeneration = 0;
+let appliedRuntimeDiscoveryGeneration = 0;
 
 function resetGatewayModelCatalogState(): void {
-  lastSuccessfulCatalog = null;
+  lastSuccessfulCacheOnlyCatalog = null;
   lastSuccessfulRuntimeDiscoveryCatalog = null;
   inFlightRefresh = null;
   inFlightRuntimeDiscoveryRefresh = null;
   staleGeneration = 0;
-  appliedGeneration = 0;
+  appliedCacheOnlyGeneration = 0;
+  appliedRuntimeDiscoveryGeneration = 0;
 }
 
-function isGatewayModelCatalogStale(): boolean {
-  return appliedGeneration < staleGeneration;
+function isGatewayModelCatalogStale(
+  mode: Exclude<GatewayModelCatalogMode, "cachePreferred">,
+): boolean {
+  return (
+    (mode === "runtimeDiscovery" ? appliedRuntimeDiscoveryGeneration : appliedCacheOnlyGeneration) <
+    staleGeneration
+  );
 }
 
 async function resolveLoadModelCatalog(
@@ -64,11 +71,13 @@ function startGatewayModelCatalogRefresh(
     )
     .then((catalog) => {
       if (catalog.length > 0 && refreshGeneration === staleGeneration) {
-        lastSuccessfulCatalog = catalog;
         if (mode === "runtimeDiscovery") {
           lastSuccessfulRuntimeDiscoveryCatalog = catalog;
+          appliedRuntimeDiscoveryGeneration = staleGeneration;
+        } else {
+          lastSuccessfulCacheOnlyCatalog = catalog;
+          appliedCacheOnlyGeneration = staleGeneration;
         }
-        appliedGeneration = staleGeneration;
       }
       return catalog;
     })
@@ -108,30 +117,12 @@ export async function loadGatewayModelCatalog(
   params?: LoadGatewayModelCatalogParams,
 ): Promise<GatewayModelChoice[]> {
   const mode = params?.mode ?? "cacheOnly";
-  const isStale = isGatewayModelCatalogStale();
   if (mode === "cachePreferred") {
-    if (!isStale && lastSuccessfulCatalog) {
-      return lastSuccessfulCatalog;
-    }
-    if (isStale && lastSuccessfulCatalog) {
-      if (!inFlightRefresh && !inFlightRuntimeDiscoveryRefresh) {
-        void startGatewayModelCatalogRefresh("runtimeDiscovery", params).catch(() => undefined);
-      }
-      return lastSuccessfulCatalog;
-    }
-    if (inFlightRefresh) {
-      return await inFlightRefresh;
-    }
-    if (inFlightRuntimeDiscoveryRefresh) {
-      return await inFlightRuntimeDiscoveryRefresh;
-    }
-    return await startGatewayModelCatalogRefresh("runtimeDiscovery", params);
-  }
-  if (mode === "runtimeDiscovery") {
-    if (!isStale && lastSuccessfulRuntimeDiscoveryCatalog) {
+    const isRuntimeDiscoveryStale = isGatewayModelCatalogStale("runtimeDiscovery");
+    if (!isRuntimeDiscoveryStale && lastSuccessfulRuntimeDiscoveryCatalog) {
       return lastSuccessfulRuntimeDiscoveryCatalog;
     }
-    if (isStale && lastSuccessfulRuntimeDiscoveryCatalog) {
+    if (isRuntimeDiscoveryStale && lastSuccessfulRuntimeDiscoveryCatalog) {
       if (!inFlightRuntimeDiscoveryRefresh) {
         void startGatewayModelCatalogRefresh("runtimeDiscovery", params).catch(() => undefined);
       }
@@ -142,14 +133,31 @@ export async function loadGatewayModelCatalog(
     }
     return await startGatewayModelCatalogRefresh("runtimeDiscovery", params);
   }
-  if (!isStale && lastSuccessfulCatalog) {
-    return lastSuccessfulCatalog;
+  if (mode === "runtimeDiscovery") {
+    const isRuntimeDiscoveryStale = isGatewayModelCatalogStale("runtimeDiscovery");
+    if (!isRuntimeDiscoveryStale && lastSuccessfulRuntimeDiscoveryCatalog) {
+      return lastSuccessfulRuntimeDiscoveryCatalog;
+    }
+    if (isRuntimeDiscoveryStale && lastSuccessfulRuntimeDiscoveryCatalog) {
+      if (!inFlightRuntimeDiscoveryRefresh) {
+        void startGatewayModelCatalogRefresh("runtimeDiscovery", params).catch(() => undefined);
+      }
+      return lastSuccessfulRuntimeDiscoveryCatalog;
+    }
+    if (inFlightRuntimeDiscoveryRefresh) {
+      return await inFlightRuntimeDiscoveryRefresh;
+    }
+    return await startGatewayModelCatalogRefresh("runtimeDiscovery", params);
   }
-  if (isStale && lastSuccessfulCatalog) {
+  const isCacheOnlyStale = isGatewayModelCatalogStale("cacheOnly");
+  if (!isCacheOnlyStale && lastSuccessfulCacheOnlyCatalog) {
+    return lastSuccessfulCacheOnlyCatalog;
+  }
+  if (isCacheOnlyStale && lastSuccessfulCacheOnlyCatalog) {
     if (!inFlightRefresh) {
       void startGatewayModelCatalogRefresh("cacheOnly", params).catch(() => undefined);
     }
-    return lastSuccessfulCatalog;
+    return lastSuccessfulCacheOnlyCatalog;
   }
   if (inFlightRefresh) {
     return await inFlightRefresh;
