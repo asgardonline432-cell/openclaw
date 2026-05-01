@@ -14,6 +14,7 @@ import {
 } from "../plugins/provider-runtime.js";
 import { resolveOwningPluginIdsForProvider } from "../plugins/providers.js";
 import { resolveDefaultSecretProviderAlias } from "../secrets/ref-contract.js";
+import { resolveProcessScopedMap } from "../shared/process-scoped-map.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalLowercaseString,
@@ -49,6 +50,52 @@ export type { ResolvedProviderAuth } from "./model-auth-runtime-shared.js";
 export type ProviderCredentialPrecedence = "profile-first" | "env-first";
 
 const log = createSubsystemLogger("model-auth");
+
+const REPLY_RUNTIME_PROVIDER_AUTH_CACHE_KEY = Symbol.for("openclaw.replyRuntimeProviderAuthCache");
+
+type ReplyRuntimeProviderAuthCacheValue =
+  | {
+      ok: true;
+      value: ResolvedProviderAuth;
+    }
+  | {
+      ok: false;
+      error: Error;
+    };
+
+function getReplyRuntimeProviderAuthCache() {
+  return resolveProcessScopedMap<ReplyRuntimeProviderAuthCacheValue>(
+    REPLY_RUNTIME_PROVIDER_AUTH_CACHE_KEY,
+  );
+}
+
+function buildReplyRuntimeProviderAuthCacheKey(params: {
+  provider: string;
+  profileId?: string;
+  preferredProfile?: string;
+  agentDir?: string;
+  workspaceDir?: string;
+  lockedProfile?: boolean;
+  credentialPrecedence?: ProviderCredentialPrecedence;
+}): string {
+  return JSON.stringify([
+    normalizeProviderId(params.provider),
+    params.profileId?.trim() || "",
+    params.preferredProfile?.trim() || "",
+    params.agentDir?.trim() || "",
+    params.workspaceDir?.trim() || "",
+    params.lockedProfile === true,
+    params.credentialPrecedence ?? "profile-first",
+  ]);
+}
+
+function cloneResolvedProviderAuth(value: ResolvedProviderAuth): ResolvedProviderAuth {
+  return { ...value };
+}
+
+export function resetReplyRuntimeProviderAuthCacheForTest(): void {
+  getReplyRuntimeProviderAuthCache().clear();
+}
 
 function resolveConfigAwareEnvApiKey(
   cfg: OpenClawConfig | undefined,
@@ -514,8 +561,40 @@ export async function resolveApiKeyForProvider(params: {
    *  silently overridden by env/config credentials. */
   lockedProfile?: boolean;
   credentialPrecedence?: ProviderCredentialPrecedence;
+  primeReplyRuntimeCache?: boolean;
 }): Promise<ResolvedProviderAuth> {
   const { provider, cfg, profileId, preferredProfile } = params;
+  const replyRuntimeCacheKey = buildReplyRuntimeProviderAuthCacheKey({
+    provider,
+    profileId,
+    preferredProfile,
+    agentDir: params.agentDir,
+    workspaceDir: params.workspaceDir,
+    lockedProfile: params.lockedProfile,
+    credentialPrecedence: params.credentialPrecedence,
+  });
+  const cached = getReplyRuntimeProviderAuthCache().get(replyRuntimeCacheKey);
+  if (cached) {
+    if (cached.ok) {
+      return cloneResolvedProviderAuth(cached.value);
+    }
+    throw cached.error;
+  }
+  const cacheResolved = (value: ResolvedProviderAuth): ResolvedProviderAuth => {
+    if (params.primeReplyRuntimeCache === true) {
+      getReplyRuntimeProviderAuthCache().set(replyRuntimeCacheKey, {
+        ok: true,
+        value: cloneResolvedProviderAuth(value),
+      });
+    }
+    return value;
+  };
+  const cacheError = (error: Error): never => {
+    if (params.primeReplyRuntimeCache === true) {
+      getReplyRuntimeProviderAuthCache().set(replyRuntimeCacheKey, { ok: false, error });
+    }
+    throw error;
+  };
 
   if (profileId) {
     const store =
@@ -534,7 +613,7 @@ export async function resolveApiKeyForProvider(params: {
       agentDir: params.agentDir,
     });
     if (!resolved) {
-      throw new Error(`No credentials found for profile "${profileId}".`);
+      return cacheError(new Error(`No credentials found for profile "${profileId}".`));
     }
     const mode = store.profiles[profileId]?.type;
     const result: ResolvedProviderAuth = {
@@ -557,28 +636,29 @@ export async function resolveApiKeyForProvider(params: {
       })
     ) {
       return resolveApiKeyForProvider({ ...params, profileId: undefined, lockedProfile: true }) //
-        .catch(() => result);
+        .then(cacheResolved)
+        .catch(() => cacheResolved(result));
     }
-    return result;
+    return cacheResolved(result);
   }
 
   const authOverride = resolveProviderAuthOverride(cfg, provider);
   if (authOverride === "aws-sdk") {
-    return resolveAwsSdkAuthInfo();
+    return cacheResolved(resolveAwsSdkAuthInfo());
   }
   if (shouldPreferExplicitConfigApiKeyAuth(cfg, provider)) {
     const customKey = resolveUsableCustomProviderApiKey({ cfg, provider });
     if (customKey) {
-      return {
+      return cacheResolved({
         apiKey: customKey.apiKey,
         source: customKey.source,
         mode: "api-key",
-      };
+      });
     }
   }
   const normalized = normalizeProviderId(provider);
   if (authOverride === undefined && normalized === "amazon-bedrock") {
-    return resolveAwsSdkAuthInfo();
+    return cacheResolved(resolveAwsSdkAuthInfo());
   }
 
   if (params.credentialPrecedence === "env-first") {
@@ -587,30 +667,30 @@ export async function resolveApiKeyForProvider(params: {
       const resolvedMode: ResolvedProviderAuth["mode"] = envResolved.source.includes("OAUTH_TOKEN")
         ? "oauth"
         : "api-key";
-      return {
+      return cacheResolved({
         apiKey: envResolved.apiKey,
         source: envResolved.source,
         mode: resolvedMode,
-      };
+      });
     }
   }
 
   const providerConfig = resolveProviderConfig(cfg, provider);
   const configuredLocalKey = resolveUsableCustomProviderApiKey({ cfg, provider });
   if (configuredLocalKey && isNonSecretApiKeyMarker(configuredLocalKey.apiKey)) {
-    return {
+    return cacheResolved({
       apiKey: configuredLocalKey.apiKey,
       source: configuredLocalKey.source,
       mode: "api-key",
-    };
+    });
   }
   const localMarkerEnv = resolveConfigAwareEnvApiKey(cfg, provider, params.workspaceDir);
   if (localMarkerEnv && isNonSecretApiKeyMarker(localMarkerEnv.apiKey)) {
-    return {
+    return cacheResolved({
       apiKey: localMarkerEnv.apiKey,
       source: localMarkerEnv.source,
       mode: "api-key",
-    };
+    });
   }
   const store =
     params.store ??
@@ -655,7 +735,7 @@ export async function resolveApiKeyForProvider(params: {
           deferredAuthProfileResult ??= result;
           continue;
         }
-        return result;
+        return cacheResolved(result);
       }
     } catch (err) {
       log.debug?.(`auth profile "${candidate}" failed for provider "${provider}": ${String(err)}`);
@@ -672,22 +752,22 @@ export async function resolveApiKeyForProvider(params: {
       source: envResolved.source,
       mode: resolvedMode,
     };
-    return result;
+    return cacheResolved(result);
   }
 
   const customKey = resolveUsableCustomProviderApiKey({ cfg, provider });
   if (customKey) {
     const result = { apiKey: customKey.apiKey, source: customKey.source, mode: "api-key" as const };
-    return result;
+    return cacheResolved(result);
   }
 
   if (deferredAuthProfileResult) {
-    return deferredAuthProfileResult;
+    return cacheResolved(deferredAuthProfileResult);
   }
 
   const syntheticLocalAuth = resolveSyntheticLocalProviderAuth({ cfg, provider });
   if (syntheticLocalAuth) {
-    return syntheticLocalAuth;
+    return cacheResolved(syntheticLocalAuth);
   }
 
   const hasInlineConfiguredModels =
@@ -711,18 +791,20 @@ export async function resolveApiKeyForProvider(params: {
       },
     });
     if (pluginMissingAuthMessage) {
-      throw new Error(pluginMissingAuthMessage);
+      return cacheError(new Error(pluginMissingAuthMessage));
     }
   }
 
   const authStorePath = resolveAuthStorePathForDisplay(params.agentDir);
   const resolvedAgentDir = path.dirname(authStorePath);
-  throw new Error(
-    [
-      `No API key found for provider "${provider}".`,
-      `Auth store: ${authStorePath} (agentDir: ${resolvedAgentDir}).`,
-      `Configure auth for this agent (${formatCliCommand("openclaw agents add <id>")}) or copy only portable static auth profiles from the main agentDir.`,
-    ].join(" "),
+  return cacheError(
+    new Error(
+      [
+        `No API key found for provider "${provider}".`,
+        `Auth store: ${authStorePath} (agentDir: ${resolvedAgentDir}).`,
+        `Configure auth for this agent (${formatCliCommand("openclaw agents add <id>")}) or copy only portable static auth profiles from the main agentDir.`,
+      ].join(" "),
+    ),
   );
 }
 
@@ -869,6 +951,7 @@ export async function getApiKeyForModel(params: {
   workspaceDir?: string;
   lockedProfile?: boolean;
   credentialPrecedence?: ProviderCredentialPrecedence;
+  primeReplyRuntimeCache?: boolean;
 }): Promise<ResolvedProviderAuth> {
   return resolveApiKeyForProvider({
     provider: params.model.provider,
@@ -880,6 +963,7 @@ export async function getApiKeyForModel(params: {
     workspaceDir: params.workspaceDir,
     lockedProfile: params.lockedProfile,
     credentialPrecedence: params.credentialPrecedence,
+    primeReplyRuntimeCache: params.primeReplyRuntimeCache,
   });
 }
 

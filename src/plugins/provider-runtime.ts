@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AuthProfileCredential, OAuthCredential } from "../agents/auth-profiles/types.js";
 import { resolveGpt5SystemPromptContribution } from "../agents/gpt5-prompt-overlay.js";
 import {
@@ -9,6 +10,7 @@ import type { ProviderSystemPromptContribution } from "../agents/system-prompt-c
 import type { ModelProviderConfig } from "../config/types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import { resolveProcessScopedMap } from "../shared/process-scoped-map.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { sanitizeForLog } from "../terminal/ansi.js";
 import { normalizeProviderModelIdWithManifest } from "./manifest-model-id-normalization.js";
@@ -82,6 +84,48 @@ import type {
 
 const log = createSubsystemLogger("plugins/provider-runtime");
 const warnedExternalAuthFallbackPluginIds = new Set<string>();
+const REPLY_RUNTIME_PREPARED_PROVIDER_AUTH_CACHE_KEY = Symbol.for(
+  "openclaw.replyRuntimePreparedProviderAuthCache",
+);
+
+type ReplyRuntimePreparedProviderAuthCacheValue = {
+  value: Awaited<ReturnType<NonNullable<ProviderPlugin["prepareRuntimeAuth"]>>>;
+  expiresAt?: number;
+};
+
+function getReplyRuntimePreparedProviderAuthCache() {
+  return resolveProcessScopedMap<ReplyRuntimePreparedProviderAuthCacheValue>(
+    REPLY_RUNTIME_PREPARED_PROVIDER_AUTH_CACHE_KEY,
+  );
+}
+
+function hashReplyRuntimePreparedProviderAuthApiKey(apiKey: string | undefined): string {
+  return createHash("sha256")
+    .update(apiKey ?? "")
+    .digest("hex");
+}
+
+function buildReplyRuntimePreparedProviderAuthCacheKey(params: {
+  provider: string;
+  workspaceDir?: string;
+  modelId?: string;
+  profileId?: string;
+  authMode?: string;
+  apiKey?: string;
+}): string {
+  return JSON.stringify([
+    normalizeProviderId(params.provider),
+    params.workspaceDir?.trim() || "",
+    params.modelId?.trim() || "",
+    params.profileId?.trim() || "",
+    params.authMode?.trim() || "",
+    hashReplyRuntimePreparedProviderAuthApiKey(params.apiKey),
+  ]);
+}
+
+export function resetReplyRuntimePreparedProviderAuthCacheForTest(): void {
+  getReplyRuntimePreparedProviderAuthCache().clear();
+}
 
 function matchesProviderPluginRef(provider: ProviderPlugin, providerId: string): boolean {
   const normalized = normalizeProviderId(providerId);
@@ -630,8 +674,28 @@ export async function prepareProviderRuntimeAuth(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
   context: ProviderPrepareRuntimeAuthContext;
+  primeReplyRuntimeCache?: boolean;
 }) {
-  return await resolveProviderRuntimePlugin(params)?.prepareRuntimeAuth?.(params.context);
+  const cacheKey = buildReplyRuntimePreparedProviderAuthCacheKey({
+    provider: params.provider,
+    workspaceDir: params.workspaceDir,
+    modelId: params.context.modelId,
+    profileId: params.context.profileId,
+    authMode: params.context.authMode,
+    apiKey: params.context.apiKey,
+  });
+  const cached = getReplyRuntimePreparedProviderAuthCache().get(cacheKey);
+  if (cached && (!cached.expiresAt || cached.expiresAt > Date.now())) {
+    return cached.value;
+  }
+  const prepared = await resolveProviderRuntimePlugin(params)?.prepareRuntimeAuth?.(params.context);
+  if (params.primeReplyRuntimeCache === true) {
+    getReplyRuntimePreparedProviderAuthCache().set(cacheKey, {
+      value: prepared,
+      expiresAt: prepared?.expiresAt,
+    });
+  }
+  return prepared;
 }
 
 export async function resolveProviderUsageAuthWithPlugin(params: {

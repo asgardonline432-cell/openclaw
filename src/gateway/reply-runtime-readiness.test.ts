@@ -16,11 +16,6 @@ function createTool(name: string) {
 
 const hoisted = vi.hoisted(() => ({
   ensureRuntimePluginsLoaded: vi.fn(),
-  getApiKeyForModel: vi.fn(async () => ({
-    apiKey: "test-key",
-    mode: "api-key",
-    profileId: "default",
-  })),
   ensureAuthProfileStore: vi.fn(() => ({ version: 1, profiles: {} })),
   resolveAuthProfileOrder: vi.fn(() => []),
   loadModelCatalog: vi.fn(async () => [
@@ -29,21 +24,28 @@ const hoisted = vi.hoisted(() => ({
   ]),
   selectAgentHarness: vi.fn(() => ({ id: "pi", label: "PI", supports: vi.fn() })),
   resolveProviderRuntimePlugin: vi.fn(() => ({ id: "mock-provider-plugin" })),
-  prepareProviderRuntimeAuth: vi.fn(async () => undefined),
-  resolveOwningPluginIdsForProvider: vi.fn(() => ["mock-provider-plugin"]),
-  resolveModelAsync: vi.fn(async (provider: string, model: string) => ({
+  prepareSimpleCompletionModel: vi.fn(async () => ({
     model: {
-      provider,
-      id: model,
+      provider: "openai",
+      id: "gpt-5.4",
       api: "openai-responses",
-      name: model,
+      name: "gpt-5.4",
       baseUrl: "https://api.example.test/v1",
       contextWindow: 128_000,
       maxTokens: 16_384,
       input: ["text"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     },
+    auth: {
+      apiKey: "test-key",
+      mode: "api-key",
+      profileId: "default",
+      source: "profile:default",
+    },
   })),
+  resolveOwningPluginIdsForProvider: vi.fn(() => ["mock-provider-plugin"]),
+  resolveStorePath: vi.fn(() => "/tmp/openclaw-agent/sessions/sessions.json"),
+  loadSessionStore: vi.fn(() => ({})),
 }));
 
 vi.mock("../agents/runtime-plugins.js", () => ({
@@ -55,7 +57,6 @@ vi.mock("../agents/model-auth.js", async (importOriginal) => {
   return {
     ...actual,
     ensureAuthProfileStore: hoisted.ensureAuthProfileStore,
-    getApiKeyForModel: hoisted.getApiKeyForModel,
     resolveAuthProfileOrder: hoisted.resolveAuthProfileOrder,
   };
 });
@@ -76,14 +77,6 @@ vi.mock("../plugins/provider-hook-runtime.js", () => ({
   resolveProviderRuntimePlugin: hoisted.resolveProviderRuntimePlugin,
 }));
 
-vi.mock("../plugins/provider-runtime.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../plugins/provider-runtime.js")>();
-  return {
-    ...actual,
-    prepareProviderRuntimeAuth: hoisted.prepareProviderRuntimeAuth,
-  };
-});
-
 vi.mock("../plugins/providers.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../plugins/providers.js")>();
   return {
@@ -92,8 +85,16 @@ vi.mock("../plugins/providers.js", async (importOriginal) => {
   };
 });
 
-vi.mock("../agents/pi-embedded-runner/model.js", () => ({
-  resolveModelAsync: hoisted.resolveModelAsync,
+vi.mock("../agents/simple-completion-runtime.js", () => ({
+  prepareSimpleCompletionModel: hoisted.prepareSimpleCompletionModel,
+}));
+
+vi.mock("../config/sessions/paths.js", () => ({
+  resolveStorePath: hoisted.resolveStorePath,
+}));
+
+vi.mock("../config/sessions/store.js", () => ({
+  loadSessionStore: hoisted.loadSessionStore,
 }));
 
 vi.mock("../agents/agent-scope.js", async (importOriginal) => {
@@ -256,14 +257,14 @@ describe("reply-runtime readiness", () => {
     resetReplyRuntimeReadinessMonitorForTest();
     hoisted.ensureRuntimePluginsLoaded.mockClear();
     hoisted.ensureAuthProfileStore.mockClear();
-    hoisted.getApiKeyForModel.mockClear();
     hoisted.loadModelCatalog.mockClear();
     hoisted.resolveAuthProfileOrder.mockClear();
     hoisted.selectAgentHarness.mockReset().mockReturnValue({ id: "pi", label: "PI" });
     hoisted.resolveProviderRuntimePlugin.mockClear();
-    hoisted.prepareProviderRuntimeAuth.mockClear();
+    hoisted.prepareSimpleCompletionModel.mockClear();
     hoisted.resolveOwningPluginIdsForProvider.mockClear();
-    hoisted.resolveModelAsync.mockClear();
+    hoisted.resolveStorePath.mockClear();
+    hoisted.loadSessionStore.mockClear();
     vi.unstubAllEnvs();
   });
 
@@ -271,7 +272,7 @@ describe("reply-runtime readiness", () => {
     vi.unstubAllEnvs();
   });
 
-  it("accepts aws-sdk auth without a static api key during readiness", async () => {
+  it("warms PI reply models through the shared completion prep seam", async () => {
     hoisted.loadModelCatalog.mockResolvedValueOnce([
       {
         provider: "amazon-bedrock",
@@ -280,10 +281,16 @@ describe("reply-runtime readiness", () => {
         reasoning: true,
       },
     ]);
-    hoisted.getApiKeyForModel.mockResolvedValueOnce({
-      apiKey: undefined,
-      mode: "aws-sdk",
-      source: "aws-sdk default chain",
+    hoisted.prepareSimpleCompletionModel.mockResolvedValueOnce({
+      model: {
+        provider: "amazon-bedrock",
+        id: "us.anthropic.claude-opus-4-6-v1:0",
+      },
+      auth: {
+        apiKey: undefined,
+        mode: "aws-sdk",
+        source: "aws-sdk default chain",
+      },
     });
 
     const result = await prepareReplyRuntimeForChannels({
@@ -298,13 +305,11 @@ describe("reply-runtime readiness", () => {
     });
 
     expect(result.status).toBe("ready");
-    expect(hoisted.prepareProviderRuntimeAuth).toHaveBeenCalledWith(
+    expect(hoisted.prepareSimpleCompletionModel).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "amazon-bedrock",
-        context: expect.objectContaining({
-          apiKey: "__aws_sdk_auth__",
-          authMode: "aws-sdk",
-        }),
+        modelId: "us.anthropic.claude-opus-4-6-v1:0",
+        primeReplyRuntimeCache: true,
       }),
     );
   });
@@ -340,8 +345,7 @@ describe("reply-runtime readiness", () => {
     });
 
     expect(result.status).toBe("ready");
-    expect(hoisted.getApiKeyForModel).not.toHaveBeenCalled();
-    expect(hoisted.prepareProviderRuntimeAuth).not.toHaveBeenCalled();
+    expect(hoisted.prepareSimpleCompletionModel).not.toHaveBeenCalled();
     expect(hoisted.ensureAuthProfileStore).toHaveBeenCalled();
     expect(hoisted.resolveAuthProfileOrder).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -411,6 +415,9 @@ describe("reply-runtime readiness", () => {
         agents: {
           defaults: {
             model: { primary: "openai/gpt-5.4" },
+            models: {
+              "openai/gpt-5.4": { alias: "GPT" },
+            },
           },
         },
       } as OpenClawConfig,

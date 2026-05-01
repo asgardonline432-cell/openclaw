@@ -17,6 +17,7 @@ import {
   normalizeProviderResolvedModelWithPlugin,
   shouldPreferProviderRuntimeResolvedModel,
 } from "../../plugins/provider-runtime.js";
+import { resolveProcessScopedMap } from "../../shared/process-scoped-map.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../defaults.js";
 import { buildModelAliasLines } from "../model-alias-lines.js";
@@ -102,6 +103,41 @@ const SKIP_PI_DISCOVERY_PROVIDER_RUNTIME_HOOKS: ProviderRuntimeHooks = {
   // skipPiDiscovery is the lean path used before PI discovery/models.json has run.
   ...TARGET_PROVIDER_RUNTIME_HOOKS,
 };
+
+const REPLY_RUNTIME_RESOLVED_MODEL_CACHE_KEY = Symbol.for(
+  "openclaw.replyRuntimeResolvedModelCache",
+);
+
+type ReplyRuntimeResolvedModelCacheValue = {
+  model?: Model<Api>;
+  error?: string;
+  authStorage: AuthStorage;
+  modelRegistry: ModelRegistry;
+};
+
+function getReplyRuntimeResolvedModelCache() {
+  return resolveProcessScopedMap<ReplyRuntimeResolvedModelCacheValue>(
+    REPLY_RUNTIME_RESOLVED_MODEL_CACHE_KEY,
+  );
+}
+
+function buildReplyRuntimeResolvedModelCacheKey(params: {
+  provider: string;
+  modelId: string;
+  agentDir: string;
+  skipPiDiscovery?: boolean;
+}): string {
+  return JSON.stringify([
+    normalizeProviderId(params.provider),
+    normalizeStaticProviderModelId(normalizeProviderId(params.provider), params.modelId),
+    params.agentDir,
+    params.skipPiDiscovery === true,
+  ]);
+}
+
+export function resetReplyRuntimeResolvedModelCacheForTest(): void {
+  getReplyRuntimeResolvedModelCache().clear();
+}
 
 function createEmptyPiDiscoveryStores(): {
   authStorage: AuthStorage;
@@ -1034,6 +1070,7 @@ export async function resolveModelAsync(
     runtimeHooks?: ProviderRuntimeHooks;
     skipProviderRuntimeHooks?: boolean;
     skipPiDiscovery?: boolean;
+    primeReplyRuntimeCache?: boolean;
   },
 ): Promise<{
   model?: Model<Api>;
@@ -1046,6 +1083,24 @@ export async function resolveModelAsync(
     model: normalizeStaticProviderModelId(normalizeProviderId(provider), modelId),
   };
   const resolvedAgentDir = agentDir ?? resolveOpenClawAgentDir();
+  const replyRuntimeCacheKey =
+    !options?.authStorage &&
+    !options?.modelRegistry &&
+    !options?.runtimeHooks &&
+    !options?.skipProviderRuntimeHooks
+      ? buildReplyRuntimeResolvedModelCacheKey({
+          provider: normalizedRef.provider,
+          modelId: normalizedRef.model,
+          agentDir: resolvedAgentDir,
+          skipPiDiscovery: options?.skipPiDiscovery,
+        })
+      : null;
+  if (replyRuntimeCacheKey) {
+    const cached = getReplyRuntimeResolvedModelCache().get(replyRuntimeCacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
   const emptyDiscoveryStores =
     options?.skipPiDiscovery && (!options.authStorage || !options.modelRegistry)
       ? createEmptyPiDiscoveryStores()
@@ -1068,7 +1123,7 @@ export async function resolveModelAsync(
     runtimeHooks,
   });
   if (explicitModel?.kind === "suppressed") {
-    return {
+    const result = {
       error: buildUnknownModelError({
         provider: normalizedRef.provider,
         modelId: normalizedRef.model,
@@ -1079,6 +1134,10 @@ export async function resolveModelAsync(
       authStorage,
       modelRegistry,
     };
+    if (replyRuntimeCacheKey && options?.primeReplyRuntimeCache === true) {
+      getReplyRuntimeResolvedModelCache().set(replyRuntimeCacheKey, result);
+    }
+    return result;
   }
   const providerConfig = resolveConfiguredProviderConfig(cfg, normalizedRef.provider);
   const resolveDynamicAttempt = async () => {
@@ -1121,10 +1180,14 @@ export async function resolveModelAsync(
     model = await resolveDynamicAttempt();
   }
   if (model) {
-    return { model, authStorage, modelRegistry };
+    const result = { model, authStorage, modelRegistry };
+    if (replyRuntimeCacheKey && options?.primeReplyRuntimeCache === true) {
+      getReplyRuntimeResolvedModelCache().set(replyRuntimeCacheKey, result);
+    }
+    return result;
   }
 
-  return {
+  const result = {
     error: buildUnknownModelError({
       provider: normalizedRef.provider,
       modelId: normalizedRef.model,
@@ -1135,6 +1198,10 @@ export async function resolveModelAsync(
     authStorage,
     modelRegistry,
   };
+  if (replyRuntimeCacheKey && options?.primeReplyRuntimeCache === true) {
+    getReplyRuntimeResolvedModelCache().set(replyRuntimeCacheKey, result);
+  }
+  return result;
 }
 
 /**

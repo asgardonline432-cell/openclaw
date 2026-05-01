@@ -107,6 +107,7 @@ async function setRuntimeApiKeyForCompletion(params: {
   cfg?: OpenClawConfig;
   workspaceDir?: string;
   profileId?: string;
+  primeReplyRuntimeCache?: boolean;
 }): Promise<CompletionRuntimeCredential> {
   if (params.model.provider === "github-copilot") {
     const { resolveCopilotApiToken } = await import("./github-copilot-token.js");
@@ -124,6 +125,7 @@ async function setRuntimeApiKeyForCompletion(params: {
     config: params.cfg,
     workspaceDir: params.workspaceDir,
     env: process.env,
+    primeReplyRuntimeCache: params.primeReplyRuntimeCache,
     context: {
       config: params.cfg,
       workspaceDir: params.workspaceDir,
@@ -160,12 +162,16 @@ export async function prepareSimpleCompletionModel(params: {
   preferredProfile?: string;
   allowMissingApiKeyModes?: ReadonlyArray<AllowedMissingApiKeyMode>;
   skipPiDiscovery?: boolean;
+  primeReplyRuntimeCache?: boolean;
 }): Promise<PreparedSimpleCompletionModel> {
   const resolved = params.skipPiDiscovery
     ? await resolveModelAsync(params.provider, params.modelId, params.agentDir, params.cfg, {
         skipPiDiscovery: true,
+        primeReplyRuntimeCache: params.primeReplyRuntimeCache,
       })
-    : resolveModel(params.provider, params.modelId, params.agentDir, params.cfg);
+    : await resolveModelAsync(params.provider, params.modelId, params.agentDir, params.cfg, {
+        primeReplyRuntimeCache: params.primeReplyRuntimeCache,
+      });
   if (!resolved.model) {
     return {
       error: resolved.error ?? `Unknown model: ${params.provider}/${params.modelId}`,
@@ -180,6 +186,7 @@ export async function prepareSimpleCompletionModel(params: {
       agentDir: params.agentDir,
       profileId: params.profileId,
       preferredProfile: params.preferredProfile,
+      primeReplyRuntimeCache: params.primeReplyRuntimeCache,
     });
   } catch (err) {
     return {
@@ -211,6 +218,7 @@ export async function prepareSimpleCompletionModel(params: {
       cfg: params.cfg,
       workspaceDir: params.agentDir,
       profileId: auth.profileId,
+      primeReplyRuntimeCache: params.primeReplyRuntimeCache,
     });
     resolvedApiKey = runtimeCredential.apiKey;
     const runtimeBaseUrl = runtimeCredential.baseUrl?.trim();

@@ -214,8 +214,6 @@ export async function startGatewaySidecars(params: {
           });
         const catalog = await loadModelCatalog({
           config: params.cfg,
-          intent: "cacheOnly",
-          source: "gateway.hooks-gmail-model",
         });
         const status = getModelRefStatus({
           cfg: params.cfg,
