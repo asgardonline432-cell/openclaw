@@ -17,6 +17,63 @@ export type GuardedSessionManager = SessionManager & {
   clearPendingToolResults?: () => void;
 };
 
+type ArtifactScopeProvenance = {
+  runId?: string;
+  taskId?: string;
+};
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function recordOrUndefined(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function applyArtifactScopeProvenanceToMessage(
+  message: AgentMessage,
+  provenance: ArtifactScopeProvenance | undefined,
+): AgentMessage {
+  const runId = nonEmptyString(provenance?.runId);
+  const taskId = nonEmptyString(provenance?.taskId);
+  if (!runId && !taskId) {
+    return message;
+  }
+
+  const source = message as unknown as Record<string, unknown>;
+  const existingMeta = recordOrUndefined(source.__openclaw);
+  let nextMeta: Record<string, unknown> | undefined;
+  const ensureMeta = () => {
+    nextMeta ??= { ...(existingMeta ?? {}) };
+    return nextMeta;
+  };
+
+  if (runId && !nonEmptyString(existingMeta?.runId) && !nonEmptyString(source.runId)) {
+    ensureMeta().runId = runId;
+  }
+  if (
+    taskId &&
+    !nonEmptyString(existingMeta?.messageTaskId) &&
+    !nonEmptyString(existingMeta?.taskId) &&
+    !nonEmptyString(source.messageTaskId) &&
+    !nonEmptyString(source.taskId)
+  ) {
+    const meta = ensureMeta();
+    meta.taskId = taskId;
+    meta.messageTaskId = taskId;
+  }
+
+  if (!nextMeta) {
+    return message;
+  }
+  return {
+    ...source,
+    __openclaw: nextMeta,
+  } as unknown as AgentMessage;
+}
+
 function redactTranscriptText(value: string, cfg?: OpenClawConfig): string {
   if (cfg?.logging?.redactSensitive === "off") {
     return value;
@@ -94,6 +151,7 @@ export function guardSessionManager(
     config?: OpenClawConfig;
     contextWindowTokens?: number;
     inputProvenance?: InputProvenance;
+    artifactScopeProvenance?: ArtifactScopeProvenance;
     allowSyntheticToolResults?: boolean;
     missingToolResultText?: string;
     allowedToolNames?: Iterable<string>;
@@ -156,7 +214,10 @@ export function guardSessionManager(
   const guard = installSessionToolResultGuard(sessionManager, {
     sessionKey: opts?.sessionKey,
     transformMessageForPersistence: (message) =>
-      applyInputProvenanceToUserMessage(message, opts?.inputProvenance),
+      applyArtifactScopeProvenanceToMessage(
+        applyInputProvenanceToUserMessage(message, opts?.inputProvenance),
+        opts?.artifactScopeProvenance,
+      ),
     transformToolResultForPersistence: transform,
     allowSyntheticToolResults: opts?.allowSyntheticToolResults,
     missingToolResultText: opts?.missingToolResultText,

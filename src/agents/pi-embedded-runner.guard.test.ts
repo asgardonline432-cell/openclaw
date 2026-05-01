@@ -2,6 +2,7 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { SessionManager } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { collectArtifactsFromMessages } from "../gateway/server-methods/artifacts.js";
 import { guardSessionManager } from "./session-tool-result-guard-wrapper.js";
 import { sanitizeToolUseResultPairing } from "./session-transcript-repair.js";
 
@@ -77,5 +78,61 @@ describe("guardSessionManager integration", () => {
     expect(serialized).toContain('"text":"contact peter@d***.io"');
     expect(serialized).toContain('"text":"peter@d***.io\\n"');
     expect(serialized).toContain('"/tmp/peter@dc.io"');
+  });
+
+  it("tags normal embedded media transcript messages for run and task artifact scopes", () => {
+    const sm = guardSessionManager(SessionManager.inMemory(), {
+      artifactScopeProvenance: {
+        runId: "run-embedded-media",
+        taskId: "task-embedded-media",
+      },
+    });
+    const appendMessage = sm.appendMessage.bind(sm) as unknown as (message: AgentMessage) => void;
+
+    appendMessage({
+      role: "assistant",
+      content: [
+        { type: "text", text: "image generated" },
+        {
+          type: "image",
+          data: "aGVsbG8=",
+          mimeType: "image/png",
+          alt: "embedded-result.png",
+        },
+      ],
+    } as AgentMessage);
+
+    const messages = sm
+      .getEntries()
+      .filter((e) => e.type === "message")
+      .map((e) => (e as { message: AgentMessage }).message);
+
+    expect(messages[0]).toMatchObject({
+      __openclaw: {
+        runId: "run-embedded-media",
+        taskId: "task-embedded-media",
+        messageTaskId: "task-embedded-media",
+      },
+    });
+    expect(
+      collectArtifactsFromMessages({
+        messages,
+        sessionKey: "agent:main:main",
+        runId: "run-embedded-media",
+      }),
+    ).toMatchObject([
+      {
+        runId: "run-embedded-media",
+        taskId: "task-embedded-media",
+        title: "embedded-result.png",
+      },
+    ]);
+    expect(
+      collectArtifactsFromMessages({
+        messages,
+        sessionKey: "agent:main:main",
+        taskId: "task-embedded-media",
+      }),
+    ).toHaveLength(1);
   });
 });

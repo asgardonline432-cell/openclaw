@@ -36,6 +36,7 @@ import { getPluginToolMeta } from "../../../plugins/tools.js";
 import { isAcpSessionKey, isSubagentSessionKey } from "../../../routing/session-key.js";
 import { annotateInterSessionPromptText } from "../../../sessions/input-provenance.js";
 import { normalizeOptionalString } from "../../../shared/string-coerce.js";
+import { findTaskByRunId } from "../../../tasks/task-registry.js";
 import {
   buildTrajectoryArtifacts,
   buildTrajectoryRunMetadata,
@@ -372,6 +373,14 @@ export {
 };
 
 const MAX_BTW_SNAPSHOT_MESSAGES = 100;
+
+function resolveTranscriptTaskIdForRun(runId: string): string | undefined {
+  try {
+    return normalizeOptionalString(findTaskByRunId(runId)?.taskId);
+  } catch {
+    return undefined;
+  }
+}
 
 export function resolveUnknownToolGuardThreshold(loopDetection?: {
   enabled?: boolean;
@@ -1327,6 +1336,10 @@ export async function runEmbeddedAttempt(
         config: params.config,
         contextWindowTokens: params.contextTokenBudget,
         inputProvenance: params.inputProvenance,
+        artifactScopeProvenance: {
+          runId: params.runId,
+          taskId: resolveTranscriptTaskIdForRun(params.runId),
+        },
         allowSyntheticToolResults: transcriptPolicy.allowSyntheticToolResults,
         missingToolResultText:
           params.model.api === "openai-responses" ||
