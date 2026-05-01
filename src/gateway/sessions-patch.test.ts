@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../plugins/runtime.js";
-import type { GatewayModelCatalogMode } from "./server-model-catalog.js";
 import { applySessionsPatchToStore } from "./sessions-patch.js";
 
 const SUBAGENT_MODEL = "synthetic/hf:moonshotai/Kimi-K2.5";
@@ -344,26 +343,6 @@ describe("gateway sessions patch", () => {
     expect(entry.modelOverride).toBe("claude-sonnet-4-6");
   });
 
-  test("uses runtime discovery for explicit model validation", async () => {
-    const loadGatewayModelCatalog = vi.fn(async (params?: { mode?: GatewayModelCatalogMode }) =>
-      params?.mode === "runtimeDiscovery"
-        ? [{ provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" }]
-        : [{ provider: "openai", id: "gpt-5.4", name: "GPT 5.4" }],
-    );
-
-    const entry = expectPatchOk(
-      await runPatch({
-        cfg: createAllowlistedAnthropicModelCfg(),
-        patch: { key: MAIN_SESSION_KEY, model: "anthropic/claude-sonnet-4-6" },
-        loadGatewayModelCatalog,
-      }),
-    );
-
-    expect(entry.providerOverride).toBe("anthropic");
-    expect(entry.modelOverride).toBe("claude-sonnet-4-6");
-    expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "runtimeDiscovery" });
-  });
-
   test("sets spawnDepth for subagent sessions", async () => {
     const entry = expectPatchOk(
       await runPatch({
@@ -394,19 +373,6 @@ describe("gateway sessions patch", () => {
     });
     setActivePluginRegistry(registry);
 
-    const loadGatewayModelCatalog = vi.fn(async (params?: { mode?: GatewayModelCatalogMode }) =>
-      params?.mode === "runtimeDiscovery"
-        ? [
-            {
-              provider: "ollama",
-              id: "qwen3:0.6b",
-              name: "qwen3:0.6b",
-              reasoning: true,
-            },
-          ]
-        : [{ provider: "openai", id: "gpt-5.4", name: "GPT 5.4" }],
-    );
-
     const entry = expectPatchOk(
       await runPatch({
         cfg: {
@@ -420,122 +386,18 @@ describe("gateway sessions patch", () => {
           key: MAIN_SESSION_KEY,
           thinkingLevel: "medium",
         },
-        loadGatewayModelCatalog,
+        loadGatewayModelCatalog: async () => [
+          {
+            provider: "ollama",
+            id: "qwen3:0.6b",
+            name: "qwen3:0.6b",
+            reasoning: true,
+          },
+        ],
       }),
     );
 
     expect(entry.thinkingLevel).toBe("medium");
-    expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "runtimeDiscovery" });
-  });
-
-  test("uses runtime discovery for explicit thinkingLevel validation hints", async () => {
-    const registry = createEmptyPluginRegistry();
-    registry.providers.push({
-      pluginId: "ollama",
-      source: "test",
-      provider: {
-        id: "ollama",
-        label: "Ollama",
-        auth: [],
-        resolveThinkingProfile: ({ reasoning }) => ({
-          levels:
-            reasoning === true
-              ? [{ id: "off" }, { id: "low" }, { id: "medium" }, { id: "high" }, { id: "max" }]
-              : [{ id: "off" }],
-          defaultLevel: "off",
-        }),
-      },
-    });
-    setActivePluginRegistry(registry);
-
-    const loadGatewayModelCatalog = vi.fn(async (params?: { mode?: GatewayModelCatalogMode }) =>
-      params?.mode === "runtimeDiscovery"
-        ? [
-            {
-              provider: "ollama",
-              id: "qwen3:0.6b",
-              name: "qwen3:0.6b",
-              reasoning: true,
-            },
-          ]
-        : [{ provider: "openai", id: "gpt-5.4", name: "GPT 5.4" }],
-    );
-
-    const result = await runPatch({
-      cfg: {
-        agents: {
-          defaults: {
-            model: { primary: "ollama/qwen3:0.6b" },
-          },
-        },
-      } as OpenClawConfig,
-      patch: {
-        key: MAIN_SESSION_KEY,
-        thinkingLevel: "nope",
-      },
-      loadGatewayModelCatalog,
-    });
-
-    expectPatchError(result, "invalid thinkingLevel (use off|low|medium|high|max)");
-    expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "runtimeDiscovery" });
-  });
-
-  test("reuses explicit model discovery for same-request thinking validation", async () => {
-    const registry = createEmptyPluginRegistry();
-    registry.providers.push({
-      pluginId: "ollama",
-      source: "test",
-      provider: {
-        id: "ollama",
-        label: "Ollama",
-        auth: [],
-        resolveThinkingProfile: ({ reasoning }) => ({
-          levels:
-            reasoning === true
-              ? [{ id: "off" }, { id: "low" }, { id: "medium" }, { id: "high" }, { id: "max" }]
-              : [{ id: "off" }],
-          defaultLevel: "off",
-        }),
-      },
-    });
-    setActivePluginRegistry(registry);
-
-    const loadGatewayModelCatalog = vi.fn(async (params?: { mode?: GatewayModelCatalogMode }) =>
-      params?.mode === "runtimeDiscovery"
-        ? [
-            {
-              provider: "ollama",
-              id: "qwen3:0.6b",
-              name: "qwen3:0.6b",
-              reasoning: true,
-            },
-          ]
-        : [{ provider: "openai", id: "gpt-5.4", name: "GPT 5.4" }],
-    );
-
-    const entry = expectPatchOk(
-      await runPatch({
-        cfg: {
-          agents: {
-            defaults: {
-              model: { primary: "openai/gpt-5.4" },
-            },
-          },
-        } as OpenClawConfig,
-        patch: {
-          key: MAIN_SESSION_KEY,
-          model: "ollama/qwen3:0.6b",
-          thinkingLevel: "medium",
-        },
-        loadGatewayModelCatalog,
-      }),
-    );
-
-    expect(entry.providerOverride).toBe("ollama");
-    expect(entry.modelOverride).toBe("qwen3:0.6b");
-    expect(entry.thinkingLevel).toBe("medium");
-    expect(loadGatewayModelCatalog).toHaveBeenCalledTimes(1);
-    expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "runtimeDiscovery" });
   });
 
   test("accepts xhigh thinking patches from configured catalog compat", async () => {

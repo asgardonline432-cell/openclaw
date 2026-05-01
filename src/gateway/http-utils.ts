@@ -95,7 +95,7 @@ export async function resolveOpenAiCompatModelOverride(params: {
     return { errorMessage: "Invalid `x-openclaw-model`." };
   }
 
-  const catalog = await loadGatewayModelCatalog({ mode: "runtimeDiscovery" });
+  const catalog = await loadGatewayModelCatalog();
   const allowed = buildAllowedModelSet({
     cfg,
     catalog,

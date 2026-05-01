@@ -3,10 +3,6 @@ import { isEmbeddedMode, setEmbeddedMode } from "../infra/embedded-mode.js";
 import { defaultRuntime } from "../runtime.js";
 
 const agentCommandFromIngressMock = vi.fn();
-const loadGatewayModelCatalogMock = vi.fn();
-const resolveVisibleModelCatalogMock = vi.fn(({ catalog }: { catalog: unknown[] }) => catalog);
-const resolveThinkingDefaultMock = vi.fn(() => undefined);
-const loadSessionEntryMock = vi.fn();
 let registeredListener: ((evt: unknown) => void) | undefined;
 
 vi.mock("../agents/agent-command.js", () => ({
@@ -35,8 +31,6 @@ vi.mock("../config/sessions.js", () => ({
 }));
 
 vi.mock("../agents/agent-scope.js", () => ({
-  resolveAgentWorkspaceDir: () => undefined,
-  resolveDefaultAgentId: () => "main",
   resolveSessionAgentId: () => "main",
 }));
 
@@ -44,18 +38,9 @@ vi.mock("../agents/defaults.js", () => ({
   DEFAULT_PROVIDER: "openai",
 }));
 
-vi.mock("../agents/model-catalog-visibility.js", () => ({
-  resolveVisibleModelCatalog: (params: { catalog: unknown[] }) =>
-    resolveVisibleModelCatalogMock(params),
-}));
-
 vi.mock("../agents/model-selection.js", () => ({
   buildAllowedModelSet: ({ catalog }: { catalog: unknown[] }) => ({ allowedCatalog: catalog }),
-  resolveThinkingDefault: (...args: unknown[]) => resolveThinkingDefaultMock(...args),
-}));
-
-vi.mock("../agents/workspace.js", () => ({
-  resolveDefaultAgentWorkspaceDir: () => "/tmp/openclaw-agent",
+  resolveThinkingDefault: () => undefined,
 }));
 
 vi.mock("../config/config.js", () => ({
@@ -92,7 +77,11 @@ vi.mock("../gateway/session-utils.js", () => ({
     storePath: "/tmp/openclaw-sessions.json",
     store: {},
   }),
-  loadSessionEntry: (sessionKey: string) => loadSessionEntryMock(sessionKey),
+  loadSessionEntry: (sessionKey: string) => ({
+    cfg: {},
+    canonicalKey: sessionKey,
+    entry: {},
+  }),
   migrateAndPruneGatewaySessionStoreKey: ({ key }: { key: string }) => ({ primaryKey: key }),
   readSessionMessages: () => [],
   resolveGatewaySessionStoreTarget: ({ key }: { key: string }) => ({
@@ -103,7 +92,7 @@ vi.mock("../gateway/session-utils.js", () => ({
 }));
 
 vi.mock("../gateway/server-model-catalog.js", () => ({
-  loadGatewayModelCatalog: (params?: unknown) => loadGatewayModelCatalogMock(params),
+  loadGatewayModelCatalog: () => [],
 }));
 
 vi.mock("../gateway/session-reset-service.js", () => ({
@@ -144,16 +133,6 @@ describe("EmbeddedTuiBackend", () => {
 
   beforeEach(() => {
     agentCommandFromIngressMock.mockReset();
-    loadGatewayModelCatalogMock.mockReset().mockResolvedValue([]);
-    resolveThinkingDefaultMock.mockReset().mockReturnValue(undefined);
-    resolveVisibleModelCatalogMock
-      .mockReset()
-      .mockImplementation(({ catalog }: { catalog: unknown[] }) => catalog);
-    loadSessionEntryMock.mockReset().mockImplementation((sessionKey: string) => ({
-      cfg: {},
-      canonicalKey: sessionKey,
-      entry: {},
-    }));
     registeredListener = undefined;
     setEmbeddedMode(false);
     defaultRuntime.log = originalRuntimeLog;
@@ -465,60 +444,5 @@ describe("EmbeddedTuiBackend", () => {
     expect(isEmbeddedMode()).toBe(false);
     expect(defaultRuntime.log).toBe(originalRuntimeLog);
     expect(defaultRuntime.error).toBe(originalRuntimeError);
-  });
-
-  it("uses the gateway default model-list policy for embedded model selection", async () => {
-    const { EmbeddedTuiBackend } = await import("./embedded-backend.js");
-    loadGatewayModelCatalogMock.mockResolvedValueOnce([
-      { provider: "openai", id: "gpt-5.4", name: "GPT 5.4" },
-      { provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
-    ]);
-    resolveVisibleModelCatalogMock.mockReturnValueOnce([
-      { provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
-    ]);
-
-    const backend = new EmbeddedTuiBackend();
-    const models = await backend.listModels();
-
-    expect(loadGatewayModelCatalogMock).toHaveBeenCalledWith({ mode: "cachePreferred" });
-    expect(resolveVisibleModelCatalogMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        defaultProvider: "openai",
-        workspaceDir: "/tmp/openclaw-agent",
-      }),
-    );
-    expect(models).toEqual([
-      {
-        id: "claude-sonnet-4-6",
-        name: "Claude Sonnet 4.6",
-        provider: "anthropic",
-        contextWindow: undefined,
-        reasoning: undefined,
-      },
-    ]);
-  });
-
-  it("uses cachePreferred catalog policy for embedded history thinking defaults", async () => {
-    const { EmbeddedTuiBackend } = await import("./embedded-backend.js");
-    loadSessionEntryMock.mockReturnValueOnce({
-      cfg: {},
-      canonicalKey: "agent:main:main",
-      entry: {},
-    });
-    loadGatewayModelCatalogMock.mockResolvedValueOnce([
-      { provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
-    ]);
-    resolveThinkingDefaultMock.mockReturnValueOnce("adaptive");
-
-    const backend = new EmbeddedTuiBackend();
-    const history = (await backend.loadHistory({
-      sessionKey: "agent:main:main",
-      limit: 50,
-    })) as {
-      thinkingLevel?: string;
-    };
-
-    expect(loadGatewayModelCatalogMock).toHaveBeenCalledWith({ mode: "cachePreferred" });
-    expect(history.thinkingLevel).toBe("adaptive");
   });
 });

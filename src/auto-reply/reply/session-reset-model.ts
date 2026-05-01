@@ -31,11 +31,7 @@ function splitBody(body: string) {
 
 async function loadResetModelCatalog(cfg: OpenClawConfig): Promise<ModelCatalogEntry[]> {
   const { loadModelCatalog } = await import("../../agents/model-catalog.js");
-  return loadModelCatalog({
-    config: cfg,
-    intent: "runtimeDiscovery",
-    source: "auto-reply.session-reset-model",
-  });
+  return loadModelCatalog({ config: cfg });
 }
 
 async function resolveResetFallbackModels(params: {

@@ -45,7 +45,6 @@ import {
   errorShape,
   type SessionsPatchParams,
 } from "./protocol/index.js";
-import type { GatewayModelCatalogMode } from "./server-model-catalog.js";
 
 function invalid(message: string): { ok: false; error: ErrorShape } {
   return { ok: false, error: errorShape(ErrorCodes.INVALID_REQUEST, message) };
@@ -92,9 +91,7 @@ export async function applySessionsPatchToStore(params: {
   store: Record<string, SessionEntry>;
   storeKey: string;
   patch: SessionsPatchParams;
-  loadGatewayModelCatalog?: (params?: {
-    mode?: GatewayModelCatalogMode;
-  }) => Promise<ModelCatalogEntry[]>;
+  loadGatewayModelCatalog?: () => Promise<ModelCatalogEntry[]>;
 }): Promise<{ ok: true; entry: SessionEntry } | { ok: false; error: ErrorShape }> {
   const { cfg, store, storeKey, patch } = params;
   const now = Date.now();
@@ -104,23 +101,18 @@ export async function applySessionsPatchToStore(params: {
   const subagentModelHint = isSubagentSessionKey(storeKey)
     ? resolveSubagentConfiguredModelSelection({ cfg, agentId: sessionAgentId })
     : undefined;
-  const loadedModelCatalogByMode = new Map<GatewayModelCatalogMode, ModelCatalogEntry[]>();
-  let explicitModelSwitchCatalog: ModelCatalogEntry[] | undefined;
-  const loadModelCatalogForPatch = async (mode: GatewayModelCatalogMode = "cacheOnly") => {
-    const cached = loadedModelCatalogByMode.get(mode);
-    if (cached) {
-      return cached;
+  let loadedModelCatalog: ModelCatalogEntry[] | undefined;
+  const loadModelCatalogForPatch = async () => {
+    if (loadedModelCatalog) {
+      return loadedModelCatalog;
     }
     if (!params.loadGatewayModelCatalog) {
       return undefined;
     }
-    const catalog = await params.loadGatewayModelCatalog({ mode });
-    const normalizedCatalog = Array.isArray(catalog) ? catalog : [];
-    loadedModelCatalogByMode.set(mode, normalizedCatalog);
-    return normalizedCatalog;
+    const catalog = await params.loadGatewayModelCatalog();
+    loadedModelCatalog = Array.isArray(catalog) ? catalog : [];
+    return loadedModelCatalog;
   };
-  const loadExplicitThinkingCatalogForPatch = async () =>
-    explicitModelSwitchCatalog ?? (await loadModelCatalogForPatch("runtimeDiscovery"));
 
   const existing = store[storeKey];
   const next: SessionEntry = existing
@@ -268,7 +260,7 @@ export async function applySessionsPatchToStore(params: {
         const hintProvider =
           normalizeOptionalString(existing?.providerOverride) || resolvedDefault.provider;
         const hintModel = normalizeOptionalString(existing?.modelOverride) || resolvedDefault.model;
-        const thinkingCatalog = await loadExplicitThinkingCatalogForPatch();
+        const thinkingCatalog = await loadModelCatalogForPatch();
         return invalid(
           `invalid thinkingLevel (use ${formatThinkingLevels(hintProvider, hintModel, "|", thinkingCatalog)})`,
         );
@@ -429,7 +421,7 @@ export async function applySessionsPatchToStore(params: {
           error: errorShape(ErrorCodes.UNAVAILABLE, "model catalog unavailable"),
         };
       }
-      const catalog = await loadModelCatalogForPatch("runtimeDiscovery");
+      const catalog = await loadModelCatalogForPatch();
       if (!catalog) {
         return {
           ok: false,
@@ -449,7 +441,6 @@ export async function applySessionsPatchToStore(params: {
       const isDefault =
         resolved.ref.provider === resolvedDefault.provider &&
         resolved.ref.model === resolvedDefault.model;
-      explicitModelSwitchCatalog = catalog;
       applyModelOverrideToSessionEntry({
         entry: next,
         selection: {
@@ -466,10 +457,7 @@ export async function applySessionsPatchToStore(params: {
     const effectiveProvider = next.providerOverride ?? resolvedDefault.provider;
     const effectiveModel = next.modelOverride ?? resolvedDefault.model;
     const thinkingLevel = normalizeThinkLevel(next.thinkingLevel);
-    const thinkingCatalog =
-      "thinkingLevel" in patch && patch.thinkingLevel !== null
-        ? await loadExplicitThinkingCatalogForPatch()
-        : (explicitModelSwitchCatalog ?? (await loadModelCatalogForPatch()));
+    const thinkingCatalog = await loadModelCatalogForPatch();
     if (!thinkingLevel) {
       delete next.thinkingLevel;
     } else if (

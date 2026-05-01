@@ -8,10 +8,7 @@ export {
 export { resolveCronStyleNow } from "../../agents/current-time.js";
 export { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 export { isCliProvider } from "../../agents/model-selection-cli.js";
-export {
-  resolveThinkingDefault,
-  resolveThinkingDefaultDecision,
-} from "../../agents/model-thinking-default.js";
+export { resolveThinkingDefault } from "../../agents/model-thinking-default.js";
 export { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 export { deriveSessionTotalTokens, hasNonzeroUsage } from "../../agents/usage.js";
 export { DEFAULT_IDENTITY_FILENAME, ensureAgentWorkspace } from "../../agents/workspace.js";

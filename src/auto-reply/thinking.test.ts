@@ -16,7 +16,6 @@ let isThinkingLevelSupported: typeof import("./thinking.js").isThinkingLevelSupp
 let formatThinkingLevels: typeof import("./thinking.js").formatThinkingLevels;
 let resolveSupportedThinkingLevel: typeof import("./thinking.js").resolveSupportedThinkingLevel;
 let resolveThinkingDefaultForModel: typeof import("./thinking.js").resolveThinkingDefaultForModel;
-let resolveThinkingDefaultForModelDecision: typeof import("./thinking.js").resolveThinkingDefaultForModelDecision;
 
 async function loadFreshThinkingModuleForTest() {
   vi.resetModules();
@@ -49,7 +48,6 @@ beforeEach(async () => {
     formatThinkingLevels,
     resolveSupportedThinkingLevel,
     resolveThinkingDefaultForModel,
-    resolveThinkingDefaultForModelDecision,
   } = await loadFreshThinkingModuleForTest());
 });
 
@@ -402,56 +400,6 @@ describe("resolveThinkingDefaultForModel", () => {
         catalog: [{ provider: "openai", id: "gpt-4.1-mini", reasoning: false }],
       }),
     ).toBe("off");
-  });
-
-  it("marks provider-owned Bedrock Claude 4.6 defaults as not catalog-dependent", () => {
-    providerRuntimeMocks.resolveProviderDefaultThinkingLevel.mockImplementation(
-      ({ provider, context }) =>
-        provider === "amazon-bedrock" && context.modelId === "claude-sonnet-4-6"
-          ? "adaptive"
-          : undefined,
-    );
-
-    expect(
-      resolveThinkingDefaultForModelDecision({
-        provider: "aws-bedrock",
-        model: "claude-sonnet-4-6",
-      }),
-    ).toEqual({
-      level: "adaptive",
-      dependsOnCatalog: false,
-    });
-  });
-
-  it("marks reasoning-sensitive provider defaults as catalog-dependent", () => {
-    providerRuntimeMocks.resolveProviderDefaultThinkingLevel.mockImplementation(
-      ({ provider, context }) =>
-        provider === "demo-contextual" ? (context.reasoning === true ? "low" : "off") : undefined,
-    );
-
-    expect(
-      resolveThinkingDefaultForModelDecision({
-        provider: "demo-contextual",
-        model: "demo-model",
-        catalog: [{ provider: "demo-contextual", id: "demo-model", reasoning: true }],
-      }),
-    ).toEqual({
-      level: "low",
-      dependsOnCatalog: true,
-    });
-  });
-
-  it("marks implicit reasoning defaults as catalog-dependent", () => {
-    expect(
-      resolveThinkingDefaultForModelDecision({
-        provider: "openai",
-        model: "gpt-5.4",
-        catalog: [{ provider: "openai", id: "gpt-5.4", reasoning: true }],
-      }),
-    ).toEqual({
-      level: "medium",
-      dependsOnCatalog: true,
-    });
   });
 });
 

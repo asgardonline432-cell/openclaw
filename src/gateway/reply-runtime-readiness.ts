@@ -207,13 +207,7 @@ export async function prepareReplyRuntimeForChannels(params: {
       "selected-model-metadata",
       `${selected.provider}/${selected.model}`,
       async () => {
-        const catalog = await loadModelCatalog({
-          config: params.cfg,
-          workspaceDir,
-          intent: "readiness",
-          source: "gateway.reply-runtime-readiness.model-catalog",
-          providerDiscoveryProviderIds: [selected.provider],
-        });
+        const catalog = await loadModelCatalog({ config: params.cfg });
         if (
           !catalog.some(
             (entry) => entry.provider === selected.provider && entry.id === selected.model,
@@ -252,7 +246,6 @@ export async function prepareReplyRuntimeForChannels(params: {
         config: params.cfg,
         workspaceDir,
         env: process.env,
-        source: "gateway.reply-runtime-readiness.provider-runtime",
       });
       if (!plugin) {
         throw new Error(`No provider runtime resolved for ${selected.provider}.`);
@@ -313,7 +306,6 @@ export async function prepareReplyRuntimeForChannels(params: {
         config: params.cfg,
         workspaceDir,
         env: process.env,
-        source: "gateway.reply-runtime-readiness.provider-auth",
         context: {
           config: params.cfg,
           agentDir,

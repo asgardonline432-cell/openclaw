@@ -1,4 +1,4 @@
-import { resolveThinkingDefaultForModelDecision } from "../auto-reply/thinking.js";
+import { resolveThinkingDefaultForModel } from "../auto-reply/thinking.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -10,17 +10,12 @@ import { normalizeModelSelection } from "./model-selection-resolve.js";
 
 type ThinkLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "adaptive" | "max";
 
-export type ThinkingDefaultDecision = {
-  level: ThinkLevel;
-  dependsOnCatalog: boolean;
-};
-
-export function resolveThinkingDefaultDecision(params: {
+export function resolveThinkingDefault(params: {
   cfg: OpenClawConfig;
   provider: string;
   model: string;
   catalog?: ModelCatalogEntry[];
-}): ThinkingDefaultDecision {
+}): ThinkLevel {
   const normalizedProvider = normalizeProviderId(params.provider);
   const normalizedModel = normalizeLowercaseStringOrEmpty(params.model).replace(/\./g, "-");
   const catalogCandidate = Array.isArray(params.catalog)
@@ -54,54 +49,31 @@ export function resolveThinkingDefaultDecision(params: {
     perModelThinking === "adaptive" ||
     perModelThinking === "max"
   ) {
-    return {
-      level: perModelThinking,
-      dependsOnCatalog: false,
-    };
+    return perModelThinking;
   }
   const configured = params.cfg.agents?.defaults?.thinkingDefault;
   if (configured) {
-    return {
-      level: configured,
-      dependsOnCatalog: false,
-    };
+    return configured;
   }
   if (
     normalizedProvider === "anthropic" &&
     (normalizedModel.startsWith("claude-opus-4-7") || normalizedModel.startsWith("claude-opus-4.7"))
   ) {
-    return {
-      level: "off",
-      dependsOnCatalog: false,
-    };
+    return "off";
   }
-  const modelDecision = resolveThinkingDefaultForModelDecision({
-    provider: params.provider,
-    model: params.model,
-    catalog: params.catalog,
-  });
   if (
     normalizedProvider === "anthropic" &&
     explicitModelConfigured &&
     typeof catalogCandidate?.name === "string" &&
     /4\.6\b/.test(catalogCandidate.name) &&
     (normalizedModel.startsWith("claude-opus-4-6") ||
-      normalizedModel.startsWith("claude-sonnet-4-6")) &&
-    modelDecision.level !== "adaptive"
+      normalizedModel.startsWith("claude-sonnet-4-6"))
   ) {
-    return {
-      level: "adaptive",
-      dependsOnCatalog: true,
-    };
+    return "adaptive";
   }
-  return modelDecision;
-}
-
-export function resolveThinkingDefault(params: {
-  cfg: OpenClawConfig;
-  provider: string;
-  model: string;
-  catalog?: ModelCatalogEntry[];
-}): ThinkLevel {
-  return resolveThinkingDefaultDecision(params).level;
+  return resolveThinkingDefaultForModel({
+    provider: params.provider,
+    model: params.model,
+    catalog: params.catalog,
+  });
 }

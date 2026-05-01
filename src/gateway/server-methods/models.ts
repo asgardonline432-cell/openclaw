@@ -26,11 +26,11 @@ async function loadModelsListCatalog(
   view: ModelsListView,
 ): Promise<GatewayModelCatalog> {
   if (view === "all") {
-    return await context.loadGatewayModelCatalog({ mode: "runtimeDiscovery" });
+    return await context.loadGatewayModelCatalog();
   }
   let timeout: NodeJS.Timeout | undefined;
   const timedOut = Symbol("models-list-catalog-timeout");
-  const catalogPromise = context.loadGatewayModelCatalog({ mode: "cachePreferred" });
+  const catalogPromise = context.loadGatewayModelCatalog();
   const timeoutPromise = new Promise<typeof timedOut>((resolve) => {
     timeout = setTimeout(() => resolve(timedOut), MODELS_LIST_CATALOG_TIMEOUT_MS);
     timeout.unref?.();

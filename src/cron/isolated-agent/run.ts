@@ -55,7 +55,6 @@ import {
   resolveSupportedThinkingLevel,
   resolveSessionTranscriptPath,
   resolveThinkingDefault,
-  resolveThinkingDefaultDecision,
   setSessionRuntimeModel,
 } from "./run.runtime.js";
 import type { RunCronAgentTurnResult } from "./run.types.js";
@@ -491,35 +490,16 @@ async function prepareCronRunContext(params: {
     ...input.cfg,
     agents: Object.assign({}, input.cfg.agents, { defaults: agentCfg }),
   };
-  let cacheOnlyCatalog:
-    | Awaited<ReturnType<CronModelCatalogRuntime["loadModelCatalog"]>>
-    | undefined;
-  let runtimeDiscoveryCatalog:
-    | Awaited<ReturnType<CronModelCatalogRuntime["loadModelCatalog"]>>
-    | undefined;
-  const loadCatalog = async (intent: "cacheOnly" | "runtimeDiscovery" = "cacheOnly") => {
-    if (intent === "runtimeDiscovery") {
-      if (!runtimeDiscoveryCatalog) {
-        runtimeDiscoveryCatalog = await (
-          await loadCronModelCatalogRuntime()
-        ).loadModelCatalog({
-          config: cfgWithAgentDefaults,
-          intent: "runtimeDiscovery",
-          source: "cron.thinking.discovery",
-        });
-      }
-      return runtimeDiscoveryCatalog;
-    }
-    if (!cacheOnlyCatalog) {
-      cacheOnlyCatalog = await (
+  let catalog: Awaited<ReturnType<CronModelCatalogRuntime["loadModelCatalog"]>> | undefined;
+  const loadCatalog = async () => {
+    if (!catalog) {
+      catalog = await (
         await loadCronModelCatalogRuntime()
       ).loadModelCatalog({
         config: cfgWithAgentDefaults,
-        intent: "cacheOnly",
-        source: "cron.thinking",
       });
     }
-    return cacheOnlyCatalog;
+    return catalog;
   };
 
   const baseSessionKey = (input.sessionKey?.trim() || `cron:${input.job.id}`).trim();
@@ -597,68 +577,6 @@ async function prepareCronRunContext(params: {
   }
   let provider = resolvedModelSelection.provider;
   let model = resolvedModelSelection.model;
-  const resolveModelCatalogEntry = (catalog: Awaited<ReturnType<typeof loadCatalog>>) =>
-    catalog.find((entry) => entry.provider === provider && entry.id === model);
-  const resolveThinkingDefaultWithFallback = async () => {
-    const cached = await loadCatalog("cacheOnly");
-    const cachedDecision = resolveThinkingDefaultDecision({
-      cfg: cfgWithAgentDefaults,
-      provider,
-      model,
-      catalog: cached,
-    });
-    if (!cachedDecision.dependsOnCatalog) {
-      return { catalog: cached, level: cachedDecision.level };
-    }
-    const discovered = await loadCatalog("runtimeDiscovery");
-    if (!resolveModelCatalogEntry(discovered)) {
-      return { catalog: cached, level: cachedDecision.level };
-    }
-    const discoveredDecision = resolveThinkingDefaultDecision({
-      cfg: cfgWithAgentDefaults,
-      provider,
-      model,
-      catalog: discovered,
-    });
-    if (discoveredDecision.level === cachedDecision.level) {
-      return {
-        catalog: cached,
-        level: cachedDecision.level,
-      };
-    }
-    return {
-      catalog: discovered,
-      level: resolveThinkingDefault({
-        cfg: cfgWithAgentDefaults,
-        provider,
-        model,
-        catalog: discovered,
-      }),
-    };
-  };
-  const resolveThinkingSupportWithFallback = async (level: ThinkLevel) => {
-    const cached = await loadCatalog("cacheOnly");
-    if (isThinkingLevelSupported({ provider, model, level, catalog: cached })) {
-      return { catalog: cached, level };
-    }
-    const discovered = await loadCatalog("runtimeDiscovery");
-    if (
-      resolveModelCatalogEntry(discovered) &&
-      isThinkingLevelSupported({ provider, model, level, catalog: discovered })
-    ) {
-      return { catalog: discovered, level };
-    }
-    const fallbackCatalog = resolveModelCatalogEntry(discovered) ? discovered : cached;
-    return {
-      catalog: fallbackCatalog,
-      level: resolveSupportedThinkingLevel({
-        provider,
-        model,
-        level,
-        catalog: fallbackCatalog,
-      }),
-    };
-  };
 
   const preflight = await (
     await loadCronModelPreflightRuntime()
@@ -687,25 +605,29 @@ async function prepareCronRunContext(params: {
     (input.job.payload.kind === "agentTurn" ? input.job.payload.thinking : undefined) ?? undefined,
   );
   let thinkLevel: ThinkLevel | undefined = jobThink ?? hooksGmailThinking;
-  let thinkingCatalog = await loadCatalog("cacheOnly");
   if (!thinkLevel) {
-    const resolvedThinkingDefault = await resolveThinkingDefaultWithFallback();
-    thinkingCatalog = resolvedThinkingDefault.catalog;
-    thinkLevel = resolvedThinkingDefault.level;
+    const thinkingCatalog = await loadCatalog();
+    thinkLevel = resolveThinkingDefault({
+      cfg: cfgWithAgentDefaults,
+      provider,
+      model,
+      catalog: thinkingCatalog,
+    });
   }
-  if (!thinkLevel) {
-    thinkLevel = "off";
-  }
-  const resolvedThinkingSupport = await resolveThinkingSupportWithFallback(thinkLevel);
-  thinkingCatalog = resolvedThinkingSupport.catalog;
-  if (resolvedThinkingSupport.level !== thinkLevel) {
-    const fallbackThinkLevel = resolvedThinkingSupport.level;
+  const thinkingCatalog = await loadCatalog();
+  if (!isThinkingLevelSupported({ provider, model, level: thinkLevel, catalog: thinkingCatalog })) {
+    const fallbackThinkLevel = resolveSupportedThinkingLevel({
+      provider,
+      model,
+      level: thinkLevel,
+      catalog: thinkingCatalog,
+    });
     if (fallbackThinkLevel !== thinkLevel) {
       logWarn(
         `[cron:${input.job.id}] Thinking level "${thinkLevel}" is not supported for ${provider}/${model}; downgrading to "${fallbackThinkLevel}".`,
       );
+      thinkLevel = fallbackThinkLevel;
     }
-    thinkLevel = fallbackThinkLevel;
   }
 
   const timeoutMs = resolveAgentTimeoutMs({

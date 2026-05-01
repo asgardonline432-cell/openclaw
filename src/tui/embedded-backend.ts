@@ -1,14 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { agentCommandFromIngress } from "../agents/agent-command.js";
-import {
-  resolveAgentWorkspaceDir,
-  resolveDefaultAgentId,
-  resolveSessionAgentId,
-} from "../agents/agent-scope.js";
+import { resolveSessionAgentId } from "../agents/agent-scope.js";
 import { DEFAULT_PROVIDER } from "../agents/defaults.js";
-import { resolveVisibleModelCatalog } from "../agents/model-catalog-visibility.js";
 import { buildAllowedModelSet, resolveThinkingDefault } from "../agents/model-selection.js";
-import { resolveDefaultAgentWorkspaceDir } from "../agents/workspace.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { getRuntimeConfig } from "../config/config.js";
 import { updateSessionStore } from "../config/sessions.js";
@@ -229,7 +223,7 @@ export class EmbeddedTuiBackend implements TuiBackend {
 
     let thinkingLevel = entry?.thinkingLevel;
     if (!thinkingLevel) {
-      const catalog = await loadGatewayModelCatalog({ mode: "cachePreferred" });
+      const catalog = await loadGatewayModelCatalog();
       thinkingLevel = resolveThinkingDefault({
         cfg,
         provider: resolvedSessionModel.provider,
@@ -320,23 +314,14 @@ export class EmbeddedTuiBackend implements TuiBackend {
   }
 
   async listModels(): Promise<TuiModelChoice[]> {
-    const catalog = await loadGatewayModelCatalog({ mode: "cachePreferred" });
+    const catalog = await loadGatewayModelCatalog();
     const cfg = getRuntimeConfig();
-    const workspaceDir =
-      resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg)) ??
-      resolveDefaultAgentWorkspaceDir();
-    const visibleCatalog = resolveVisibleModelCatalog({
+    const { allowedCatalog } = buildAllowedModelSet({
       cfg,
       catalog,
       defaultProvider: DEFAULT_PROVIDER,
-      workspaceDir,
     });
-    const { allowedCatalog } = buildAllowedModelSet({
-      cfg,
-      catalog: visibleCatalog,
-      defaultProvider: DEFAULT_PROVIDER,
-    });
-    const entries = allowedCatalog.length > 0 ? allowedCatalog : visibleCatalog;
+    const entries = allowedCatalog.length > 0 ? allowedCatalog : catalog;
     return entries.map((entry) => ({
       id: entry.id,
       name: entry.name ?? entry.id,

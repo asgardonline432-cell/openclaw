@@ -13,7 +13,6 @@ import {
   resolveReasoningDefault,
   resolveThinkingDefault,
 } from "../../agents/model-selection.js";
-import { resolveThinkingDefaultDecision } from "../../agents/model-thinking-default.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { applyModelOverrideToSessionEntry } from "../../sessions/model-overrides.js";
@@ -131,8 +130,6 @@ export async function createModelSelectionState(params: {
   let allowedModelKeys = new Set<string>();
   let allowedModelCatalog: ModelCatalog = configuredModelCatalog;
   let modelCatalog: ModelCatalog | null = null;
-  let cacheOnlyModelCatalog: ModelCatalog | undefined;
-  let runtimeDiscoveryModelCatalog: ModelCatalog | undefined;
   let resetModelOverride = false;
   let resetModelOverrideRef: string | undefined;
   const agentEntry = params.agentId ? resolveAgentConfig(cfg, params.agentId) : undefined;
@@ -143,13 +140,7 @@ export async function createModelSelectionState(params: {
   });
 
   if (needsModelCatalog) {
-    modelCatalog = await (
-      await loadModelCatalogRuntime()
-    ).loadModelCatalog({
-      config: cfg,
-      intent: "runtimeDiscovery",
-      source: "auto-reply.model-directive",
-    });
+    modelCatalog = await (await loadModelCatalogRuntime()).loadModelCatalog({ config: cfg });
     logStage("catalog-loaded", `entries=${modelCatalog.length}`);
     const allowed = buildAllowedModelSet({
       cfg,
@@ -253,101 +244,31 @@ export async function createModelSelectionState(params: {
   }
 
   let thinkingCatalog: ModelCatalog | undefined;
-  const loadSelectedModelMetadataCatalog = async (
-    source: "auto-reply.default-thinking" | "auto-reply.default-reasoning",
-    intent: "cacheOnly" | "runtimeDiscovery",
-  ) => {
-    if (intent === "cacheOnly" && cacheOnlyModelCatalog) {
-      modelCatalog = cacheOnlyModelCatalog;
-      return cacheOnlyModelCatalog;
-    }
-    if (intent === "runtimeDiscovery" && runtimeDiscoveryModelCatalog) {
-      modelCatalog = runtimeDiscoveryModelCatalog;
-      return runtimeDiscoveryModelCatalog;
-    }
-    const loadedCatalog = await (
-      await loadModelCatalogRuntime()
-    ).loadModelCatalog({
-      config: cfg,
-      intent,
-      source,
-    });
-    if (intent === "cacheOnly") {
-      cacheOnlyModelCatalog = loadedCatalog;
-    } else {
-      runtimeDiscoveryModelCatalog = loadedCatalog;
-    }
-    modelCatalog = loadedCatalog;
-    logStage(
-      `catalog-loaded-${source.endsWith("thinking") ? "for-thinking" : "for-reasoning"}`,
-      `entries=${loadedCatalog.length}`,
-    );
-    return loadedCatalog;
-  };
-  const findSelectedCatalogEntry = (catalog?: ModelCatalog | null) =>
-    catalog?.find((entry) => entry.provider === provider && entry.id === model);
-  const canResolveSelectedModelMetadataFromCatalog = (
-    catalog: ModelCatalog | undefined,
-    requireReasoningMetadata: boolean,
-  ) => {
-    const selectedEntry = findSelectedCatalogEntry(catalog);
-    if (selectedEntry?.reasoning !== undefined) {
-      return true;
-    }
-    if (requireReasoningMetadata) {
-      return false;
-    }
-    const decision = resolveThinkingDefaultDecision({
-      cfg,
-      provider,
-      model,
-      catalog: catalog && catalog.length > 0 ? catalog : undefined,
-    });
-    return !decision.dependsOnCatalog;
-  };
-  const resolveSelectedModelMetadataCatalog = async (params: {
-    source: "auto-reply.default-thinking" | "auto-reply.default-reasoning";
-    requireReasoningMetadata: boolean;
-  }): Promise<ModelCatalog | undefined> => {
-    const currentCatalog =
-      modelCatalog && modelCatalog.length > 0 ? modelCatalog : allowedModelCatalog;
-    if (
-      canResolveSelectedModelMetadataFromCatalog(currentCatalog, params.requireReasoningMetadata)
-    ) {
-      return currentCatalog.length > 0 ? currentCatalog : undefined;
-    }
-
-    const cachedCatalog = await loadSelectedModelMetadataCatalog(params.source, "cacheOnly");
-    if (
-      canResolveSelectedModelMetadataFromCatalog(cachedCatalog, params.requireReasoningMetadata)
-    ) {
-      return cachedCatalog.length > 0 ? cachedCatalog : undefined;
-    }
-
-    const runtimeCatalog = await loadSelectedModelMetadataCatalog(
-      params.source,
-      "runtimeDiscovery",
-    );
-    const runtimeSelectedEntry = findSelectedCatalogEntry(runtimeCatalog);
-    if (
-      runtimeSelectedEntry &&
-      (!params.requireReasoningMetadata || runtimeSelectedEntry.reasoning !== undefined)
-    ) {
-      return runtimeCatalog.length > 0 ? runtimeCatalog : undefined;
-    }
-    if (cachedCatalog.length > 0) {
-      return cachedCatalog;
-    }
-    return currentCatalog.length > 0 ? currentCatalog : undefined;
-  };
   const resolveThinkingCatalog = async () => {
     if (thinkingCatalog) {
       return thinkingCatalog;
     }
-    thinkingCatalog = await resolveSelectedModelMetadataCatalog({
-      source: "auto-reply.default-thinking",
-      requireReasoningMetadata: false,
-    });
+    let catalogForThinking =
+      modelCatalog && modelCatalog.length > 0 ? modelCatalog : allowedModelCatalog;
+    const selectedCatalogEntry = catalogForThinking?.find(
+      (entry) => entry.provider === provider && entry.id === model,
+    );
+    const shouldHydrateRuntimeCatalog =
+      !modelCatalog && (!selectedCatalogEntry || selectedCatalogEntry.reasoning === undefined);
+    if (shouldHydrateRuntimeCatalog) {
+      modelCatalog = await (await loadModelCatalogRuntime()).loadModelCatalog({ config: cfg });
+      logStage("catalog-loaded-for-thinking", `entries=${modelCatalog.length}`);
+      const runtimeSelectedEntry = modelCatalog.find(
+        (entry) => entry.provider === provider && entry.id === model,
+      );
+      catalogForThinking =
+        runtimeSelectedEntry || !catalogForThinking || catalogForThinking.length === 0
+          ? modelCatalog.length > 0
+            ? modelCatalog
+            : allowedModelCatalog
+          : allowedModelCatalog;
+    }
+    thinkingCatalog = catalogForThinking.length > 0 ? catalogForThinking : undefined;
     return thinkingCatalog;
   };
 
@@ -375,10 +296,12 @@ export async function createModelSelectionState(params: {
   };
 
   const resolveDefaultReasoningLevel = async (): Promise<"on" | "off"> => {
-    const catalogForReasoning = await resolveSelectedModelMetadataCatalog({
-      source: "auto-reply.default-reasoning",
-      requireReasoningMetadata: true,
-    });
+    let catalogForReasoning = modelCatalog ?? allowedModelCatalog;
+    if (!catalogForReasoning || catalogForReasoning.length === 0) {
+      modelCatalog = await (await loadModelCatalogRuntime()).loadModelCatalog({ config: cfg });
+      logStage("catalog-loaded-for-reasoning", `entries=${modelCatalog.length}`);
+      catalogForReasoning = modelCatalog;
+    }
     return resolveReasoningDefault({
       provider,
       model,

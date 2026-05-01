@@ -50,7 +50,6 @@ export async function compactEmbeddedPiSession(
     config: params.config,
     workspaceDir: params.workspaceDir,
     allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
-    source: "embedded-runner.compact-queued",
   });
   ensureContextEnginesInitialized();
   const agentDir = params.agentDir ?? resolveOpenClawAgentDir();

@@ -127,7 +127,7 @@ async function loadOptionalSessionsListModelCatalog(
   });
   try {
     const result = await Promise.race([
-      context.loadGatewayModelCatalog({ mode: "cachePreferred" }).catch(() => undefined),
+      context.loadGatewayModelCatalog().catch(() => undefined),
       timeoutPromise,
     ]);
     if (result === timedOut) {

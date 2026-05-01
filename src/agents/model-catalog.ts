@@ -1,13 +1,8 @@
 import { join } from "node:path";
 import { getRuntimeConfig } from "../config/config.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import {
-  isReplyCapableChannelsLive,
-  logReplyRuntimeColdPathViolation,
-} from "../gateway/reply-runtime-readiness-monitor.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { augmentModelCatalogWithProviderPlugins } from "../plugins/provider-runtime.runtime.js";
-import { resolveOwningPluginIdsForProvider } from "../plugins/providers.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
@@ -50,7 +45,6 @@ type PiRegistryClassLike = {
 };
 
 let modelCatalogPromise: Promise<ModelCatalogEntry[]> | null = null;
-let modelCatalogCache: ModelCatalogEntry[] | null = null;
 let hasLoggedModelCatalogError = false;
 const defaultImportPiSdk = () => import("./pi-model-discovery-runtime.js");
 let importPiSdk = defaultImportPiSdk;
@@ -67,7 +61,6 @@ function loadModelSuppression() {
 
 export function resetModelCatalogCache() {
   modelCatalogPromise = null;
-  modelCatalogCache = null;
   hasLoggedModelCatalogError = false;
 }
 
@@ -112,73 +105,21 @@ function appendCatalogEntriesIfAbsent(
   }
 }
 
-function sortModelCatalogEntries(entries: ModelCatalogEntry[]): ModelCatalogEntry[] {
-  return [...entries].sort((a, b) => {
-    const p = a.provider.localeCompare(b.provider);
-    if (p !== 0) {
-      return p;
-    }
-    return a.name.localeCompare(b.name);
-  });
-}
-
-export type ModelCatalogLoadIntent = "configured" | "cacheOnly" | "runtimeDiscovery" | "readiness";
-
-function resolveScopedReadinessProviderPluginIds(params: {
-  config?: OpenClawConfig;
-  workspaceDir?: string;
-  env?: NodeJS.ProcessEnv;
-  providerDiscoveryProviderIds?: readonly string[];
-}): string[] | undefined {
-  if (!params.providerDiscoveryProviderIds || params.providerDiscoveryProviderIds.length === 0) {
-    return undefined;
-  }
-  const onlyPluginIds = [
-    ...new Set(
-      params.providerDiscoveryProviderIds.flatMap(
-        (providerId) =>
-          resolveOwningPluginIdsForProvider({
-            provider: providerId,
-            config: params.config,
-            workspaceDir: params.workspaceDir,
-            env: params.env,
-          }) ?? [],
-      ),
-    ),
-  ].toSorted((left, right) => left.localeCompare(right));
-  return onlyPluginIds.length > 0 ? onlyPluginIds : undefined;
-}
-
 export async function loadModelCatalog(params?: {
   config?: OpenClawConfig;
   useCache?: boolean;
   readOnly?: boolean;
-  intent?: ModelCatalogLoadIntent;
-  source?: string;
-  workspaceDir?: string;
-  providerDiscoveryProviderIds?: readonly string[];
 }): Promise<ModelCatalogEntry[]> {
-  const intent = params?.intent ?? "runtimeDiscovery";
-  const cfg = params?.config ?? getRuntimeConfig();
-  if (intent === "configured") {
-    return sortModelCatalogEntries(buildConfiguredModelCatalog({ cfg }));
-  }
-  if (intent === "cacheOnly") {
-    return modelCatalogCache ?? sortModelCatalogEntries(buildConfiguredModelCatalog({ cfg }));
-  }
   const readOnly = params?.readOnly === true;
   if (!readOnly && params?.useCache === false) {
     modelCatalogPromise = null;
-    modelCatalogCache = null;
   }
-  if (!readOnly && intent === "runtimeDiscovery" && modelCatalogPromise) {
+  if (!readOnly && modelCatalogPromise) {
     return modelCatalogPromise;
   }
 
   const loadCatalog = async () => {
     const models: ModelCatalogEntry[] = [];
-    const shouldWarnLateDiscovery = isReplyCapableChannelsLive() && intent === "runtimeDiscovery";
-    const startedAt = shouldWarnLateDiscovery ? Date.now() : 0;
     const timingEnabled = shouldLogModelCatalogTiming();
     const startMs = timingEnabled ? Date.now() : 0;
     const logStage = (stage: string, extra?: string) => {
@@ -188,17 +129,18 @@ export async function loadModelCatalog(params?: {
       const suffix = extra ? ` ${extra}` : "";
       log.info(`model-catalog stage=${stage} elapsedMs=${Date.now() - startMs}${suffix}`);
     };
+    const sortModels = (entries: ModelCatalogEntry[]) =>
+      entries.sort((a, b) => {
+        const p = a.provider.localeCompare(b.provider);
+        if (p !== 0) {
+          return p;
+        }
+        return a.name.localeCompare(b.name);
+      });
     try {
+      const cfg = params?.config ?? getRuntimeConfig();
       if (!readOnly) {
-        await ensureOpenClawModelsJson(cfg, undefined, {
-          ...(params?.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
-          ...(intent === "readiness" && params?.providerDiscoveryProviderIds
-            ? {
-                providerDiscoveryProviderIds: params.providerDiscoveryProviderIds,
-                providerDiscoveryEntriesOnly: true,
-              }
-            : {}),
-        });
+        await ensureOpenClawModelsJson(cfg);
         logStage("models-json-ready");
       }
       // IMPORTANT: keep the dynamic import *inside* the try/catch.
@@ -252,17 +194,6 @@ export async function loadModelCatalog(params?: {
       const supplemental = await augmentModelCatalogWithProviderPlugins({
         config: cfg,
         env: process.env,
-        ...(params?.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
-        ...(intent === "readiness"
-          ? {
-              onlyPluginIds: resolveScopedReadinessProviderPluginIds({
-                config: cfg,
-                workspaceDir: params?.workspaceDir,
-                env: process.env,
-                providerDiscoveryProviderIds: params?.providerDiscoveryProviderIds,
-              }),
-            }
-          : {}),
         context: {
           config: cfg,
           agentDir,
@@ -288,18 +219,8 @@ export async function loadModelCatalog(params?: {
         }
       }
 
-      const sorted = sortModelCatalogEntries(models);
-      if (!readOnly) {
-        modelCatalogCache = sorted;
-      }
+      const sorted = sortModels(models);
       logStage("complete", `entries=${sorted.length}`);
-      if (shouldWarnLateDiscovery) {
-        logReplyRuntimeColdPathViolation({
-          kind: "model-catalog-discovery",
-          source: params?.source ?? "agents.model-catalog",
-          durationMs: Date.now() - startedAt,
-        });
-      }
       return sorted;
     } catch (error) {
       if (!hasLoggedModelCatalogError) {
@@ -311,17 +232,13 @@ export async function loadModelCatalog(params?: {
         modelCatalogPromise = null;
       }
       if (models.length > 0) {
-        const partial = sortModelCatalogEntries(models);
-        if (!readOnly) {
-          modelCatalogCache = partial;
-        }
-        return partial;
+        return sortModels(models);
       }
       return [];
     }
   };
 
-  if (readOnly || intent === "readiness") {
+  if (readOnly) {
     return loadCatalog();
   }
 

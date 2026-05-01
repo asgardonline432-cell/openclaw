@@ -109,7 +109,7 @@ describe("createModelSelectionState catalog loading", () => {
     expect(loadModelCatalog).not.toHaveBeenCalled();
   });
 
-  it("uses cache-only catalog metadata when configured allowlist metadata is incomplete", async () => {
+  it("hydrates runtime catalog metadata when the configured allowlist entry lacks reasoning", async () => {
     vi.mocked(loadModelCatalog).mockClear();
     vi.mocked(loadModelCatalog).mockResolvedValueOnce([
       { provider: "openai-codex", id: "gpt-5.4", name: "GPT-5.4", reasoning: true },
@@ -143,60 +143,7 @@ describe("createModelSelectionState catalog loading", () => {
     });
 
     await expect(state.resolveDefaultThinkingLevel()).resolves.toBe("medium");
-    await expect(state.resolveDefaultReasoningLevel()).resolves.toBe("on");
     expect(loadModelCatalog).toHaveBeenCalledOnce();
-    expect(loadModelCatalog).toHaveBeenCalledWith({
-      config: cfg,
-      intent: "cacheOnly",
-      source: "auto-reply.default-thinking",
-    });
-  });
-
-  it("falls back to runtime discovery when cache-only metadata misses the selected default model", async () => {
-    vi.mocked(loadModelCatalog).mockClear();
-    vi.mocked(loadModelCatalog).mockImplementation(async (params?: { intent?: string }) =>
-      params?.intent === "runtimeDiscovery"
-        ? [{ provider: "openai-codex", id: "gpt-5.4", name: "GPT-5.4", reasoning: true }]
-        : [{ provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" }],
-    );
-    const cfg = {
-      agents: {
-        defaults: {
-          model: { primary: "anthropic/claude-sonnet-4-6" },
-          models: {},
-        },
-      },
-      models: {
-        providers: {
-          "openai-codex": {
-            baseUrl: "https://api.openai.com/v1",
-            models: [makeConfiguredModel({ reasoning: undefined })],
-          },
-        },
-      },
-    } as OpenClawConfig;
-
-    const state = await createModelSelectionState({
-      cfg,
-      agentCfg: cfg.agents?.defaults,
-      defaultProvider: "openai-codex",
-      defaultModel: "gpt-5.4",
-      provider: "openai-codex",
-      model: "gpt-5.4",
-      hasModelDirective: false,
-    });
-
-    await expect(state.resolveDefaultThinkingLevel()).resolves.toBe("medium");
-    expect(loadModelCatalog).toHaveBeenNthCalledWith(1, {
-      config: cfg,
-      intent: "cacheOnly",
-      source: "auto-reply.default-thinking",
-    });
-    expect(loadModelCatalog).toHaveBeenNthCalledWith(2, {
-      config: cfg,
-      intent: "runtimeDiscovery",
-      source: "auto-reply.default-thinking",
-    });
   });
 
   it("prefers per-agent thinkingDefault over model and global defaults", async () => {
@@ -257,11 +204,6 @@ describe("createModelSelectionState catalog loading", () => {
     });
 
     expect(loadModelCatalog).toHaveBeenCalledOnce();
-    expect(loadModelCatalog).toHaveBeenCalledWith({
-      config: cfg,
-      intent: "runtimeDiscovery",
-      source: "auto-reply.model-directive",
-    });
   });
 });
 
@@ -497,35 +439,6 @@ describe("createModelSelectionState respects session model override", () => {
 
     expect(state.provider).toBe("kimi");
     expect(state.model).toBe("kimi-code");
-  });
-
-  it("uses runtime discovery for stored override metadata when cache-only misses the selected model", async () => {
-    vi.mocked(loadModelCatalog).mockClear();
-    vi.mocked(loadModelCatalog).mockImplementation(async (params?: { intent?: string }) =>
-      params?.intent === "runtimeDiscovery"
-        ? [{ provider: "openai", id: "gpt-5.4", name: "GPT-5.4", reasoning: true }]
-        : [{ provider: "anthropic", id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" }],
-    );
-
-    const state = await resolveState(
-      makeEntry({
-        providerOverride: "openai",
-        modelOverride: "gpt-5.4",
-      }),
-    );
-
-    await expect(state.resolveDefaultReasoningLevel()).resolves.toBe("on");
-    await expect(state.resolveDefaultThinkingLevel()).resolves.toBe("medium");
-    expect(loadModelCatalog).toHaveBeenNthCalledWith(1, {
-      config: {} as OpenClawConfig,
-      intent: "cacheOnly",
-      source: "auto-reply.default-reasoning",
-    });
-    expect(loadModelCatalog).toHaveBeenNthCalledWith(2, {
-      config: {} as OpenClawConfig,
-      intent: "runtimeDiscovery",
-      source: "auto-reply.default-reasoning",
-    });
   });
 
   it("falls back to default when no modelOverride is set", async () => {

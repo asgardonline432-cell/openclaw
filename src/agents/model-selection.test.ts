@@ -24,7 +24,6 @@ import {
   resolveThinkingDefault,
   resolveModelRefFromString,
 } from "./model-selection.js";
-import { resolveThinkingDefaultDecision } from "./model-thinking-default.js";
 
 const EXPLICIT_ALLOWLIST_CONFIG = {
   agents: {
@@ -1622,35 +1621,6 @@ describe("model-selection", () => {
           ],
         }),
       ).toBe("medium");
-    });
-
-    it("keeps configured Claude 4.6 adaptive override catalog-dependent when the provider hook is absent", () => {
-      const cfg = {
-        agents: {
-          defaults: {
-            model: { primary: "anthropic/claude-sonnet-4-6" },
-          },
-        },
-      } as OpenClawConfig;
-
-      expect(
-        resolveThinkingDefaultDecision({
-          cfg,
-          provider: "anthropic",
-          model: "claude-sonnet-4-6",
-          catalog: [
-            {
-              provider: "anthropic",
-              id: "claude-sonnet-4-6",
-              name: "Claude Sonnet 4.6",
-              reasoning: true,
-            },
-          ],
-        }),
-      ).toEqual({
-        level: "adaptive",
-        dependsOnCatalog: true,
-      });
     });
   });
 });

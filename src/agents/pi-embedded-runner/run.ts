@@ -400,7 +400,6 @@ export async function runEmbeddedPiAgent(
         config: params.config,
         workspaceDir: resolvedWorkspace,
         allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
-        source: "embedded-runner.run",
       });
       startupStages.mark("runtime-plugins");
 

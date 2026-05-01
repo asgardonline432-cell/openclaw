@@ -75,11 +75,7 @@ export async function buildModelsProviderData(
     agentId,
   });
 
-  const catalog = await loadModelCatalog({
-    config: cfg,
-    intent: "runtimeDiscovery",
-    source: "auto-reply.commands-models",
-  });
+  const catalog = await loadModelCatalog({ config: cfg });
   const visibleCatalog = resolveVisibleModelCatalog({
     cfg,
     catalog,

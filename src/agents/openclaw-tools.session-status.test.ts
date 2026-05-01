@@ -26,23 +26,6 @@ const resolveEnvApiKeyMock = vi.hoisted(() =>
 const resolveUsableCustomProviderApiKeyMock = vi.hoisted(() =>
   vi.fn((_params?: { provider?: string }) => null as { apiKey: string; source: string } | null),
 );
-const loadModelCatalogMock = vi.hoisted(() =>
-  vi.fn(async () => [
-    {
-      provider: "anthropic",
-      id: "claude-sonnet-4-6",
-      name: "Claude Sonnet 4.6",
-      contextWindow: 200000,
-    },
-    {
-      provider: "openai",
-      id: "gpt-5.4",
-      name: "GPT-5.4",
-      reasoning: true,
-      contextWindow: 400000,
-    },
-  ]),
-);
 
 const createMockConfig = () => ({
   session: { mainKey: "main", scope: "per-sender" },
@@ -147,7 +130,21 @@ async function createConfigModuleMock() {
 
 function createModelCatalogModuleMock() {
   return {
-    loadModelCatalog: (params?: unknown) => loadModelCatalogMock(params),
+    loadModelCatalog: async () => [
+      {
+        provider: "anthropic",
+        id: "claude-sonnet-4-6",
+        name: "Claude Sonnet 4.6",
+        contextWindow: 200000,
+      },
+      {
+        provider: "openai",
+        id: "gpt-5.4",
+        name: "GPT-5.4",
+        reasoning: true,
+        contextWindow: 400000,
+      },
+    ],
   };
 }
 
@@ -294,22 +291,6 @@ function resetSessionStore(store: Record<string, SessionEntry>) {
   resolveEnvApiKeyMock.mockReturnValue(null);
   resolveUsableCustomProviderApiKeyMock.mockReset();
   resolveUsableCustomProviderApiKeyMock.mockReturnValue(null);
-  loadModelCatalogMock.mockClear();
-  loadModelCatalogMock.mockImplementation(async () => [
-    {
-      provider: "anthropic",
-      id: "claude-sonnet-4-6",
-      name: "Claude Sonnet 4.6",
-      contextWindow: 200000,
-    },
-    {
-      provider: "openai",
-      id: "gpt-5.4",
-      name: "GPT-5.4",
-      reasoning: true,
-      contextWindow: 400000,
-    },
-  ]);
   loadSessionStoreMock.mockClear();
   updateSessionStoreMock.mockClear();
   callGatewayMock.mockClear();
@@ -1091,94 +1072,6 @@ describe("session_status tool", () => {
           agent: expect.objectContaining({
             thinkingDefault: "medium",
           }),
-        }),
-      );
-    } finally {
-      mockConfig = savedConfig;
-    }
-  });
-
-  it("falls back to runtime discovery for agent-selected models when cache-only metadata misses the selected model", async () => {
-    resetSessionStore({
-      "agent:kira:main": {
-        sessionId: "agent-thinking-runtime-fallback",
-        updatedAt: 10,
-      },
-    });
-    loadModelCatalogMock.mockImplementation(async (params?: { intent?: string }) =>
-      params?.intent === "runtimeDiscovery"
-        ? [
-            {
-              provider: "openai",
-              id: "gpt-5.4",
-              name: "GPT-5.4",
-              reasoning: true,
-            },
-          ]
-        : [
-            {
-              provider: "anthropic",
-              id: "claude-sonnet-4-6",
-              name: "Claude Sonnet 4.6",
-              reasoning: true,
-            },
-          ],
-    );
-    const savedConfig = mockConfig;
-    try {
-      mockConfig = {
-        session: { mainKey: "main", scope: "per-sender" },
-        agents: {
-          defaults: {
-            model: { primary: "anthropic/claude-sonnet-4-6" },
-            models: {},
-          },
-          list: [
-            {
-              id: "kira",
-              model: "openai/gpt-5.4",
-            },
-          ],
-        },
-        models: {
-          providers: {
-            openai: {
-              baseUrl: "https://api.openai.com/v1",
-              models: [{ id: "gpt-5.4", name: "GPT-5.4" }],
-            },
-          },
-        },
-        tools: {
-          agentToAgent: { enabled: false },
-        },
-      };
-
-      const tool = getSessionStatusTool("agent:kira:main");
-
-      await tool.execute("call-agent-thinking-runtime-fallback", {});
-
-      expect(buildStatusMessageMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: "kira",
-          agent: expect.objectContaining({
-            thinkingDefault: "medium",
-          }),
-        }),
-      );
-      expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          config: mockConfig,
-          intent: "cacheOnly",
-          source: "session-status.display",
-        }),
-      );
-      expect(loadModelCatalogMock).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          config: mockConfig,
-          intent: "runtimeDiscovery",
-          source: "session-status.display",
         }),
       );
     } finally {

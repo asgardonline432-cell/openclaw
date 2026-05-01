@@ -227,71 +227,6 @@ test("sessions.list yields before responding during bulk transcript hydration", 
   );
 });
 
-test("sessions.list prefers runtime-discovered thinking metadata over cache-only catalog subsets", async () => {
-  await createSessionStoreDir();
-  testState.agentConfig = {
-    model: { primary: "test-provider/reasoner" },
-  };
-  await writeSessionStore({
-    entries: {
-      main: sessionStoreEntry("sess-main", {
-        modelProvider: "test-provider",
-        model: "reasoner",
-      }),
-    },
-  });
-
-  const respond = vi.fn();
-  const loadGatewayModelCatalog = vi.fn(async (params?: { mode?: string }) =>
-    params?.mode === "cachePreferred"
-      ? [
-          {
-            provider: "test-provider",
-            id: "reasoner",
-            name: "Reasoner",
-            reasoning: true,
-          },
-        ]
-      : [],
-  );
-  const sessionsHandlers = await getSessionsHandlers();
-  const { getRuntimeConfig } = await getGatewayConfigModule();
-  await sessionsHandlers["sessions.list"]({
-    req: {
-      type: "req",
-      id: "req-sessions-list-runtime-thinking-default",
-      method: "sessions.list",
-      params: {},
-    },
-    params: {},
-    respond,
-    client: null,
-    isWebchatConnect: () => false,
-    context: {
-      getRuntimeConfig,
-      loadGatewayModelCatalog,
-    } as never,
-  });
-
-  expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "cachePreferred" });
-  expect(respond).toHaveBeenCalledWith(
-    true,
-    expect.objectContaining({
-      sessions: expect.arrayContaining([
-        expect.objectContaining({
-          key: "agent:main:main",
-          thinkingLevels: expect.arrayContaining([
-            expect.objectContaining({ id: "off" }),
-            expect.objectContaining({ id: "medium" }),
-          ]),
-          thinkingDefault: "medium",
-        }),
-      ]),
-    }),
-    undefined,
-  );
-});
-
 test("sessions.list does not block on slow model catalog discovery", async () => {
   await createSessionStoreDir();
   await writeSessionStore({
@@ -304,7 +239,6 @@ test("sessions.list does not block on slow model catalog discovery", async () =>
   try {
     const deferredCatalog = createDeferred<never>();
     const respond = vi.fn();
-    const loadGatewayModelCatalog = vi.fn(() => deferredCatalog.promise);
     const sessionsHandlers = await getSessionsHandlers();
     const { getRuntimeConfig } = await getGatewayConfigModule();
     const request = sessionsHandlers["sessions.list"]({
@@ -320,7 +254,7 @@ test("sessions.list does not block on slow model catalog discovery", async () =>
       isWebchatConnect: () => false,
       context: {
         getRuntimeConfig,
-        loadGatewayModelCatalog,
+        loadGatewayModelCatalog: vi.fn(() => deferredCatalog.promise),
         logGateway: {
           debug: vi.fn(),
         },
@@ -330,7 +264,6 @@ test("sessions.list does not block on slow model catalog discovery", async () =>
     await vi.advanceTimersByTimeAsync(800);
     await request;
 
-    expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "cachePreferred" });
     expect(respond).toHaveBeenCalledWith(
       true,
       expect.objectContaining({

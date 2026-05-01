@@ -124,7 +124,6 @@ async function setRuntimeApiKeyForCompletion(params: {
     config: params.cfg,
     workspaceDir: params.workspaceDir,
     env: process.env,
-    source: "simple-completion.runtime-auth",
     context: {
       config: params.cfg,
       workspaceDir: params.workspaceDir,

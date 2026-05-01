@@ -60,65 +60,12 @@ export async function resolveCronModelSelection(
   let provider = resolvedDefault.provider;
   let model = resolvedDefault.model;
 
-  let cacheOnlyCatalog: Awaited<ReturnType<typeof loadModelCatalog>> | undefined;
-  let runtimeDiscoveryCatalog: Awaited<ReturnType<typeof loadModelCatalog>> | undefined;
-  const loadCatalogOnce = async (intent: "cacheOnly" | "runtimeDiscovery" = "cacheOnly") => {
-    if (intent === "runtimeDiscovery") {
-      if (!runtimeDiscoveryCatalog) {
-        runtimeDiscoveryCatalog = await loadModelCatalog({
-          config: params.cfgWithAgentDefaults,
-          intent: "runtimeDiscovery",
-          source: "cron.model-selection.discovery",
-        });
-      }
-      return runtimeDiscoveryCatalog;
+  let catalog: Awaited<ReturnType<typeof loadModelCatalog>> | undefined;
+  const loadCatalogOnce = async () => {
+    if (!catalog) {
+      catalog = await loadModelCatalog({ config: params.cfgWithAgentDefaults });
     }
-    if (!cacheOnlyCatalog) {
-      cacheOnlyCatalog = await loadModelCatalog({
-        config: params.cfgWithAgentDefaults,
-        intent: "cacheOnly",
-        source: "cron.model-selection",
-      });
-    }
-    return cacheOnlyCatalog;
-  };
-  const resolveAllowedModelRefWithFallback = async (raw: string) => {
-    const cached = resolveAllowedModelRef({
-      cfg: params.cfgWithAgentDefaults,
-      catalog: await loadCatalogOnce("cacheOnly"),
-      raw,
-      defaultProvider: resolvedDefault.provider,
-      defaultModel: resolvedDefault.model,
-    });
-    if (!("error" in cached)) {
-      return cached;
-    }
-    return resolveAllowedModelRef({
-      cfg: params.cfgWithAgentDefaults,
-      catalog: await loadCatalogOnce("runtimeDiscovery"),
-      raw,
-      defaultProvider: resolvedDefault.provider,
-      defaultModel: resolvedDefault.model,
-    });
-  };
-  const getModelRefStatusWithFallback = async (ref: { provider: string; model: string }) => {
-    const cached = getModelRefStatus({
-      cfg: params.cfg,
-      catalog: await loadCatalogOnce("cacheOnly"),
-      ref,
-      defaultProvider: resolvedDefault.provider,
-      defaultModel: resolvedDefault.model,
-    });
-    if (cached.allowed) {
-      return cached;
-    }
-    return getModelRefStatus({
-      cfg: params.cfg,
-      catalog: await loadCatalogOnce("runtimeDiscovery"),
-      ref,
-      defaultProvider: resolvedDefault.provider,
-      defaultModel: resolvedDefault.model,
-    });
+    return catalog;
   };
 
   const subagentModelRaw =
@@ -126,7 +73,13 @@ export async function resolveCronModelSelection(
     normalizeModelSelection(params.agentConfigOverride?.model) ??
     normalizeModelSelection(params.cfg.agents?.defaults?.subagents?.model);
   if (subagentModelRaw) {
-    const resolvedSubagent = await resolveAllowedModelRefWithFallback(subagentModelRaw);
+    const resolvedSubagent = resolveAllowedModelRef({
+      cfg: params.cfgWithAgentDefaults,
+      catalog: await loadCatalogOnce(),
+      raw: subagentModelRaw,
+      defaultProvider: resolvedDefault.provider,
+      defaultModel: resolvedDefault.model,
+    });
     if (!("error" in resolvedSubagent)) {
       provider = resolvedSubagent.ref.provider;
       model = resolvedSubagent.ref.model;
@@ -141,7 +94,13 @@ export async function resolveCronModelSelection(
       })
     : null;
   if (hooksGmailModelRef) {
-    const status = await getModelRefStatusWithFallback(hooksGmailModelRef);
+    const status = getModelRefStatus({
+      cfg: params.cfg,
+      catalog: await loadCatalogOnce(),
+      ref: hooksGmailModelRef,
+      defaultProvider: resolvedDefault.provider,
+      defaultModel: resolvedDefault.model,
+    });
     if (status.allowed) {
       provider = hooksGmailModelRef.provider;
       model = hooksGmailModelRef.model;
@@ -152,7 +111,13 @@ export async function resolveCronModelSelection(
   const modelOverrideRaw = params.payload.kind === "agentTurn" ? params.payload.model : undefined;
   const modelOverride = typeof modelOverrideRaw === "string" ? modelOverrideRaw.trim() : undefined;
   if (modelOverride !== undefined && modelOverride.length > 0) {
-    const resolvedOverride = await resolveAllowedModelRefWithFallback(modelOverride);
+    const resolvedOverride = resolveAllowedModelRef({
+      cfg: params.cfgWithAgentDefaults,
+      catalog: await loadCatalogOnce(),
+      raw: modelOverride,
+      defaultProvider: resolvedDefault.provider,
+      defaultModel: resolvedDefault.model,
+    });
     if ("error" in resolvedOverride) {
       return {
         ok: false,
@@ -168,9 +133,13 @@ export async function resolveCronModelSelection(
     if (sessionModelOverride) {
       const sessionProviderOverride =
         params.sessionEntry.providerOverride?.trim() || resolvedDefault.provider;
-      const resolvedSessionOverride = await resolveAllowedModelRefWithFallback(
-        `${sessionProviderOverride}/${sessionModelOverride}`,
-      );
+      const resolvedSessionOverride = resolveAllowedModelRef({
+        cfg: params.cfgWithAgentDefaults,
+        catalog: await loadCatalogOnce(),
+        raw: `${sessionProviderOverride}/${sessionModelOverride}`,
+        defaultProvider: resolvedDefault.provider,
+        defaultModel: resolvedDefault.model,
+      });
       if (!("error" in resolvedSessionOverride)) {
         provider = resolvedSessionOverride.ref.provider;
         model = resolvedSessionOverride.ref.model;
