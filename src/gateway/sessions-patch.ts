@@ -119,6 +119,8 @@ export async function applySessionsPatchToStore(params: {
     loadedModelCatalogByMode.set(mode, normalizedCatalog);
     return normalizedCatalog;
   };
+  const loadExplicitThinkingCatalogForPatch = async () =>
+    explicitModelSwitchCatalog ?? (await loadModelCatalogForPatch("runtimeDiscovery"));
 
   const existing = store[storeKey];
   const next: SessionEntry = existing
@@ -266,7 +268,7 @@ export async function applySessionsPatchToStore(params: {
         const hintProvider =
           normalizeOptionalString(existing?.providerOverride) || resolvedDefault.provider;
         const hintModel = normalizeOptionalString(existing?.modelOverride) || resolvedDefault.model;
-        const thinkingCatalog = await loadModelCatalogForPatch();
+        const thinkingCatalog = await loadExplicitThinkingCatalogForPatch();
         return invalid(
           `invalid thinkingLevel (use ${formatThinkingLevels(hintProvider, hintModel, "|", thinkingCatalog)})`,
         );
@@ -464,7 +466,10 @@ export async function applySessionsPatchToStore(params: {
     const effectiveProvider = next.providerOverride ?? resolvedDefault.provider;
     const effectiveModel = next.modelOverride ?? resolvedDefault.model;
     const thinkingLevel = normalizeThinkLevel(next.thinkingLevel);
-    const thinkingCatalog = explicitModelSwitchCatalog ?? (await loadModelCatalogForPatch());
+    const thinkingCatalog =
+      "thinkingLevel" in patch && patch.thinkingLevel !== null
+        ? await loadExplicitThinkingCatalogForPatch()
+        : (explicitModelSwitchCatalog ?? (await loadModelCatalogForPatch()));
     if (!thinkingLevel) {
       delete next.thinkingLevel;
     } else if (

@@ -394,6 +394,19 @@ describe("gateway sessions patch", () => {
     });
     setActivePluginRegistry(registry);
 
+    const loadGatewayModelCatalog = vi.fn(async (params?: { mode?: GatewayModelCatalogMode }) =>
+      params?.mode === "runtimeDiscovery"
+        ? [
+            {
+              provider: "ollama",
+              id: "qwen3:0.6b",
+              name: "qwen3:0.6b",
+              reasoning: true,
+            },
+          ]
+        : [{ provider: "openai", id: "gpt-5.4", name: "GPT 5.4" }],
+    );
+
     const entry = expectPatchOk(
       await runPatch({
         cfg: {
@@ -407,18 +420,64 @@ describe("gateway sessions patch", () => {
           key: MAIN_SESSION_KEY,
           thinkingLevel: "medium",
         },
-        loadGatewayModelCatalog: async () => [
-          {
-            provider: "ollama",
-            id: "qwen3:0.6b",
-            name: "qwen3:0.6b",
-            reasoning: true,
-          },
-        ],
+        loadGatewayModelCatalog,
       }),
     );
 
     expect(entry.thinkingLevel).toBe("medium");
+    expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "runtimeDiscovery" });
+  });
+
+  test("uses runtime discovery for explicit thinkingLevel validation hints", async () => {
+    const registry = createEmptyPluginRegistry();
+    registry.providers.push({
+      pluginId: "ollama",
+      source: "test",
+      provider: {
+        id: "ollama",
+        label: "Ollama",
+        auth: [],
+        resolveThinkingProfile: ({ reasoning }) => ({
+          levels:
+            reasoning === true
+              ? [{ id: "off" }, { id: "low" }, { id: "medium" }, { id: "high" }, { id: "max" }]
+              : [{ id: "off" }],
+          defaultLevel: "off",
+        }),
+      },
+    });
+    setActivePluginRegistry(registry);
+
+    const loadGatewayModelCatalog = vi.fn(async (params?: { mode?: GatewayModelCatalogMode }) =>
+      params?.mode === "runtimeDiscovery"
+        ? [
+            {
+              provider: "ollama",
+              id: "qwen3:0.6b",
+              name: "qwen3:0.6b",
+              reasoning: true,
+            },
+          ]
+        : [{ provider: "openai", id: "gpt-5.4", name: "GPT 5.4" }],
+    );
+
+    const result = await runPatch({
+      cfg: {
+        agents: {
+          defaults: {
+            model: { primary: "ollama/qwen3:0.6b" },
+          },
+        },
+      } as OpenClawConfig,
+      patch: {
+        key: MAIN_SESSION_KEY,
+        thinkingLevel: "nope",
+      },
+      loadGatewayModelCatalog,
+    });
+
+    expectPatchError(result, "invalid thinkingLevel (use off|low|medium|high|max)");
+    expect(loadGatewayModelCatalog).toHaveBeenCalledWith({ mode: "runtimeDiscovery" });
   });
 
   test("reuses explicit model discovery for same-request thinking validation", async () => {
