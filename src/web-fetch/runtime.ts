@@ -4,7 +4,10 @@ import type {
   PluginWebFetchProviderEntry,
   WebFetchProviderToolDefinition,
 } from "../plugins/types.js";
-import { resolvePluginWebFetchProviders } from "../plugins/web-fetch-providers.runtime.js";
+import {
+  resolvePluginWebFetchProviders,
+  resolveRuntimeWebFetchProviders,
+} from "../plugins/web-fetch-providers.runtime.js";
 import { sortWebFetchProvidersForAutoDetect } from "../plugins/web-fetch-providers.shared.js";
 import { getActiveRuntimeWebToolsMetadata } from "../secrets/runtime-web-tools-state.js";
 import type { RuntimeWebFetchMetadata } from "../secrets/runtime-web-tools.types.js";
@@ -89,10 +92,9 @@ export function isWebFetchProviderConfigured(params: {
 export function listWebFetchProviders(params?: {
   config?: OpenClawConfig;
 }): PluginWebFetchProviderEntry[] {
-  return resolvePluginWebFetchProviders({
+  return resolveRuntimeWebFetchProviders({
     config: params?.config,
     bundledAllowlistCompat: true,
-    origin: "bundled",
   });
 }
 
@@ -109,14 +111,20 @@ export function resolveWebFetchProviderId(params: {
   fetch?: WebFetchConfig;
   config?: OpenClawConfig;
   providers?: PluginWebFetchProviderEntry[];
+  preferRuntimeProviders?: boolean;
 }): string {
   const providers = sortWebFetchProvidersForAutoDetect(
     params.providers ??
-      resolvePluginWebFetchProviders({
-        config: params.config,
-        bundledAllowlistCompat: true,
-        origin: "bundled",
-      }),
+      (params.preferRuntimeProviders
+        ? resolveRuntimeWebFetchProviders({
+            config: params.config,
+            bundledAllowlistCompat: true,
+          })
+        : resolvePluginWebFetchProviders({
+            config: params.config,
+            bundledAllowlistCompat: true,
+            origin: "bundled",
+          })),
   );
   const raw =
     params.fetch && "provider" in params.fetch
@@ -166,11 +174,13 @@ function getPreparedWebFetchDefinitionCache(
 function createPreparedWebFetchDefinitionCacheKey(params: {
   providerId?: string;
   sandboxed?: boolean;
+  preferRuntimeProviders?: boolean;
   runtimeWebFetch?: RuntimeWebFetchMetadata;
 }): string {
   return JSON.stringify({
     providerId: normalizeLowercaseStringOrEmpty(params.providerId),
     sandboxed: params.sandboxed === true,
+    preferRuntimeProviders: params.preferRuntimeProviders === true,
     runtimeSelectedProvider: normalizeLowercaseStringOrEmpty(
       params.runtimeWebFetch?.selectedProvider,
     ),
@@ -186,6 +196,7 @@ function readPreparedWebFetchDefinition(params: {
   config?: OpenClawConfig;
   providerId?: string;
   sandboxed?: boolean;
+  preferRuntimeProviders?: boolean;
   runtimeWebFetch?: RuntimeWebFetchMetadata;
 }): ResolvedWebFetchDefinition | undefined {
   return getPreparedWebFetchDefinitionCache(params.config).get(
@@ -197,6 +208,7 @@ function storePreparedWebFetchDefinition(params: {
   config?: OpenClawConfig;
   providerId?: string;
   sandboxed?: boolean;
+  preferRuntimeProviders?: boolean;
   runtimeWebFetch?: RuntimeWebFetchMetadata;
   resolved: ResolvedWebFetchDefinition;
 }): ResolvedWebFetchDefinition {
@@ -209,17 +221,23 @@ function resolveWebFetchDefinitionUncached(params: {
   config?: OpenClawConfig;
   providerId?: string;
   sandboxed?: boolean;
+  preferRuntimeProviders?: boolean;
   runtimeWebFetch?: RuntimeWebFetchMetadata;
 }): ResolvedWebFetchDefinition | null {
   const fetch = resolveWebProviderConfig(params.config, "fetch") as
     | NonNullable<WebFetchConfig>
     | undefined;
   const providers = sortWebFetchProvidersForAutoDetect(
-    resolvePluginWebFetchProviders({
-      config: params.config,
-      bundledAllowlistCompat: true,
-      origin: "bundled",
-    }),
+    params.preferRuntimeProviders && !params.sandboxed
+      ? resolveRuntimeWebFetchProviders({
+          config: params.config,
+          bundledAllowlistCompat: true,
+        })
+      : resolvePluginWebFetchProviders({
+          config: params.config,
+          bundledAllowlistCompat: true,
+          origin: "bundled",
+        }),
   );
   return resolveWebProviderDefinition({
     config: params.config,
@@ -238,6 +256,7 @@ function resolveWebFetchDefinitionUncached(params: {
         config,
         fetch: toolConfig as WebFetchConfig | undefined,
         providers,
+        preferRuntimeProviders: params.preferRuntimeProviders,
       }),
     createTool: ({ provider, config, toolConfig, runtimeMetadata }) =>
       provider.createTool({
@@ -256,6 +275,7 @@ export function prepareWebFetchDefinition(
     config: options?.config,
     providerId: options?.providerId,
     sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
     runtimeWebFetch,
   });
   if (prepared) {
@@ -265,6 +285,7 @@ export function prepareWebFetchDefinition(
     config: options?.config,
     providerId: options?.providerId,
     sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
     runtimeWebFetch,
   });
   if (!resolved) {
@@ -274,6 +295,7 @@ export function prepareWebFetchDefinition(
     config: options?.config,
     providerId: options?.providerId,
     sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
     runtimeWebFetch,
     resolved,
   });
@@ -283,20 +305,34 @@ export function resolveWebFetchDefinition(
   options?: ResolveWebFetchDefinitionParams,
 ): ResolvedWebFetchDefinition | null {
   const runtimeWebFetch = options?.runtimeWebFetch ?? getActiveRuntimeWebToolsMetadata()?.fetch;
-  return (
-    readPreparedWebFetchDefinition({
-      config: options?.config,
-      providerId: options?.providerId,
-      sandboxed: options?.sandboxed,
-      runtimeWebFetch,
-    }) ??
-    resolveWebFetchDefinitionUncached({
-      config: options?.config,
-      providerId: options?.providerId,
-      sandboxed: options?.sandboxed,
-      runtimeWebFetch,
-    })
-  );
+  const prepared = readPreparedWebFetchDefinition({
+    config: options?.config,
+    providerId: options?.providerId,
+    sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
+    runtimeWebFetch,
+  });
+  if (prepared) {
+    return prepared;
+  }
+  const resolved = resolveWebFetchDefinitionUncached({
+    config: options?.config,
+    providerId: options?.providerId,
+    sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
+    runtimeWebFetch,
+  });
+  if (!resolved) {
+    return null;
+  }
+  return storePreparedWebFetchDefinition({
+    config: options?.config,
+    providerId: options?.providerId,
+    sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
+    runtimeWebFetch,
+    resolved,
+  });
 }
 
 export const __testing = {

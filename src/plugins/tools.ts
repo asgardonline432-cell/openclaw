@@ -328,7 +328,6 @@ export function resolvePluginTools(params: {
     ? { allowGatewaySubagentBinding: true as const }
     : undefined;
   const loadOptions = buildPluginRuntimeLoadOptions(context, {
-    installBundledRuntimeDeps: false,
     activate: false,
     toolDiscovery: true,
     runtimeOptions,

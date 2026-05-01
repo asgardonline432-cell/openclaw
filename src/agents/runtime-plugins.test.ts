@@ -70,6 +70,20 @@ describe("ensureRuntimePluginsLoaded", () => {
     expect(hoisted.resolveRuntimePluginRegistry).not.toHaveBeenCalled();
   });
 
+  it("returns early when a compatible registry is already active even before readiness marks it", async () => {
+    hoisted.resolveCompatibleRuntimePluginRegistry.mockReturnValue({});
+
+    ensureRuntimePluginsLoaded({
+      config: {} as never,
+      workspaceDir: "/tmp/workspace",
+      source: "runtime-plugins.test",
+    });
+
+    expect(hoisted.resolveCompatibleRuntimePluginRegistry).toHaveBeenCalledTimes(1);
+    expect(hoisted.resolveRuntimePluginRegistry).not.toHaveBeenCalled();
+    expect(hoisted.logReplyRuntimeColdPathViolation).not.toHaveBeenCalled();
+  });
+
   it("resolves runtime plugins through the shared runtime helper", async () => {
     ensureRuntimePluginsLoaded({
       config: {} as never,

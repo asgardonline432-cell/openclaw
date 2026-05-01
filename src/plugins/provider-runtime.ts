@@ -17,6 +17,7 @@ import { normalizeProviderModelIdWithManifest } from "./manifest-model-id-normal
 import { resolvePluginDiscoveryProvidersRuntime } from "./provider-discovery.runtime.js";
 import {
   prepareProviderExtraParams,
+  resolveCachedProviderRuntimePlugin,
   resolveProviderAuthProfileId,
   resolveProviderExtraParamsForTransport,
   resolveProviderFollowupFallbackRoute,
@@ -893,6 +894,33 @@ export function resolveProviderSyntheticAuthWithPlugin(params: {
   context: ProviderResolveSyntheticAuthContext;
 }) {
   const providerRefs = resolveProviderHookRefs(params.provider, params.context.providerConfig);
+  const strictRuntimeLookup = {
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+    applyAutoEnable: false,
+    bundledProviderAllowlistCompat: false,
+    bundledProviderVitestCompat: false,
+  } as const;
+  const cachedRuntimeResolved = resolveCachedProviderRuntimePlugin({
+    ...strictRuntimeLookup,
+    provider: params.provider,
+  })?.resolveSyntheticAuth?.(params.context);
+  if (cachedRuntimeResolved) {
+    return cachedRuntimeResolved;
+  }
+  for (const providerRef of providerRefs) {
+    if (normalizeProviderId(providerRef) === normalizeProviderId(params.provider)) {
+      continue;
+    }
+    const cachedAliasResolved = resolveCachedProviderRuntimePlugin({
+      ...strictRuntimeLookup,
+      provider: providerRef,
+    })?.resolveSyntheticAuth?.(params.context);
+    if (cachedAliasResolved) {
+      return cachedAliasResolved;
+    }
+  }
   const discoveryPluginIds = [
     ...new Set(
       providerRefs.flatMap(
@@ -922,9 +950,7 @@ export function resolveProviderSyntheticAuthWithPlugin(params: {
   }
   const runtimeResolved = resolveProviderRuntimePlugin({
     ...params,
-    applyAutoEnable: false,
-    bundledProviderAllowlistCompat: false,
-    bundledProviderVitestCompat: false,
+    ...strictRuntimeLookup,
   })?.resolveSyntheticAuth?.(params.context);
   if (runtimeResolved) {
     return runtimeResolved;
@@ -935,10 +961,8 @@ export function resolveProviderSyntheticAuthWithPlugin(params: {
     }
     const runtimeProviderResolved = resolveProviderRuntimePlugin({
       ...params,
+      ...strictRuntimeLookup,
       provider: providerRef,
-      applyAutoEnable: false,
-      bundledProviderAllowlistCompat: false,
-      bundledProviderVitestCompat: false,
     })?.resolveSyntheticAuth?.(params.context);
     if (runtimeProviderResolved) {
       return runtimeProviderResolved;

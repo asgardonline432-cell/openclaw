@@ -33,10 +33,7 @@ export function ensureRuntimePluginsLoaded(params: {
         }
       : undefined,
   };
-  if (
-    isReplyRuntimePluginRegistryPrepared() &&
-    resolveCompatibleRuntimePluginRegistry(loadOptions)
-  ) {
+  if (resolveCompatibleRuntimePluginRegistry(loadOptions)) {
     return;
   }
   const shouldWarnLateColdLoad =

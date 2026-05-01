@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const resolveCachedProviderRuntimePlugin = vi.hoisted(() => vi.fn(() => undefined));
 const resolveProviderRuntimePlugin = vi.hoisted(() => vi.fn(() => undefined));
 const resolvePluginDiscoveryProvidersRuntime = vi.hoisted(() =>
   vi.fn(() => [
@@ -41,6 +42,7 @@ vi.mock("./provider-hook-runtime.js", async (importOriginal) => {
     ...actual,
     __testing: {},
     prepareProviderExtraParams: vi.fn(),
+    resolveCachedProviderRuntimePlugin,
     resolveProviderHookPlugin: vi.fn(),
     resolveProviderPluginsForHooks: vi.fn(() => []),
     resolveProviderRuntimePlugin,
@@ -68,6 +70,14 @@ vi.mock("./providers.js", () => ({
 import { resolveProviderSyntheticAuthWithPlugin } from "./provider-runtime.js";
 
 describe("resolveProviderSyntheticAuthWithPlugin", () => {
+  beforeEach(() => {
+    resolveCachedProviderRuntimePlugin.mockReset();
+    resolveCachedProviderRuntimePlugin.mockReturnValue(undefined);
+    resolveProviderRuntimePlugin.mockReset();
+    resolveProviderRuntimePlugin.mockReturnValue(undefined);
+    resolvePluginDiscoveryProvidersRuntime.mockClear();
+  });
+
   it("falls back to lightweight discovery providers when runtime hooks are unavailable", () => {
     expect(
       resolveProviderSyntheticAuthWithPlugin({
@@ -107,5 +117,35 @@ describe("resolveProviderSyntheticAuthWithPlugin", () => {
       source: "models.providers.ollama-remote (synthetic local key)",
       mode: "api-key",
     });
+  });
+
+  it("uses a cached strict runtime hook before discovery fallback", () => {
+    resolveCachedProviderRuntimePlugin.mockReturnValue({
+      id: "anthropic-vertex",
+      label: "Anthropic Vertex",
+      auth: [],
+      resolveSyntheticAuth: () => ({
+        apiKey: "cached-runtime",
+        source: "cached runtime",
+        mode: "api-key" as const,
+      }),
+    });
+
+    expect(
+      resolveProviderSyntheticAuthWithPlugin({
+        provider: "anthropic-vertex",
+        context: {
+          config: undefined,
+          provider: "anthropic-vertex",
+          providerConfig: undefined,
+        },
+      }),
+    ).toEqual({
+      apiKey: "cached-runtime",
+      source: "cached runtime",
+      mode: "api-key",
+    });
+    expect(resolvePluginDiscoveryProvidersRuntime).not.toHaveBeenCalled();
+    expect(resolveProviderRuntimePlugin).not.toHaveBeenCalled();
   });
 });

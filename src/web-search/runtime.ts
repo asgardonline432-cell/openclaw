@@ -346,22 +346,34 @@ export function resolveWebSearchDefinition(
 ): ResolvedWebSearchDefinition | null {
   const config = resolveWebSearchRuntimeConfig(options?.config);
   const runtimeWebSearch = options?.runtimeWebSearch ?? getActiveRuntimeWebToolsMetadata()?.search;
-  return (
-    readPreparedWebSearchDefinition({
-      config,
-      providerId: options?.providerId,
-      sandboxed: options?.sandboxed,
-      preferRuntimeProviders: options?.preferRuntimeProviders,
-      runtimeWebSearch,
-    }) ??
-    resolveWebSearchDefinitionUncached({
-      config,
-      providerId: options?.providerId,
-      sandboxed: options?.sandboxed,
-      preferRuntimeProviders: options?.preferRuntimeProviders,
-      runtimeWebSearch,
-    })
-  );
+  const prepared = readPreparedWebSearchDefinition({
+    config,
+    providerId: options?.providerId,
+    sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
+    runtimeWebSearch,
+  });
+  if (prepared) {
+    return prepared;
+  }
+  const resolved = resolveWebSearchDefinitionUncached({
+    config,
+    providerId: options?.providerId,
+    sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
+    runtimeWebSearch,
+  });
+  if (!resolved) {
+    return null;
+  }
+  return storePreparedWebSearchDefinition({
+    config,
+    providerId: options?.providerId,
+    sandboxed: options?.sandboxed,
+    preferRuntimeProviders: options?.preferRuntimeProviders,
+    runtimeWebSearch,
+    resolved,
+  });
 }
 
 function resolveWebSearchCandidates(

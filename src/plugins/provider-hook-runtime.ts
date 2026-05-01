@@ -69,6 +69,20 @@ function resolveProviderRuntimePluginCache(
   }
   return cache;
 }
+
+export function resolveCachedProviderRuntimePlugin(
+  params: ProviderRuntimePluginLookupParams,
+): ProviderPlugin | undefined {
+  const cache = resolveProviderRuntimePluginCache(params);
+  if (!cache) {
+    return undefined;
+  }
+  const key = resolveProviderRuntimePluginCacheKey(params);
+  if (!cache.has(key)) {
+    return undefined;
+  }
+  return cache.get(key) ?? undefined;
+}
 function matchesProviderLiteralId(provider: ProviderPlugin, providerId: string): boolean {
   const normalized = normalizeLowercaseStringOrEmpty(providerId);
   return !!normalized && normalizeLowercaseStringOrEmpty(provider.id) === normalized;
@@ -124,6 +138,10 @@ export function resolveProviderRuntimePlugin(params: {
   installBundledRuntimeDeps?: boolean;
   source?: string;
 }): ProviderPlugin | undefined {
+  const cached = resolveCachedProviderRuntimePlugin(params);
+  if (cached) {
+    return cached;
+  }
   const shouldWarnLateActivation =
     isReplyCapableChannelsLive() && !isReplyRuntimeProviderPrepared(params.provider);
   const startedAt = shouldWarnLateActivation ? Date.now() : 0;
@@ -147,6 +165,12 @@ export function resolveProviderRuntimePlugin(params: {
     }
     return matchesProviderId(plugin, params.provider);
   });
+  if (plugin) {
+    resolveProviderRuntimePluginCache(params)?.set(
+      resolveProviderRuntimePluginCacheKey(params),
+      plugin,
+    );
+  }
   if (shouldWarnLateActivation && plugin) {
     logReplyRuntimeColdPathViolation({
       kind: "provider-runtime-activation",

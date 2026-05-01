@@ -506,6 +506,15 @@ export async function prepareReplyRuntimeForChannels(params: {
           if (!plugin) {
             throw new Error(`No provider runtime resolved for ${target.provider}.`);
           }
+          resolveProviderRuntimePlugin({
+            provider: target.provider,
+            config: params.cfg,
+            workspaceDir: target.workspaceDir,
+            env: process.env,
+            applyAutoEnable: false,
+            bundledProviderAllowlistCompat: false,
+            bundledProviderVitestCompat: false,
+          });
           markReplyRuntimeProviderPrepared(target.provider);
         }
       },

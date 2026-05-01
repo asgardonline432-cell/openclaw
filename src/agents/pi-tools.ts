@@ -662,7 +662,6 @@ export function createOpenClawCodingTools(options?: {
       modelHasVision: options?.modelHasVision,
       requireExplicitMessageTarget: options?.requireExplicitMessageTarget,
       disableMessageTool: options?.disableMessageTool,
-      enableHeartbeatTool,
       ...(cronSelfRemoveOnlyJobId ? { cronSelfRemoveOnlyJobId } : {}),
       requesterAgentIdOverride: agentId,
       requesterSenderId: options?.senderId,
