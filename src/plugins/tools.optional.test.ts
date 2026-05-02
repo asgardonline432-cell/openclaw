@@ -76,7 +76,7 @@ function createResolveToolsParams(params?: {
   };
 }
 
-function setRegistry(entries: MockRegistryToolEntry[]) {
+function setRegistry(entries: MockRegistryToolEntry[], options?: { env?: NodeJS.ProcessEnv }) {
   const registry = {
     tools: entries,
     diagnostics: [] as Array<{
@@ -89,6 +89,7 @@ function setRegistry(entries: MockRegistryToolEntry[]) {
   loadOpenClawPluginsMock.mockReturnValue(registry);
   installToolManifestSnapshots({
     config: createContext().config,
+    env: options?.env,
     plugins: entries
       .map((entry) => ({
         id: entry.pluginId,
@@ -158,8 +159,8 @@ function resolveWithConflictingCoreName(options?: { suppressNameConflicts?: bool
   );
 }
 
-function setOptionalDemoRegistry() {
-  setRegistry([createOptionalDemoEntry()]);
+function setOptionalDemoRegistry(options?: { env?: NodeJS.ProcessEnv }) {
+  setRegistry([createOptionalDemoEntry()], options);
 }
 
 function resolveOptionalDemoTools(toolAllowlist?: readonly string[]) {
@@ -296,7 +297,7 @@ function installToolManifestSnapshots(params: {
   );
 }
 
-function createXaiToolManifest() {
+function createXaiToolManifest(params: { descriptor?: boolean } = {}) {
   return {
     id: "xai",
     origin: "bundled",
@@ -311,6 +312,23 @@ function createXaiToolManifest() {
     },
     toolMetadata: {
       x_search: {
+        ...(params.descriptor
+          ? {
+              descriptor: {
+                title: "X Search",
+                description: "Search X with xAI.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    query: {
+                      type: "string",
+                    },
+                  },
+                  required: ["query"],
+                },
+              },
+            }
+          : {}),
         authSignals: [{ provider: "xai" }],
         configSignals: [
           {
@@ -432,11 +450,7 @@ describe("resolvePluginTools optional tools", () => {
 
     expect(tools).toEqual([]);
     expect(factory).not.toHaveBeenCalled();
-    expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        onlyPluginIds: [],
-      }),
-    );
+    expect(loadOpenClawPluginsMock).not.toHaveBeenCalled();
   });
 
   it("does not reuse a pinned gateway registry for manifest-unavailable tools", () => {
@@ -473,11 +487,60 @@ describe("resolvePluginTools optional tools", () => {
 
     expect(tools).toEqual([]);
     expect(factory).not.toHaveBeenCalled();
+    expect(loadOpenClawPluginsMock).not.toHaveBeenCalled();
+  });
+
+  it("plans descriptor-backed plugin tools without runtime loading and loads execution on demand", async () => {
+    const config = createContext().config;
+    installToolManifestSnapshot({
+      config,
+      env: { XAI_API_KEY: "test-key" },
+      plugin: createXaiToolManifest({ descriptor: true }),
+    });
+    const factory = vi.fn(() => ({
+      ...makeTool("x_search"),
+      async execute() {
+        return { content: [{ type: "text", text: "runtime-ok" }] };
+      },
+    }));
+    loadOpenClawPluginsMock.mockReturnValue({
+      tools: [
+        {
+          pluginId: "xai",
+          optional: false,
+          source: "/tmp/xai.js",
+          names: ["x_search"],
+          factory,
+        },
+      ],
+      diagnostics: [],
+    });
+
+    const tools = resolvePluginTools({
+      context: {
+        ...createContext(),
+        config,
+      } as never,
+      env: {
+        XAI_API_KEY: "test-key",
+      },
+    });
+
+    expectResolvedToolNames(tools, ["x_search"]);
+    expect(tools[0]?.description).toBe("Search X with xAI.");
+    expect(loadOpenClawPluginsMock).not.toHaveBeenCalled();
+    expect(factory).not.toHaveBeenCalled();
+
+    const result = await tools[0]?.execute("tool-call", { query: "openclaw" });
+
+    expect(result?.content).toEqual([{ type: "text", text: "runtime-ok" }]);
+    expect(loadOpenClawPluginsMock).toHaveBeenCalledTimes(1);
     expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        onlyPluginIds: [],
+        onlyPluginIds: ["xai"],
       }),
     );
+    expect(factory).toHaveBeenCalledTimes(1);
   });
 
   it("loads plugin-owned tools when manifest tool metadata has env auth evidence", () => {
@@ -710,7 +773,7 @@ describe("resolvePluginTools optional tools", () => {
       },
     },
   ])("$name", ({ params, expectedLoaderCall }) => {
-    setOptionalDemoRegistry();
+    setOptionalDemoRegistry({ env: params.env });
 
     resolvePluginTools(createResolveToolsParams(params));
 
