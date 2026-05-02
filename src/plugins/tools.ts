@@ -11,7 +11,6 @@ import {
 } from "./manifest-contract-eligibility.js";
 import type { PluginManifestRecord } from "./manifest-registry.js";
 import { hasManifestToolAvailability } from "./manifest-tool-availability.js";
-import type { PluginToolRegistration } from "./registry-types.js";
 import {
   getActivePluginChannelRegistry,
   getActivePluginRegistry,
@@ -24,16 +23,8 @@ import {
 } from "./runtime/load-context.js";
 import { buildPluginToolAvailabilityContext } from "./tool-availability-context.js";
 import { findUndeclaredPluginToolNames } from "./tool-contracts.js";
-import {
-  buildPluginToolFactoryCacheKey,
-  readCachedPluginToolFactoryResult,
-  type PluginToolFactoryResult,
-  writeCachedPluginToolFactoryResult,
-} from "./tool-factory-cache.js";
 import { listPluginManifestToolDescriptors } from "./tool-descriptors.js";
 import type { OpenClawPluginToolContext } from "./types.js";
-
-export { resetPluginToolFactoryCache } from "./tool-factory-cache.js";
 
 export type PluginToolMeta = {
   pluginId: string;
@@ -152,99 +143,6 @@ function describePluginToolFactoryResult(
     return { result: "array", resultCount: resolved.length };
   }
   return { result: "single", resultCount: 1 };
-}
-
-function createPluginToolFactoryTiming(params: {
-  pluginId: string;
-  names: string[];
-  durationMs: number;
-  elapsedMs: number;
-  resolved: PluginToolFactoryResult;
-  failed: boolean;
-  optional: boolean;
-}): PluginToolFactoryTiming {
-  const result = describePluginToolFactoryResult(params.resolved, params.failed);
-  return {
-    pluginId: params.pluginId,
-    names: params.names,
-    durationMs: params.durationMs,
-    elapsedMs: params.elapsedMs,
-    result: result.result,
-    resultCount: result.resultCount,
-    optional: params.optional,
-  };
-}
-
-function resolvePluginToolFactoryEntry(params: {
-  entry: PluginToolRegistration;
-  ctx: OpenClawPluginToolContext;
-  declaredNames: string[];
-  currentRuntimeConfig: PluginLoadOptions["config"] | null | undefined;
-  factoryTimingStartedAt: number;
-  logError: (message: string) => void;
-}): {
-  resolved: PluginToolFactoryResult;
-  failed: boolean;
-  timing: PluginToolFactoryTiming;
-} {
-  let resolved: PluginToolFactoryResult = null;
-  let failed = false;
-  const factoryStartedAt = Date.now();
-  const factoryCacheKey = buildPluginToolFactoryCacheKey({
-    ctx: params.ctx,
-    currentRuntimeConfig: params.currentRuntimeConfig,
-  });
-  const cached = readCachedPluginToolFactoryResult({
-    factory: params.entry.factory,
-    cacheKey: factoryCacheKey,
-  });
-
-  if (cached.hit) {
-    resolved = cached.result;
-    return {
-      resolved,
-      failed: false,
-      timing: createPluginToolFactoryTiming({
-        pluginId: params.entry.pluginId,
-        names: params.declaredNames,
-        durationMs: 0,
-        elapsedMs: toElapsedMs(Date.now() - params.factoryTimingStartedAt),
-        resolved,
-        failed: false,
-        optional: params.entry.optional,
-      }),
-    };
-  }
-
-  try {
-    resolved = params.entry.factory(params.ctx);
-  } catch (err) {
-    failed = true;
-    params.logError(`plugin tool failed (${params.entry.pluginId}): ${String(err)}`);
-  } finally {
-    if (!failed) {
-      writeCachedPluginToolFactoryResult({
-        factory: params.entry.factory,
-        cacheKey: factoryCacheKey,
-        result: resolved,
-      });
-    }
-  }
-
-  const factoryEndedAt = Date.now();
-  return {
-    resolved,
-    failed,
-    timing: createPluginToolFactoryTiming({
-      pluginId: params.entry.pluginId,
-      names: params.declaredNames,
-      durationMs: toElapsedMs(factoryEndedAt - factoryStartedAt),
-      elapsedMs: toElapsedMs(factoryEndedAt - params.factoryTimingStartedAt),
-      resolved,
-      failed,
-      optional: params.entry.optional,
-    }),
-  };
 }
 
 function formatPluginToolFactoryTiming(timing: PluginToolFactoryTiming): string {
@@ -759,15 +657,6 @@ export function resolvePluginTools(params: {
   const blockedPlugins = new Set<string>();
   const factoryTimingStartedAt = Date.now();
   const factoryTimings: PluginToolFactoryTiming[] = [];
-  let currentRuntimeConfigForFactoryCache: PluginLoadOptions["config"] | null | undefined =
-    params.context.runtimeConfig;
-  if (currentRuntimeConfigForFactoryCache === undefined && params.context.getRuntimeConfig) {
-    try {
-      currentRuntimeConfigForFactoryCache = params.context.getRuntimeConfig();
-    } catch {
-      currentRuntimeConfigForFactoryCache = null;
-    }
-  }
 
   for (const entry of registry.tools) {
     if (!scopedPluginIds.has(entry.pluginId)) {
@@ -802,19 +691,30 @@ export function resolvePluginTools(params: {
     ) {
       continue;
     }
-    const factoryResult = resolvePluginToolFactoryEntry({
-      entry,
-      ctx: params.context,
-      declaredNames,
-      currentRuntimeConfig: currentRuntimeConfigForFactoryCache,
-      factoryTimingStartedAt,
-      logError: (message) => context.logger.error(message),
-    });
-    factoryTimings.push(factoryResult.timing);
-    if (factoryResult.failed) {
+    let resolved: AnyAgentTool | AnyAgentTool[] | null | undefined = null;
+    let factoryFailed = false;
+    const factoryStartedAt = Date.now();
+    try {
+      resolved = entry.factory(params.context);
+    } catch (err) {
+      factoryFailed = true;
+      context.logger.error(`plugin tool failed (${entry.pluginId}): ${String(err)}`);
+    } finally {
+      const factoryEndedAt = Date.now();
+      const result = describePluginToolFactoryResult(resolved, factoryFailed);
+      factoryTimings.push({
+        pluginId: entry.pluginId,
+        names: declaredNames,
+        durationMs: toElapsedMs(factoryEndedAt - factoryStartedAt),
+        elapsedMs: toElapsedMs(factoryEndedAt - factoryTimingStartedAt),
+        result: result.result,
+        resultCount: result.resultCount,
+        optional: entry.optional,
+      });
+    }
+    if (factoryFailed) {
       continue;
     }
-    const { resolved } = factoryResult;
     if (!resolved) {
       if (declaredNames.length > 0) {
         context.logger.debug?.(
