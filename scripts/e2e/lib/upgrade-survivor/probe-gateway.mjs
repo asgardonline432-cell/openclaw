@@ -52,10 +52,10 @@ while (Date.now() - startedAt < timeoutMs) {
       throw new Error(`${url} returned non-JSON probe body: ${String(error)}`, { cause: error });
     }
 
-    if (!response.ok) {
-      throw new Error(`${url} probe failed with HTTP ${response.status}: ${text}`);
-    }
     if (expectKind === "live") {
+      if (!response.ok) {
+        throw new Error(`${url} probe failed with HTTP ${response.status}: ${text}`);
+      }
       if (body?.ok !== true || body?.status !== "live") {
         throw new Error(`${url} did not report live status: ${text}`);
       }
