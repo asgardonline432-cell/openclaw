@@ -123,6 +123,10 @@ function normalizeSessionKind(value: unknown): GatewaySessionRow["kind"] | undef
     : undefined;
 }
 
+function compareSessionRowsByUpdatedAt(a: GatewaySessionRow, b: GatewaySessionRow): number {
+  return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+}
+
 function checkpointSummarySignature(
   row:
     | {
@@ -278,10 +282,11 @@ export function applySessionsChangedEvent(
     delete nextRow.totalTokens;
   }
 
-  const sessions =
+  const nextRows =
     existingIndex >= 0
       ? previousRows.map((row, index) => (index === existingIndex ? nextRow : row))
       : [nextRow, ...previousRows];
+  const sessions = nextRows.toSorted(compareSessionRowsByUpdatedAt);
   const eventTs = typeof payload.ts === "number" && Number.isFinite(payload.ts) ? payload.ts : null;
   state.sessionsResult = {
     ...state.sessionsResult,
