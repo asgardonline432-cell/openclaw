@@ -54,9 +54,9 @@ function getDescriptorCacheObjectId(value: object | null | undefined): number | 
 }
 
 function stripDescriptorVolatileConfigFields(
-  value: PluginLoadOptions["config"],
-): PluginLoadOptions["config"] {
-  if (!value || typeof value !== "object") {
+  value: NonNullable<PluginLoadOptions["config"]>,
+): NonNullable<PluginLoadOptions["config"]> {
+  if (typeof value !== "object") {
     return value;
   }
   if (!("meta" in value) && !("wizard" in value)) {
