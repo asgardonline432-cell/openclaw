@@ -1,8 +1,8 @@
+import type { OpenClawConfig } from "../../config/types.js";
 import {
   applyLocalStatusRpcFallback,
   shouldUseDeviceIdentityForLocalStatusRpcFallback,
-} from "../../commands/gateway-status/local-status-rpc-fallback.js";
-import type { OpenClawConfig } from "../../config/types.js";
+} from "../../gateway/local-status-rpc-fallback.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createLazyImportLoader } from "../../shared/lazy-promise.js";
 import { withProgress } from "../progress.js";
@@ -95,6 +95,7 @@ export async function probeGatewayStatus(opts: {
               token: opts.token,
               password: opts.password,
               tlsFingerprint: opts.tlsFingerprint,
+              ...(opts.config ? { config: opts.config } : {}),
               method: "status",
               timeoutMs: Math.min(1000, opts.timeoutMs),
               mode: "backend",

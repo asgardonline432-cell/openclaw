@@ -98,10 +98,12 @@ describe("probeGatewayStatus", () => {
       },
     });
     callGatewayMock.mockResolvedValueOnce({ status: "ok" });
+    const config = { gateway: { mode: "local" } } as const;
 
     const result = await probeGatewayStatus({
       url: "wss://127.0.0.1:19191",
       token: "temp-token",
+      config,
       tlsFingerprint: "abc123",
       timeoutMs: 5_000,
       json: true,
@@ -123,6 +125,7 @@ describe("probeGatewayStatus", () => {
       token: "temp-token",
       password: undefined,
       tlsFingerprint: "abc123",
+      config,
       method: "status",
       timeoutMs: 1000,
       mode: "backend",

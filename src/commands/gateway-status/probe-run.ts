@@ -1,5 +1,10 @@
 import type { OpenClawConfig } from "../../config/types.js";
 import { callGateway } from "../../gateway/call.js";
+import {
+  applyLocalStatusRpcFallback,
+  isLoopbackGatewayUrl,
+  shouldUseDeviceIdentityForLocalStatusRpcFallback,
+} from "../../gateway/local-status-rpc-fallback.js";
 import { probeGateway } from "../../gateway/probe.js";
 import {
   discoverGatewayBeacons,
@@ -16,11 +21,6 @@ import {
   type GatewayConfigSummary,
   type GatewayStatusTarget,
 } from "./helpers.js";
-import {
-  applyLocalStatusRpcFallback,
-  isLoopbackGatewayUrl,
-  shouldUseDeviceIdentityForLocalStatusRpcFallback,
-} from "./local-status-rpc-fallback.js";
 
 export type GatewayStatusProbedTarget = {
   target: GatewayStatusTarget;

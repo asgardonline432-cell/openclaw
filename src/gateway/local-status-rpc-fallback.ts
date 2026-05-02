@@ -1,5 +1,5 @@
-import type { GatewayProbeResult } from "../../gateway/probe.js";
-import { isLoopbackIpAddress } from "../../shared/net/ip.js";
+import { isLoopbackIpAddress } from "../shared/net/ip.js";
+import type { GatewayProbeResult } from "./probe.js";
 
 export function isLoopbackGatewayUrl(rawUrl: string): boolean {
   try {

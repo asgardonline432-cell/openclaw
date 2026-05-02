@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import type { OpenClawConfig } from "../config/types.js";
 import { buildGatewayConnectionDetailsWithResolvers } from "../gateway/connection-details.js";
 import { normalizeControlUiBasePath } from "../gateway/control-ui-shared.js";
+import { applyLocalStatusRpcFallback } from "../gateway/local-status-rpc-fallback.js";
 import { resolveGatewayProbeTarget } from "../gateway/probe-target.js";
 import type { probeGateway as probeGatewayFn } from "../gateway/probe.js";
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../gateway/protocol/client-info.js";
@@ -14,7 +15,6 @@ import {
 } from "../shared/string-coerce.js";
 import { pickGatewaySelfPresence } from "./gateway-presence.js";
 import { isProbeReachable } from "./gateway-status/helpers.js";
-import { applyLocalStatusRpcFallback } from "./gateway-status/local-status-rpc-fallback.js";
 export { pickGatewaySelfPresence } from "./gateway-presence.js";
 
 const gatewayProbeModuleLoader = createLazyImportLoader(() => import("./status.gateway-probe.js"));
