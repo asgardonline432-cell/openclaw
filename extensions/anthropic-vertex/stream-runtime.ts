@@ -22,46 +22,101 @@ type AnthropicVertexClientOptions = ConstructorParameters<typeof BaseAnthropic>[
   projectId?: string | null;
   region?: string | null;
 };
+type HeaderValue = string | null | undefined;
+type HeaderValueInput = HeaderValue | readonly HeaderValue[];
+type AnthropicHeaderContainer = {
+  readonly values: Headers;
+  readonly nulls: Set<string>;
+  readonly [key: symbol]: true | Headers | Set<string>;
+};
 
 const ANTHROPIC_VERTEX_VERSION = "vertex-2023-10-16";
 const MODEL_ENDPOINTS = new Set(["/v1/messages", "/v1/messages?beta=true"]);
+const ANTHROPIC_HEADER_CONTAINER_BRAND = Symbol.for("brand.privateNullableHeaders");
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function mergeHeaders(first: unknown, second: unknown): Record<string, string> {
-  const merged: Record<string, string> = {};
+function isAnthropicHeaderContainer(value: unknown): value is AnthropicHeaderContainer {
+  return (
+    isRecord(value) &&
+    (value as { [key: symbol]: unknown })[ANTHROPIC_HEADER_CONTAINER_BRAND] === true &&
+    (value as { values?: unknown }).values instanceof Headers &&
+    (value as { nulls?: unknown }).nulls instanceof Set
+  );
+}
+
+function* iterateHeaders(
+  headers: unknown,
+): IterableIterator<readonly [name: string, value: string | null]> {
+  if (!headers) {
+    return;
+  }
+  if (isAnthropicHeaderContainer(headers)) {
+    yield* headers.values.entries();
+    for (const name of headers.nulls) {
+      yield [name, null];
+    }
+    return;
+  }
+
+  let shouldClear = false;
+  let entries: Iterable<readonly [string, HeaderValueInput]>;
+  if (headers instanceof Headers) {
+    entries = headers.entries();
+  } else if (Array.isArray(headers)) {
+    entries = headers as readonly (readonly [string, HeaderValueInput])[];
+  } else if (isRecord(headers)) {
+    shouldClear = true;
+    entries = Object.entries(headers) as readonly (readonly [string, HeaderValueInput])[];
+  } else {
+    return;
+  }
+
+  for (const [name, rawValue] of entries) {
+    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+    let didClear = false;
+    for (const value of values) {
+      if (value === undefined) {
+        continue;
+      }
+      if (shouldClear && !didClear) {
+        didClear = true;
+        yield [name, null];
+      }
+      yield [name, value === null ? null : String(value)];
+    }
+  }
+}
+
+function mergeHeaders(first: unknown, second: unknown): AnthropicHeaderContainer {
+  const values = new Headers();
+  const nulls = new Set<string>();
 
   for (const headers of [first, second]) {
-    if (!headers) {
-      continue;
-    }
-    if (headers instanceof Headers) {
-      headers.forEach((value, key) => {
-        merged[key] = value;
-      });
-      continue;
-    }
-    if (Array.isArray(headers)) {
-      for (const entry of headers) {
-        if (Array.isArray(entry) && entry.length >= 2 && entry[1] !== undefined) {
-          merged[String(entry[0])] = String(entry[1]);
-        }
+    const seenHeaders = new Set<string>();
+    for (const [name, value] of iterateHeaders(headers)) {
+      const lowerName = name.toLowerCase();
+      if (!seenHeaders.has(lowerName)) {
+        values.delete(name);
+        seenHeaders.add(lowerName);
       }
-      continue;
-    }
-    if (!isRecord(headers)) {
-      continue;
-    }
-    for (const [key, value] of Object.entries(headers)) {
-      if (value !== undefined) {
-        merged[key] = String(value);
+      if (value === null) {
+        values.delete(name);
+        nulls.add(lowerName);
+      } else {
+        values.append(name, value);
+        nulls.delete(lowerName);
       }
     }
   }
 
-  return merged;
+  return {
+    [ANTHROPIC_HEADER_CONTAINER_BRAND]: true,
+    values,
+    nulls,
+  };
 }
 
 function getHeaderValue(headers: unknown, name: string): unknown {
@@ -70,6 +125,9 @@ function getHeaderValue(headers: unknown, name: string): unknown {
   }
   if (headers instanceof Headers) {
     return headers.get(name);
+  }
+  if (isAnthropicHeaderContainer(headers)) {
+    return headers.values.get(name);
   }
   if (isRecord(headers)) {
     return headers[name];
@@ -137,7 +195,7 @@ class AnthropicVertexClient extends BaseAnthropic {
     if (!this.projectId && typeof projectId === "string" && projectId.length > 0) {
       this.projectId = projectId;
     }
-    options.headers = mergeHeaders(authHeaders, options.headers);
+    options.headers = mergeHeaders(authHeaders, options.headers) as typeof options.headers;
   }
 
   async buildRequest(
@@ -161,6 +219,9 @@ class AnthropicVertexClient extends BaseAnthropic {
       }
 
       const model = options.body.model;
+      if (typeof model !== "string" || model.length === 0) {
+        throw new Error("Expected request body model to be a string for post /v1/messages");
+      }
       options.body.model = undefined;
       const specifier = options.body.stream ? "streamRawPredict" : "rawPredict";
       options.path = `/projects/${this.projectId}/locations/${this.region}/publishers/anthropic/models/${model}:${specifier}`;
@@ -215,6 +276,10 @@ export type AnthropicVertexStreamDeps = {
 const defaultAnthropicVertexStreamDeps: AnthropicVertexStreamDeps = {
   AnthropicVertex: AnthropicVertexClient as AnthropicVertexStreamDeps["AnthropicVertex"],
   streamAnthropic: streamAnthropicDefault,
+};
+
+export const __testing = {
+  AnthropicVertexClient,
 };
 
 function isClaudeOpus47Model(modelId: string): boolean {
