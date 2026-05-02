@@ -180,6 +180,19 @@ describe("createOpenClawCodingTools", () => {
     );
   });
 
+  it("keeps canonical core runtime allowlist tools materialized", () => {
+    const tools = applyRuntimeToolsAllow(
+      createOpenClawCodingTools({
+        config: testConfig,
+        senderIsOwner: true,
+        enableHeartbeatTool: true,
+      }),
+      ["process", "heartbeat_respond"],
+    );
+
+    expect(tools.map((tool) => tool.name)).toEqual(["process", "heartbeat_respond"]);
+  });
+
   it("preserves action enums in normalized schemas", () => {
     const defaultTools = createOpenClawCodingTools({ config: testConfig, senderIsOwner: true });
     const toolNames = ["canvas", "nodes", "cron", "gateway", "message"];

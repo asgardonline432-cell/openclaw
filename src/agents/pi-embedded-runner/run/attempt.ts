@@ -157,8 +157,9 @@ import {
   buildEmptyExplicitToolAllowlistError,
   collectExplicitToolAllowlistSources,
 } from "../../tool-allowlist-guard.js";
+import { isKnownCoreToolId } from "../../tool-catalog.js";
 import { UNKNOWN_TOOL_THRESHOLD } from "../../tool-loop-detection.js";
-import { normalizeToolName } from "../../tool-policy.js";
+import { expandToolGroups, normalizeToolName } from "../../tool-policy.js";
 import { shouldAllowProviderOwnedThinkingReplay } from "../../transcript-policy.js";
 import { normalizeUsage, type NormalizedUsage } from "../../usage.js";
 import { DEFAULT_BOOTSTRAP_FILENAME } from "../../workspace.js";
@@ -492,41 +493,9 @@ export function applyEmbeddedAttemptToolsAllow<T extends { name: string }>(
   if (!toolsAllow || toolsAllow.length === 0) {
     return tools;
   }
-  const allowSet = new Set(toolsAllow.map((name) => normalizeToolName(name)));
+  const allowSet = new Set(expandToolGroups(toolsAllow));
   return tools.filter((tool) => allowSet.has(normalizeToolName(tool.name)));
 }
-
-const CORE_CODING_TOOL_ALLOWLIST_NAMES = new Set([
-  "agents_list",
-  "apply_patch",
-  "bash",
-  "canvas",
-  "cron",
-  "edit",
-  "exec",
-  "gateway",
-  "heartbeat_response",
-  "image",
-  "image_generate",
-  "message",
-  "music_generate",
-  "nodes",
-  "pdf",
-  "read",
-  "session_status",
-  "sessions_history",
-  "sessions_list",
-  "sessions_send",
-  "sessions_spawn",
-  "sessions_yield",
-  "subagents",
-  "tts",
-  "update_plan",
-  "video_generate",
-  "web_fetch",
-  "web_search",
-  "write",
-]);
 
 function shouldBuildCoreCodingToolsForAllowlist(toolsAllow?: string[]): boolean {
   if (!toolsAllow || toolsAllow.length === 0) {
@@ -536,10 +505,9 @@ function shouldBuildCoreCodingToolsForAllowlist(toolsAllow?: string[]): boolean 
     const normalized = normalizeToolName(toolName);
     return (
       normalized === "*" ||
-      normalized.startsWith("group:") ||
       normalized === "bundle-mcp" ||
       normalized.includes(TOOL_NAME_SEPARATOR) ||
-      CORE_CODING_TOOL_ALLOWLIST_NAMES.has(normalized)
+      expandToolGroups([normalized]).some((toolId) => isKnownCoreToolId(toolId))
     );
   });
 }

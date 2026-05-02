@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { isKnownCoreToolId } from "./tool-catalog.js";
 import {
   analyzeAllowlistByToolType,
   buildPluginToolGroups,
+  TOOL_GROUPS,
   type PluginToolGroups,
 } from "./tool-policy.js";
 
@@ -12,6 +14,13 @@ const pluginGroups: PluginToolGroups = {
 const coreTools = new Set(["read", "write", "exec", "session_status"]);
 
 describe("analyzeAllowlistByToolType", () => {
+  it("keeps canonical core catalog coverage for fast-path allowlist detection", () => {
+    expect(isKnownCoreToolId("process")).toBe(true);
+    expect(isKnownCoreToolId("heartbeat_respond")).toBe(true);
+    expect(TOOL_GROUPS["group:runtime"]).toContain("process");
+    expect(TOOL_GROUPS["group:openclaw"]).toContain("heartbeat_respond");
+  });
+
   it("preserves allowlist when it only targets plugin tools", () => {
     const policy = analyzeAllowlistByToolType({ allow: ["lobster"] }, pluginGroups, coreTools);
     expect(policy.policy?.allow).toEqual(["lobster"]);
