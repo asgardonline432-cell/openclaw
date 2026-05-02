@@ -55,6 +55,7 @@ import {
   isSubagentEnvelopeSession,
   resolveSubagentCapabilityStore,
 } from "./subagent-capabilities.js";
+import { listKnownCoreToolIds } from "./tool-catalog.js";
 import {
   EXEC_TOOL_DISPLAY_SUMMARY,
   PROCESS_TOOL_DISPLAY_SUMMARY,
@@ -79,6 +80,7 @@ function isOpenAIProvider(provider?: string) {
 }
 
 const MEMORY_FLUSH_ALLOWED_TOOL_NAMES = new Set(["read", "write"]);
+const CANONICAL_CORE_TOOL_NAMES = listKnownCoreToolIds();
 
 type BashToolsModule = typeof import("./bash-tools.js");
 
@@ -637,6 +639,7 @@ export function createOpenClawCodingTools(options?: {
           allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
         },
         resolvedConfig: options?.config,
+        existingToolNames: new Set(CANONICAL_CORE_TOOL_NAMES),
       });
   const tools: AnyAgentTool[] = [
     ...base,

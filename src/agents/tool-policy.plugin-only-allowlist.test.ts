@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isKnownCoreToolId } from "./tool-catalog.js";
+import { isKnownCoreToolId, listKnownCoreToolIds } from "./tool-catalog.js";
 import {
   analyzeAllowlistByToolType,
   buildPluginToolGroups,
@@ -17,6 +17,9 @@ describe("analyzeAllowlistByToolType", () => {
   it("keeps canonical core catalog coverage for fast-path allowlist detection", () => {
     expect(isKnownCoreToolId("process")).toBe(true);
     expect(isKnownCoreToolId("heartbeat_respond")).toBe(true);
+    expect(listKnownCoreToolIds()).toEqual(
+      expect.arrayContaining(["process", "heartbeat_respond"]),
+    );
     expect(TOOL_GROUPS["group:runtime"]).toContain("process");
     expect(TOOL_GROUPS["group:openclaw"]).toContain("heartbeat_respond");
   });

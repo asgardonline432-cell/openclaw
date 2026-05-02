@@ -14,6 +14,12 @@ import "./test-helpers/fast-coding-tools.js";
 import "./test-helpers/fast-openclaw-tools.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { createOpenClawCodingTools } from "./pi-tools.js";
+import {
+  getPluginToolMetaMock,
+  resolvePluginToolsMock,
+  stubTool,
+  type StubTool,
+} from "./test-helpers/fast-tool-stubs.js";
 import { createHostSandboxFsBridge } from "./test-helpers/host-sandbox-fs-bridge.js";
 import { expectReadWriteEditTools } from "./test-helpers/pi-tools-fs-helpers.js";
 import { createPiToolsSandboxContext } from "./test-helpers/pi-tools-sandbox-context.js";
@@ -191,6 +197,59 @@ describe("createOpenClawCodingTools", () => {
     );
 
     expect(tools.map((tool) => tool.name)).toEqual(["process", "heartbeat_respond"]);
+  });
+
+  it.each([
+    {
+      label: "group:plugins",
+      runtimeToolAllowlist: ["group:plugins"],
+    },
+    {
+      label: "plugin id",
+      runtimeToolAllowlist: ["process"],
+    },
+  ])("passes canonical core tool names through the plugin-only $label path", (params) => {
+    const pluginMeta = new WeakMap<StubTool, { pluginId: string }>();
+    resolvePluginToolsMock.mockReset();
+    getPluginToolMetaMock.mockReset();
+    resolvePluginToolsMock.mockImplementation((resolverParams: unknown) => {
+      const existingToolNames = (resolverParams as { existingToolNames?: Set<string> })
+        .existingToolNames;
+      if (existingToolNames?.has("process")) {
+        return [];
+      }
+      const tool = stubTool("process");
+      pluginMeta.set(tool, { pluginId: "process" });
+      return [tool];
+    });
+    getPluginToolMetaMock.mockImplementation((tool: unknown) => pluginMeta.get(tool as StubTool));
+
+    try {
+      const tools = createOpenClawCodingTools({
+        config: testConfig,
+        includeCoreTools: false,
+        runtimeToolAllowlist: params.runtimeToolAllowlist,
+      });
+
+      expect(resolvePluginToolsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          existingToolNames: expect.any(Set),
+          toolAllowlist: params.runtimeToolAllowlist,
+        }),
+      );
+      const resolverParams = resolvePluginToolsMock.mock.calls[0]?.[0] as
+        | { existingToolNames?: Set<string> }
+        | undefined;
+      expect(Array.from(resolverParams?.existingToolNames ?? [])).toEqual(
+        expect.arrayContaining(["process", "heartbeat_respond"]),
+      );
+      expect(tools.map((tool) => tool.name)).not.toContain("process");
+    } finally {
+      resolvePluginToolsMock.mockReset();
+      getPluginToolMetaMock.mockReset();
+      resolvePluginToolsMock.mockReturnValue([]);
+      getPluginToolMetaMock.mockReturnValue(undefined);
+    }
   });
 
   it("preserves action enums in normalized schemas", () => {

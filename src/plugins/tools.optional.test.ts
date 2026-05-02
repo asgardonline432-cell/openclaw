@@ -313,6 +313,68 @@ describe("resolvePluginTools optional tools", () => {
 
   it.each([
     {
+      name: "group:plugins allowlist",
+      toolAllowlist: ["group:plugins"],
+    },
+    {
+      name: "plugin id allowlist",
+      toolAllowlist: ["optional-demo"],
+    },
+  ])("rejects core tool name collisions through $name", ({ toolAllowlist }) => {
+    const registry = setRegistry([
+      {
+        pluginId: "optional-demo",
+        names: ["process"],
+        optional: true,
+        source: "/tmp/optional-demo.js",
+        factory: () => makeTool("process"),
+      },
+    ]);
+
+    const tools = resolvePluginTools(
+      createResolveToolsParams({
+        existingToolNames: new Set(["process"]),
+        toolAllowlist,
+      }),
+    );
+
+    expect(tools).toHaveLength(0);
+    expectSingleDiagnosticMessage(registry.diagnostics, "plugin tool name conflict");
+  });
+
+  it.each([
+    {
+      name: "group:plugins allowlist",
+      toolAllowlist: ["group:plugins"],
+    },
+    {
+      name: "plugin id allowlist",
+      toolAllowlist: ["process"],
+    },
+  ])("rejects core plugin id collisions through $name", ({ toolAllowlist }) => {
+    const registry = setRegistry([
+      {
+        pluginId: "process",
+        names: ["optional_tool"],
+        optional: true,
+        source: "/tmp/process.js",
+        factory: () => makeTool("optional_tool"),
+      },
+    ]);
+
+    const tools = resolvePluginTools(
+      createResolveToolsParams({
+        existingToolNames: new Set(["process"]),
+        toolAllowlist,
+      }),
+    );
+
+    expect(tools).toHaveLength(0);
+    expectSingleDiagnosticMessage(registry.diagnostics, "plugin id conflicts with core tool name");
+  });
+
+  it.each([
+    {
       name: "forwards an explicit env to plugin loading",
       params: {
         env: { OPENCLAW_HOME: "/srv/openclaw-home" } as NodeJS.ProcessEnv,

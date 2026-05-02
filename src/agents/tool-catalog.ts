@@ -397,6 +397,10 @@ export function resolveCoreToolProfiles(toolId: string): ToolProfileId[] {
   return [...tool.profiles];
 }
 
+export function listKnownCoreToolIds(): string[] {
+  return CORE_TOOL_DEFINITIONS.map((tool) => tool.id);
+}
+
 export function isKnownCoreToolId(toolId: string): boolean {
   return CORE_TOOL_BY_ID.has(toolId);
 }

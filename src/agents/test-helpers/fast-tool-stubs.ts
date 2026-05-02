@@ -15,6 +15,11 @@ export const stubTool = (name: string): StubTool => ({
   execute: vi.fn() as unknown as (...args: unknown[]) => unknown,
 });
 
+export const getPluginToolMetaMock = vi.fn(
+  (_tool: unknown): { pluginId: string } | undefined => undefined,
+);
+export const resolvePluginToolsMock = vi.fn((_params: unknown): StubTool[] => []);
+
 vi.mock("../tools/image-tool.js", () => ({
   createImageTool: () => stubTool("image"),
 }));
@@ -36,6 +41,6 @@ vi.mock("../../plugins/tools.js", () => ({
   buildPluginToolMetadataKey: (pluginId: string, toolName: string) =>
     JSON.stringify([pluginId, toolName]),
   copyPluginToolMeta: (_from: unknown, to: unknown) => to,
-  getPluginToolMeta: () => undefined,
-  resolvePluginTools: () => [],
+  getPluginToolMeta: (tool: unknown) => getPluginToolMetaMock(tool),
+  resolvePluginTools: (params: unknown) => resolvePluginToolsMock(params),
 }));
