@@ -1,10 +1,12 @@
-import { AnthropicVertex as AnthropicVertexSdk } from "@anthropic-ai/vertex-sdk";
+import { BaseAnthropic } from "@anthropic-ai/sdk/client";
+import * as AnthropicResources from "@anthropic-ai/sdk/resources/index";
 import type { StreamFn } from "@mariozechner/pi-agent-core";
 import {
   streamAnthropic as streamAnthropicDefault,
   type AnthropicOptions,
   type Model,
 } from "@mariozechner/pi-ai";
+import { GoogleAuth, type AuthClient } from "google-auth-library";
 import {
   applyAnthropicPayloadPolicyToParams,
   resolveAnthropicPayloadPolicy,
@@ -13,7 +15,197 @@ import { resolveAnthropicVertexClientRegion, resolveAnthropicVertexProjectId } f
 
 type AnthropicVertexEffort = NonNullable<AnthropicOptions["effort"]>;
 type AnthropicVertexAdaptiveEffort = AnthropicVertexEffort | "xhigh";
-type AnthropicVertexClientOptions = ConstructorParameters<typeof AnthropicVertexSdk>[0];
+type AnthropicVertexClientOptions = ConstructorParameters<typeof BaseAnthropic>[0] & {
+  accessToken?: string | null;
+  authClient?: AuthClient | null;
+  googleAuth?: GoogleAuth | null;
+  projectId?: string | null;
+  region?: string | null;
+};
+
+const ANTHROPIC_VERTEX_VERSION = "vertex-2023-10-16";
+const MODEL_ENDPOINTS = new Set(["/v1/messages", "/v1/messages?beta=true"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeHeaders(first: unknown, second: unknown): Record<string, string> {
+  const merged: Record<string, string> = {};
+
+  for (const headers of [first, second]) {
+    if (!headers) {
+      continue;
+    }
+    if (headers instanceof Headers) {
+      headers.forEach((value, key) => {
+        merged[key] = value;
+      });
+      continue;
+    }
+    if (Array.isArray(headers)) {
+      for (const entry of headers) {
+        if (Array.isArray(entry) && entry.length >= 2 && entry[1] !== undefined) {
+          merged[String(entry[0])] = String(entry[1]);
+        }
+      }
+      continue;
+    }
+    if (!isRecord(headers)) {
+      continue;
+    }
+    for (const [key, value] of Object.entries(headers)) {
+      if (value !== undefined) {
+        merged[key] = String(value);
+      }
+    }
+  }
+
+  return merged;
+}
+
+function getHeaderValue(headers: unknown, name: string): unknown {
+  if (!headers) {
+    return undefined;
+  }
+  if (headers instanceof Headers) {
+    return headers.get(name);
+  }
+  if (isRecord(headers)) {
+    return headers[name];
+  }
+  return undefined;
+}
+
+class AnthropicVertexClient extends BaseAnthropic {
+  accessToken: string | null;
+  beta: AnthropicResources.Beta;
+  messages: AnthropicResources.Messages;
+  projectId: string | null;
+  region: string;
+
+  private auth?: GoogleAuth;
+  private authClientPromise: Promise<AuthClient>;
+
+  constructor({
+    baseURL = process.env.ANTHROPIC_VERTEX_BASE_URL,
+    region = process.env.CLOUD_ML_REGION ?? null,
+    projectId = process.env.ANTHROPIC_VERTEX_PROJECT_ID ?? null,
+    ...opts
+  }: AnthropicVertexClientOptions = {}) {
+    if (!region) {
+      throw new Error(
+        "No region was given. The client should be instantiated with the `region` option or the `CLOUD_ML_REGION` environment variable should be set.",
+      );
+    }
+
+    super({
+      baseURL: baseURL ?? resolveDefaultAnthropicVertexBaseUrl(region),
+      ...opts,
+    });
+
+    this.messages = makeMessagesResource(this);
+    this.beta = makeBetaResource(this);
+    this.region = region;
+    this.projectId = projectId;
+    this.accessToken = opts.accessToken ?? null;
+
+    if (opts.authClient && opts.googleAuth) {
+      throw new Error(
+        "You cannot provide both `authClient` and `googleAuth`. Please provide only one of them.",
+      );
+    }
+    if (opts.authClient) {
+      this.authClientPromise = Promise.resolve(opts.authClient);
+    } else {
+      this.auth =
+        opts.googleAuth ??
+        new GoogleAuth({ scopes: "https://www.googleapis.com/auth/cloud-platform" });
+      this.authClientPromise = this.auth.getClient();
+    }
+  }
+
+  validateHeaders(): void {
+    // Vertex auth is resolved asynchronously in prepareOptions.
+  }
+
+  async prepareOptions(options: Parameters<BaseAnthropic["prepareOptions"]>[0]): Promise<void> {
+    const authClient = await this.authClientPromise;
+    const authHeaders = await authClient.getRequestHeaders();
+    const projectId = authClient.projectId ?? getHeaderValue(authHeaders, "x-goog-user-project");
+
+    if (!this.projectId && typeof projectId === "string" && projectId.length > 0) {
+      this.projectId = projectId;
+    }
+    options.headers = mergeHeaders(authHeaders, options.headers);
+  }
+
+  async buildRequest(
+    options: Parameters<BaseAnthropic["buildRequest"]>[0],
+  ): ReturnType<BaseAnthropic["buildRequest"]> {
+    if (isRecord(options.body)) {
+      options.body = { ...options.body };
+    }
+    if (isRecord(options.body) && !options.body.anthropic_version) {
+      options.body.anthropic_version = ANTHROPIC_VERTEX_VERSION;
+    }
+
+    if (MODEL_ENDPOINTS.has(options.path) && options.method === "post") {
+      if (!this.projectId) {
+        throw new Error(
+          "No projectId was given and it could not be resolved from credentials. The client should be instantiated with the `projectId` option or the `ANTHROPIC_VERTEX_PROJECT_ID` environment variable should be set.",
+        );
+      }
+      if (!isRecord(options.body)) {
+        throw new Error("Expected request body to be an object for post /v1/messages");
+      }
+
+      const model = options.body.model;
+      options.body.model = undefined;
+      const specifier = options.body.stream ? "streamRawPredict" : "rawPredict";
+      options.path = `/projects/${this.projectId}/locations/${this.region}/publishers/anthropic/models/${model}:${specifier}`;
+    }
+
+    if (
+      options.path === "/v1/messages/count_tokens" ||
+      (options.path === "/v1/messages/count_tokens?beta=true" && options.method === "post")
+    ) {
+      if (!this.projectId) {
+        throw new Error(
+          "No projectId was given and it could not be resolved from credentials. The client should be instantiated with the `projectId` option or the `ANTHROPIC_VERTEX_PROJECT_ID` environment variable should be set.",
+        );
+      }
+      options.path = `/projects/${this.projectId}/locations/${this.region}/publishers/anthropic/models/count-tokens:rawPredict`;
+    }
+
+    return super.buildRequest(options);
+  }
+}
+
+function resolveDefaultAnthropicVertexBaseUrl(region: string): string {
+  switch (region) {
+    case "global":
+      return "https://aiplatform.googleapis.com/v1";
+    case "us":
+      return "https://aiplatform.us.rep.googleapis.com/v1";
+    case "eu":
+      return "https://aiplatform.eu.rep.googleapis.com/v1";
+    default:
+      return `https://${region}-aiplatform.googleapis.com/v1`;
+  }
+}
+
+function makeMessagesResource(client: BaseAnthropic): AnthropicResources.Messages {
+  const resource = new AnthropicResources.Messages(client);
+  delete (resource as { batches?: unknown }).batches;
+  return resource;
+}
+
+function makeBetaResource(client: BaseAnthropic): AnthropicResources.Beta {
+  const resource = new AnthropicResources.Beta(client);
+  delete (resource.messages as { batches?: unknown }).batches;
+  return resource;
+}
 
 export type AnthropicVertexStreamDeps = {
   AnthropicVertex: new (options: AnthropicVertexClientOptions) => unknown;
@@ -21,7 +213,7 @@ export type AnthropicVertexStreamDeps = {
 };
 
 const defaultAnthropicVertexStreamDeps: AnthropicVertexStreamDeps = {
-  AnthropicVertex: AnthropicVertexSdk as AnthropicVertexStreamDeps["AnthropicVertex"],
+  AnthropicVertex: AnthropicVertexClient as AnthropicVertexStreamDeps["AnthropicVertex"],
   streamAnthropic: streamAnthropicDefault,
 };
 
