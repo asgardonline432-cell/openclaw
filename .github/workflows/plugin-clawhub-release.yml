@@ -32,7 +32,7 @@ env:
   CLAWHUB_REGISTRY: "https://clawhub.ai"
   CLAWHUB_REPOSITORY: "openclaw/clawhub"
   # Pinned to a reviewed ClawHub commit so release behavior stays reproducible.
-  CLAWHUB_REF: "3d6f3b49a58cfe08bccc0614ab7eb8e0cde33b74"
+  CLAWHUB_REF: "bbdde7fd5325666374a08537298d10316b1cd131"
 
 jobs:
   preview_plugins_clawhub:
