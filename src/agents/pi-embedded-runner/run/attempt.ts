@@ -697,7 +697,7 @@ function collectAttemptExplicitToolAllowlistSources(params: {
     { label: "group tools.allow", allow: groupPolicy?.allow },
     { label: "sandbox tools.allow", allow: params.sandboxToolPolicy?.allow },
     { label: "subagent tools.allow", allow: subagentPolicy?.allow },
-    { label: "runtime toolsAllow", allow: params.toolsAllow },
+    { label: "runtime toolsAllow", allow: params.toolsAllow, kind: "runtime" },
   ]);
 }
 
@@ -1142,7 +1142,7 @@ export async function runEmbeddedAttempt(
       sources: explicitToolAllowlistSources,
       callableToolNames: effectiveTools.map((tool) => tool.name),
       toolsEnabled,
-      disableTools: params.disableTools,
+      disableTools: params.disableTools || isRawModelRun,
     });
     logAgentRuntimeToolDiagnostics({
       runtimePlan: params.runtimePlan,
