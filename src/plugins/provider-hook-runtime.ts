@@ -214,22 +214,6 @@ export function resolveProviderRuntimePlugin(
   return plugin ?? undefined;
 }
 
-export function resolveProviderHookPlugin(params: {
-  provider: string;
-  config?: OpenClawConfig;
-  workspaceDir?: string;
-  env?: NodeJS.ProcessEnv;
-}): ProviderPlugin | undefined {
-  return (
-    resolveProviderRuntimePlugin(params) ??
-    resolveProviderPluginsForHooks({
-      config: params.config,
-      workspaceDir: params.workspaceDir,
-      env: params.env,
-    }).find((candidate) => matchesProviderId(candidate, params.provider))
-  );
-}
-
 export function resolveProviderRuntimePluginHandle(
   params: ProviderRuntimePluginLookupParams,
 ): ProviderRuntimePluginHandle {

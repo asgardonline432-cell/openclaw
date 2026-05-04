@@ -43,6 +43,8 @@ const hoisted = vi.hoisted(() => {
   }));
   const resolveEmbeddedAgentRuntime = vi.fn(() => "pi");
   const ensureOpenClawModelsJson = vi.fn(async () => undefined);
+  const resolveModelAsync = vi.fn(async () => ({}));
+  const prewarmTtsRuntimeFacade = vi.fn(() => undefined);
   return {
     startPluginServices,
     startGmailWatcherWithLogs,
@@ -69,6 +71,8 @@ const hoisted = vi.hoisted(() => {
     resolveConfiguredModelRef,
     resolveEmbeddedAgentRuntime,
     ensureOpenClawModelsJson,
+    resolveModelAsync,
+    prewarmTtsRuntimeFacade,
   };
 });
 
@@ -178,6 +182,14 @@ vi.mock("../agents/models-config.js", () => ({
   ensureOpenClawModelsJson: hoisted.ensureOpenClawModelsJson,
 }));
 
+vi.mock("../agents/pi-embedded-runner/model.js", () => ({
+  resolveModelAsync: hoisted.resolveModelAsync,
+}));
+
+vi.mock("../tts/tts.js", () => ({
+  prewarmTtsRuntimeFacade: hoisted.prewarmTtsRuntimeFacade,
+}));
+
 vi.mock("./server-tailscale.js", () => ({
   startGatewayTailscaleExposure: hoisted.startGatewayTailscaleExposure,
 }));
@@ -223,6 +235,10 @@ describe("startGatewayPostAttachRuntime", () => {
     hoisted.resolveEmbeddedAgentRuntime.mockReturnValue("pi");
     hoisted.ensureOpenClawModelsJson.mockReset();
     hoisted.ensureOpenClawModelsJson.mockResolvedValue(undefined);
+    hoisted.resolveModelAsync.mockReset();
+    hoisted.resolveModelAsync.mockResolvedValue({});
+    hoisted.prewarmTtsRuntimeFacade.mockReset();
+    hoisted.prewarmTtsRuntimeFacade.mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -638,14 +654,18 @@ describe("startGatewayPostAttachRuntime", () => {
     await withEnvAsync(
       { OPENCLAW_SKIP_CHANNELS: undefined, OPENCLAW_SKIP_PROVIDERS: undefined },
       async () => {
-        let resolvePrewarm: (() => void) | undefined;
-        const prewarmPrimaryModel = vi.fn(
-          async () =>
-            await new Promise<undefined>((resolve) => {
-              resolvePrewarm = () => resolve(undefined);
-            }),
-        );
-        const startChannels = vi.fn(async () => undefined);
+        const events: string[] = [];
+        let resolvePrewarm!: () => void;
+        const prewarmPrimaryModel = vi.fn(async () => {
+          events.push("prewarm-start");
+          await new Promise<undefined>((resolve) => {
+            resolvePrewarm = () => resolve(undefined);
+          });
+          events.push("prewarm-done");
+        });
+        const startChannels = vi.fn(async () => {
+          events.push("channels");
+        });
 
         const sidecarsPromise = startGatewaySidecars({
           cfg: {
@@ -669,27 +689,70 @@ describe("startGatewayPostAttachRuntime", () => {
           },
         });
 
-        await vi.waitFor(
-          () => {
-            expect(prewarmPrimaryModel).toHaveBeenCalledTimes(1);
-            expect(prewarmPrimaryModel).toHaveBeenCalledWith(
-              expect.objectContaining({
-                workspaceDir: "/tmp/openclaw-workspace",
-              }),
-            );
-            expect(startChannels).toHaveBeenCalledTimes(1);
-          },
-          { timeout: 2_000 },
-        );
+        await vi.waitFor(() => {
+          expect(hoisted.prewarmTtsRuntimeFacade).toHaveBeenCalledTimes(1);
+          expect(prewarmPrimaryModel).toHaveBeenCalledTimes(1);
+          expect(prewarmPrimaryModel).toHaveBeenCalledWith(
+            expect.objectContaining({
+              workspaceDir: "/tmp/openclaw-workspace",
+            }),
+          );
+        });
         await sidecarsPromise;
 
         if (!resolvePrewarm) {
           throw new Error("Expected primary model prewarm resolver to be initialized");
         }
         resolvePrewarm();
-        await Promise.resolve();
+        await vi.waitFor(() => {
+          expect(events).toEqual(["prewarm-start", "channels", "prewarm-done"]);
+        });
+
+        expect(startChannels).toHaveBeenCalledTimes(1);
       },
     );
+  });
+
+  it("prewarms the TTS runtime facade before channel startup", async () => {
+    const events: string[] = [];
+    hoisted.prewarmTtsRuntimeFacade.mockImplementationOnce(() => {
+      events.push("tts-runtime");
+    });
+    const startChannels = vi.fn(async () => {
+      events.push("channels");
+    });
+
+    await withEnvAsync(
+      {
+        OPENCLAW_SKIP_CHANNELS: undefined,
+        OPENCLAW_SKIP_PROVIDERS: undefined,
+        OPENCLAW_SKIP_STARTUP_MODEL_PREWARM: "1",
+      },
+      async () => {
+        await startGatewaySidecars({
+          cfg: {
+            hooks: { internal: { enabled: false } },
+          } as never,
+          pluginRegistry: createPostAttachParams().pluginRegistry,
+          defaultWorkspaceDir: "/tmp/openclaw-workspace",
+          deps: {} as never,
+          startChannels,
+          log: { warn: vi.fn() },
+          logHooks: {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+          },
+          logChannels: {
+            info: vi.fn(),
+            error: vi.fn(),
+          },
+        });
+      },
+    );
+
+    expect(startChannels).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["tts-runtime", "channels"]);
   });
 
   it("keeps startup-gated methods unavailable while sidecars are still resuming", async () => {

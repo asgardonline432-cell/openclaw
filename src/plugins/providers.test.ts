@@ -29,6 +29,7 @@ const applyPluginAutoEnableMock = vi.fn<ApplyPluginAutoEnable>();
 
 let resolveOwningPluginIdsForProvider: typeof import("./providers.js").resolveOwningPluginIdsForProvider;
 let resolveOwningPluginIdsForModelRef: typeof import("./providers.js").resolveOwningPluginIdsForModelRef;
+let resolveCatalogHookProviderPluginIds: typeof import("./providers.js").resolveCatalogHookProviderPluginIds;
 let resolveActivatableProviderOwnerPluginIds: typeof import("./providers.js").resolveActivatableProviderOwnerPluginIds;
 let resolveEnabledProviderPluginIds: typeof import("./providers.js").resolveEnabledProviderPluginIds;
 let resolveExternalAuthProfileCompatFallbackPluginIds: typeof import("./providers.js").resolveExternalAuthProfileCompatFallbackPluginIds;
@@ -487,6 +488,7 @@ describe("resolvePluginProviders", () => {
     });
     ({
       resolveActivatableProviderOwnerPluginIds,
+      resolveCatalogHookProviderPluginIds,
       resolveOwningPluginIdsForProvider,
       resolveOwningPluginIdsForModelRef,
       resolveEnabledProviderPluginIds,
@@ -523,6 +525,28 @@ describe("resolvePluginProviders", () => {
     ]);
 
     expectOwningPluginIds("dynamic-provider", ["second-owner"]);
+  });
+
+  it("scopes catalog hook plugin ids to requested provider and model refs", () => {
+    setOwningProviderManifestPlugins();
+
+    expect(
+      resolveCatalogHookProviderPluginIds({
+        providerRefs: ["openai-codex"],
+        modelRefs: ["claude-sonnet-4-6"],
+      }),
+    ).toEqual(["anthropic", "openai"]);
+  });
+
+  it("does not broaden scoped catalog hook loads when no owner matches", () => {
+    setOwningProviderManifestPlugins();
+
+    expect(
+      resolveCatalogHookProviderPluginIds({
+        providerRefs: ["missing-provider"],
+        modelRefs: ["missing-model"],
+      }),
+    ).toEqual([]);
   });
 
   beforeEach(() => {

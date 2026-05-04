@@ -376,6 +376,20 @@ function schedulePrimaryModelPrewarm(
   });
 }
 
+async function prewarmTtsRuntimeBeforeChannelStart(params: {
+  startupTrace?: GatewayStartupTrace;
+  log: { warn: (msg: string) => void };
+}): Promise<void> {
+  await measureStartup(params.startupTrace, "sidecars.tts-runtime-prewarm", async () => {
+    try {
+      const { prewarmTtsRuntimeFacade } = await import("../tts/tts.js");
+      prewarmTtsRuntimeFacade();
+    } catch (err) {
+      params.log.warn(`startup TTS runtime warmup failed: ${String(err)}`);
+    }
+  });
+}
+
 export async function startGatewaySidecars(params: {
   cfg: OpenClawConfig;
   pluginRegistry: ReturnType<typeof loadOpenClawPlugins>;
@@ -406,7 +420,7 @@ export async function startGatewaySidecars(params: {
     if (params.cfg.hooks?.gmail?.model) {
       const [
         { DEFAULT_MODEL, DEFAULT_PROVIDER },
-        { loadModelCatalog },
+        { resolveModelCatalogScope, loadModelCatalog },
         { getModelRefStatus, resolveConfiguredModelRef, resolveHooksGmailModel },
       ] = await Promise.all([
         import("../agents/defaults.js"),
@@ -424,7 +438,14 @@ export async function startGatewaySidecars(params: {
             defaultProvider: DEFAULT_PROVIDER,
             defaultModel: DEFAULT_MODEL,
           });
-        const catalog = await loadModelCatalog({ config: params.cfg });
+        const catalog = await loadModelCatalog({
+          config: params.cfg,
+          ...resolveModelCatalogScope({
+            cfg: params.cfg,
+            provider: hooksModelRef.provider,
+            model: hooksModelRef.model,
+          }),
+        });
         const status = getModelRefStatus({
           cfg: params.cfg,
           catalog,
@@ -473,6 +494,10 @@ export async function startGatewaySidecars(params: {
   await measureStartup(params.startupTrace, "sidecars.channels", async () => {
     if (!skipChannels) {
       try {
+        await prewarmTtsRuntimeBeforeChannelStart({
+          log: params.log,
+          startupTrace: params.startupTrace,
+        });
         schedulePrimaryModelPrewarm(
           {
             cfg: params.cfg,
@@ -881,6 +906,7 @@ export const __testing = {
   prewarmConfiguredPrimaryModel,
   prewarmConfiguredPrimaryModelWithTimeout,
   refreshLatestUpdateRestartSentinelIfPresent,
+  prewarmTtsRuntimeBeforeChannelStart,
   resolveGatewayMemoryStartupPolicy,
   schedulePrimaryModelPrewarm,
   shouldSkipStartupModelPrewarm,

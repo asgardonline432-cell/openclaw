@@ -7,12 +7,12 @@ import type {
 
 type ProviderUnderTest = "brave" | "gemini" | "grok" | "kimi" | "perplexity" | "duckduckgo";
 
-const { resolvePluginWebSearchProvidersMock } = vi.hoisted(() => ({
-  resolvePluginWebSearchProvidersMock: vi.fn(() => buildTestWebSearchProviders()),
+const { resolveRuntimeWebSearchProvidersMock } = vi.hoisted(() => ({
+  resolveRuntimeWebSearchProvidersMock: vi.fn(() => buildTestWebSearchProviders()),
 }));
 
-const { resolvePluginWebFetchProvidersMock } = vi.hoisted(() => ({
-  resolvePluginWebFetchProvidersMock: vi.fn(() => buildTestWebFetchProviders()),
+const { resolveRuntimeWebFetchProvidersMock } = vi.hoisted(() => ({
+  resolveRuntimeWebFetchProvidersMock: vi.fn(() => buildTestWebFetchProviders()),
 }));
 const {
   resolveBundledExplicitWebSearchProvidersFromPublicArtifactsMock,
@@ -78,8 +78,8 @@ vi.mock("./runtime-web-tools-fallback.runtime.js", async () => {
     ...actual,
     runtimeWebToolsFallbackProviders: {
       ...actual.runtimeWebToolsFallbackProviders,
-      resolvePluginWebSearchProviders: resolvePluginWebSearchProvidersMock,
-      resolvePluginWebFetchProviders: resolvePluginWebFetchProvidersMock,
+      resolveRuntimeWebSearchProviders: resolveRuntimeWebSearchProvidersMock,
+      resolveRuntimeWebFetchProviders: resolveRuntimeWebFetchProvidersMock,
     },
   };
 });
@@ -355,8 +355,8 @@ describe("runtime web tools resolution", () => {
   });
 
   beforeEach(() => {
-    resolvePluginWebSearchProvidersMock.mockClear();
-    resolvePluginWebFetchProvidersMock.mockClear();
+    resolveRuntimeWebSearchProvidersMock.mockClear();
+    resolveRuntimeWebFetchProvidersMock.mockClear();
     resolveBundledExplicitWebSearchProvidersFromPublicArtifactsMock.mockClear();
     resolveBundledExplicitWebFetchProvidersFromPublicArtifactsMock.mockClear();
     resolveBundledWebSearchProvidersFromPublicArtifactsMock.mockClear();
@@ -406,7 +406,7 @@ describe("runtime web tools resolution", () => {
     expect(metadata.fetch.selectedProviderKeySource).toBe("env");
     expect(resolveBundledExplicitWebSearchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
     expect(resolveBundledWebSearchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebSearchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebSearchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("keeps web fetch inactive when only web search is configured", async () => {
@@ -442,7 +442,7 @@ describe("runtime web tools resolution", () => {
     expect(metadata.fetch.providerSource).toBe("none");
     expect(resolveBundledExplicitWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
     expect(resolveBundledWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebFetchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebFetchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("skips fetch provider discovery when web fetch only configures runtime limits", async () => {
@@ -472,7 +472,7 @@ describe("runtime web tools resolution", () => {
     expect(metadata.fetch.selectedProvider).toBeUndefined();
     expect(resolveBundledExplicitWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
     expect(resolveBundledWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebFetchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebFetchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("skips fetch provider discovery when web fetch is explicitly disabled", async () => {
@@ -507,7 +507,7 @@ describe("runtime web tools resolution", () => {
     expect(metadata.fetch.selectedProvider).toBeUndefined();
     expect(resolveBundledExplicitWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
     expect(resolveBundledWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebFetchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebFetchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("keeps active fetch provider SecretRefs on the discovery path", async () => {
@@ -1007,7 +1007,7 @@ describe("runtime web tools resolution", () => {
     });
     expect(resolveManifestContractOwnerPluginIdMock).not.toHaveBeenCalled();
     expect(resolveBundledWebSearchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebSearchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebSearchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("uses exact plugin-id hints for configured bundled provider entries without manifest owner lookup", async () => {
@@ -1054,7 +1054,7 @@ describe("runtime web tools resolution", () => {
     });
     expect(resolveManifestContractOwnerPluginIdMock).not.toHaveBeenCalled();
     expect(resolveBundledWebSearchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebSearchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebSearchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("uses single plugin-scoped web search config as a bundled provider hint", async () => {
@@ -1084,7 +1084,7 @@ describe("runtime web tools resolution", () => {
     });
     expect(resolveManifestContractOwnerPluginIdMock).not.toHaveBeenCalled();
     expect(resolveBundledWebSearchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebSearchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebSearchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("does not auto-detect from legacy top-level web search apiKey", async () => {
@@ -1106,7 +1106,7 @@ describe("runtime web tools resolution", () => {
     expect(metadata.search.selectedProvider).toBe("duckduckgo");
     expect(resolveManifestContractPluginIdsByCompatibilityRuntimePathMock).not.toHaveBeenCalled();
     expect(resolveBundledExplicitWebSearchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebSearchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebSearchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("does not resolve web fetch provider SecretRef when web fetch is inactive", async () => {
@@ -1142,7 +1142,7 @@ describe("runtime web tools resolution", () => {
     expect(context.warnings).toStrictEqual([]);
     expect(resolveBundledExplicitWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
     expect(resolveBundledWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebFetchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebFetchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("keeps configured provider metadata and inactive warnings when search is disabled", async () => {
@@ -1230,8 +1230,8 @@ describe("runtime web tools resolution", () => {
 
     expect(metadata.search.providerSource).toBe("none");
     expect(metadata.fetch.providerSource).toBe("none");
-    expect(resolvePluginWebSearchProvidersMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebFetchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebSearchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebFetchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("uses bundled public artifacts for bundled web search provider discovery", async () => {
@@ -1251,7 +1251,7 @@ describe("runtime web tools resolution", () => {
     });
 
     expect(metadata.search.selectedProvider).toBe("brave");
-    expect(resolvePluginWebSearchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebSearchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("uses runtime web search discovery when the managed plugin index install records is populated", async () => {
@@ -1279,7 +1279,11 @@ describe("runtime web tools resolution", () => {
 
     expect(metadata.search.selectedProvider).toBe("brave");
     expect(resolveBundledWebSearchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(firstMockArg(resolvePluginWebSearchProvidersMock).bundledAllowlistCompat).toBe(true);
+    expect(resolveRuntimeWebSearchProvidersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bundledAllowlistCompat: true,
+      }),
+    );
   });
 
   it("uses bundled public artifacts for bundled web fetch provider discovery", async () => {
@@ -1299,7 +1303,7 @@ describe("runtime web tools resolution", () => {
     });
 
     expect(metadata.fetch.selectedProvider).toBe("firecrawl");
-    expect(resolvePluginWebFetchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebFetchProvidersMock).not.toHaveBeenCalled();
   });
 
   it("uses runtime web fetch discovery when the managed plugin index install records is populated", async () => {
@@ -1328,7 +1332,11 @@ describe("runtime web tools resolution", () => {
 
     expect(metadata.fetch.selectedProvider).toBe("firecrawl");
     expect(resolveBundledWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(firstMockArg(resolvePluginWebFetchProvidersMock).bundledAllowlistCompat).toBe(true);
+    expect(resolveRuntimeWebFetchProvidersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bundledAllowlistCompat: true,
+      }),
+    );
   });
 
   it("uses env fallback for unresolved web fetch provider SecretRef when active", async () => {
@@ -1551,7 +1559,7 @@ describe("runtime web tools resolution", () => {
       onlyPluginIds: ["firecrawl"],
     });
     expect(resolveBundledWebFetchProvidersFromPublicArtifactsMock).not.toHaveBeenCalled();
-    expect(resolvePluginWebFetchProvidersMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeWebFetchProvidersMock).not.toHaveBeenCalled();
   });
 
   describe("when brave is installed as an external plugin and explicitly configured", () => {

@@ -4,6 +4,11 @@ import { matchRootFileOpenFailure, type RootFileOpenFailure } from "../infra/bou
 import { readRootJsonObjectSync } from "../infra/json-files.js";
 import { normalizePluginsConfig, resolveEffectivePluginActivationState } from "./config-state.js";
 import type { PluginBundleFormat } from "./manifest-types.js";
+import {
+  createPluginCacheKey,
+  resolveConfigScopedRuntimeCacheValue,
+  type ConfigScopedRuntimeCache,
+} from "./plugin-cache-primitives.js";
 import { loadPluginManifestRegistryForPluginRegistry } from "./plugin-registry.js";
 
 type ReadBundleJsonResult =
@@ -15,6 +20,11 @@ export type BundleServerRuntimeSupport = {
   supportedServerNames: string[];
   unsupportedServerNames: string[];
   diagnostics: string[];
+};
+
+export type EnabledBundleConfigResult<TConfig, TDiagnostic> = {
+  config: TConfig;
+  diagnostics: TDiagnostic[];
 };
 
 export function readBundleJsonObject(params: {
@@ -129,4 +139,43 @@ export function loadEnabledBundleConfig<TConfig, TDiagnostic>(params: {
   }
 
   return { config: merged, diagnostics };
+}
+
+function cloneEnabledBundleConfigResult<TConfig, TDiagnostic>(
+  result: EnabledBundleConfigResult<TConfig, TDiagnostic>,
+): EnabledBundleConfigResult<TConfig, TDiagnostic> {
+  return structuredClone(result) as EnabledBundleConfigResult<TConfig, TDiagnostic>;
+}
+
+export function loadCachedEnabledBundleConfig<TConfig, TDiagnostic>(params: {
+  cache: ConfigScopedRuntimeCache<EnabledBundleConfigResult<TConfig, TDiagnostic>>;
+  cacheKeyParts: readonly unknown[];
+  workspaceDir: string;
+  cfg?: OpenClawConfig;
+  createEmptyConfig: () => TConfig;
+  loadBundleConfig: (params: {
+    pluginId: string;
+    rootDir: string;
+    bundleFormat: PluginBundleFormat;
+  }) => { config: TConfig; diagnostics: string[] };
+  createDiagnostic: (pluginId: string, message: string) => TDiagnostic;
+}): EnabledBundleConfigResult<TConfig, TDiagnostic> {
+  const load = () =>
+    loadEnabledBundleConfig({
+      workspaceDir: params.workspaceDir,
+      cfg: params.cfg,
+      createEmptyConfig: params.createEmptyConfig,
+      loadBundleConfig: params.loadBundleConfig,
+      createDiagnostic: params.createDiagnostic,
+    });
+  if (!params.cfg) {
+    return cloneEnabledBundleConfigResult(load());
+  }
+  const cached = resolveConfigScopedRuntimeCacheValue({
+    cache: params.cache,
+    config: params.cfg,
+    key: createPluginCacheKey(params.cacheKeyParts),
+    load,
+  });
+  return cloneEnabledBundleConfigResult(cached);
 }

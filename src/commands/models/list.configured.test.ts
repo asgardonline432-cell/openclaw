@@ -6,6 +6,7 @@ const emptyPluginMetadataSnapshot = vi.hoisted(() => ({
 }));
 
 vi.mock("../../agents/provider-model-normalization.runtime.js", () => ({
+  getProviderModelNormalizationRuntimeCacheKey: vi.fn(() => "test-runtime"),
   normalizeProviderModelIdWithRuntime: vi.fn(() => {
     throw new Error("runtime model normalization should not load for models list entries");
   }),

@@ -33,18 +33,21 @@ const state: RegistryState = (() => {
         pinned: false,
         version: 0,
         workspaceDir: null,
+        runtimeSubagentMode: "default",
       },
       channel: {
         registry: null,
         pinned: false,
         version: 0,
         workspaceDir: null,
+        runtimeSubagentMode: "default",
       },
       gatewayRuntime: {
         registry: null,
         pinned: false,
         version: 0,
         workspaceDir: null,
+        runtimeSubagentMode: "default",
       },
       key: null,
       workspaceDir: null,
@@ -60,8 +63,12 @@ const state: RegistryState = (() => {
     pinned: false,
     version: 0,
     workspaceDir: null,
+    runtimeSubagentMode: "default",
   };
   registryState.gatewayRuntime.workspaceDir ??= null;
+  registryState.httpRoute.runtimeSubagentMode ??= "default";
+  registryState.channel.runtimeSubagentMode ??= "default";
+  registryState.gatewayRuntime.runtimeSubagentMode ??= "default";
   return registryState;
 })();
 
@@ -122,17 +129,20 @@ function installSurfaceRegistry(
   registry: RegistryState["activeRegistry"],
   pinned: boolean,
   workspaceDir: string | null = state.workspaceDir,
+  runtimeSubagentMode: RegistryState["runtimeSubagentMode"] = state.runtimeSubagentMode,
 ) {
   if (
     surface.registry === registry &&
     surface.pinned === pinned &&
-    surface.workspaceDir === workspaceDir
+    surface.workspaceDir === workspaceDir &&
+    surface.runtimeSubagentMode === runtimeSubagentMode
   ) {
     return;
   }
   surface.registry = registry;
   surface.pinned = pinned;
   surface.workspaceDir = workspaceDir;
+  surface.runtimeSubagentMode = runtimeSubagentMode;
   surface.version += 1;
 }
 
@@ -140,18 +150,24 @@ function syncTrackedSurface(
   surface: RegistrySurfaceState,
   registry: RegistryState["activeRegistry"],
   workspaceDir: string | null = state.workspaceDir,
+  runtimeSubagentMode: RegistryState["runtimeSubagentMode"] = state.runtimeSubagentMode,
   refreshVersion = false,
 ) {
   if (surface.pinned) {
     return;
   }
-  if (surface.registry === registry && surface.workspaceDir === workspaceDir && !surface.pinned) {
+  if (
+    surface.registry === registry &&
+    surface.workspaceDir === workspaceDir &&
+    surface.runtimeSubagentMode === runtimeSubagentMode &&
+    !surface.pinned
+  ) {
     if (refreshVersion) {
       surface.version += 1;
     }
     return;
   }
-  installSurfaceRegistry(surface, registry, false, workspaceDir);
+  installSurfaceRegistry(surface, registry, false, workspaceDir, runtimeSubagentMode);
 }
 
 export function setActivePluginRegistry(
@@ -170,9 +186,21 @@ export function setActivePluginRegistry(
   state.key = cacheKey ?? null;
   state.workspaceDir = workspaceDir ?? null;
   state.runtimeSubagentMode = runtimeSubagentMode;
-  syncTrackedSurface(state.httpRoute, registry, state.workspaceDir, true);
-  syncTrackedSurface(state.channel, registry, state.workspaceDir, true);
-  syncTrackedSurface(state.gatewayRuntime, registry, state.workspaceDir, true);
+  syncTrackedSurface(
+    state.httpRoute,
+    registry,
+    state.workspaceDir,
+    state.runtimeSubagentMode,
+    true,
+  );
+  syncTrackedSurface(state.channel, registry, state.workspaceDir, state.runtimeSubagentMode, true);
+  syncTrackedSurface(
+    state.gatewayRuntime,
+    registry,
+    state.workspaceDir,
+    state.runtimeSubagentMode,
+    true,
+  );
   syncPluginAgentEventBridge(registry);
   if (
     !previousRegistry ||
@@ -307,6 +335,13 @@ export function getActivePluginGatewayRuntimeRegistryWorkspaceDir(): string | un
   return state.gatewayRuntime.workspaceDir ?? state.workspaceDir ?? undefined;
 }
 
+export function getActivePluginGatewayRuntimeSubagentMode():
+  | "default"
+  | "explicit"
+  | "gateway-bindable" {
+  return state.gatewayRuntime.runtimeSubagentMode ?? state.runtimeSubagentMode;
+}
+
 export function getActivePluginGatewayRuntimeRegistryVersion(): number {
   return state.gatewayRuntime.registry ? state.gatewayRuntime.version : state.activeVersion;
 }
@@ -360,12 +395,12 @@ export function listImportedRuntimePluginIds(): string[] {
 export function resetPluginRuntimeStateForTest(): void {
   state.activeRegistry = null;
   state.activeVersion += 1;
-  installSurfaceRegistry(state.httpRoute, null, false);
-  installSurfaceRegistry(state.channel, null, false);
-  installSurfaceRegistry(state.gatewayRuntime, null, false);
   state.key = null;
   state.workspaceDir = null;
   state.runtimeSubagentMode = "default";
+  installSurfaceRegistry(state.httpRoute, null, false);
+  installSurfaceRegistry(state.channel, null, false);
+  installSurfaceRegistry(state.gatewayRuntime, null, false);
   state.importedPluginIds.clear();
   syncPluginAgentEventBridge(null);
   // Also clear the plugin host-hook runtime singleton (run context map,

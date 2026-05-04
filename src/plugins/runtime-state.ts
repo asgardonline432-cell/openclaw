@@ -9,6 +9,7 @@ export type RegistrySurfaceState = {
   pinned: boolean;
   version: number;
   workspaceDir?: string | null;
+  runtimeSubagentMode?: "default" | "explicit" | "gateway-bindable";
 };
 
 export type RegistryState = {

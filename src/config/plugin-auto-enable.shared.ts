@@ -22,7 +22,7 @@ import { resolvePluginSetupAutoEnableReasons } from "../plugins/setup-registry.j
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { isRecord } from "../utils.js";
 import { isChannelConfigured } from "./channel-configured.js";
-import { collectConfiguredModelRefs } from "./model-refs.js";
+import { collectConfiguredModelRefs, extractProviderFromModelRef } from "./model-refs.js";
 import { shouldSkipPreferredPluginAutoEnable } from "./plugin-auto-enable.prefer-over.js";
 import type {
   PluginAutoEnableCandidate,
@@ -57,15 +57,6 @@ function resolveAutoEnableProviderPluginIds(
 
 function canReuseUnscopedCurrentPluginMetadataSnapshot(config: OpenClawConfig): boolean {
   return normalizePluginsConfig(config.plugins).loadPaths.length === 0;
-}
-
-function extractProviderFromModelRef(value: string): string | null {
-  const trimmed = value.trim();
-  const slash = trimmed.indexOf("/");
-  if (slash <= 0) {
-    return null;
-  }
-  return normalizeProviderId(trimmed.slice(0, slash));
 }
 
 function hasConfiguredEmbeddedHarnessRuntime(cfg: OpenClawConfig, env: NodeJS.ProcessEnv): boolean {
