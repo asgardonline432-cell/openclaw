@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   _resetBlueBubblesInboundDedupForTest,
   claimBlueBubblesInboundMessage,
@@ -8,7 +8,14 @@ import {
 import type { PluginRuntime } from "./runtime-api.js";
 import { clearBlueBubblesRuntime, setBlueBubblesRuntime } from "./runtime.js";
 
+const SQLITE_CLAIM_LEASE_MS = 30 * 60 * 1_000;
+
 type RuntimeStateRecord = { status: "claimed" | "committed"; at: number };
+
+type RuntimeStateEntry = {
+  value: RuntimeStateRecord;
+  expiresAt?: number;
+};
 
 type RuntimeStateStore = {
   register: (key: string, value: RuntimeStateRecord, opts?: { ttlMs?: number }) => Promise<void>;
@@ -24,20 +31,37 @@ type RuntimeStateStore = {
 };
 
 function createMemoryRuntimeStateStore(): RuntimeStateStore {
-  const entries = new Map<string, RuntimeStateRecord>();
+  const entries = new Map<string, RuntimeStateEntry>();
+
+  function isExpired(entry: RuntimeStateEntry | undefined): boolean {
+    return entry?.expiresAt != null && entry.expiresAt <= Date.now();
+  }
+
+  function pruneExpired(key: string): void {
+    if (isExpired(entries.get(key))) {
+      entries.delete(key);
+    }
+  }
+
+  function buildEntry(value: RuntimeStateRecord, opts?: { ttlMs?: number }): RuntimeStateEntry {
+    return { value, ...(opts?.ttlMs != null ? { expiresAt: Date.now() + opts.ttlMs } : {}) };
+  }
+
   return {
-    async register(key, value) {
-      entries.set(key, value);
+    async register(key, value, opts) {
+      entries.set(key, buildEntry(value, opts));
     },
-    async registerIfAbsent(key, value) {
+    async registerIfAbsent(key, value, opts) {
+      pruneExpired(key);
       if (entries.has(key)) {
         return false;
       }
-      entries.set(key, value);
+      entries.set(key, buildEntry(value, opts));
       return true;
     },
     async lookup(key) {
-      return entries.get(key);
+      pruneExpired(key);
+      return entries.get(key)?.value;
     },
     async delete(key) {
       return entries.delete(key);
@@ -77,6 +101,10 @@ async function claimAndFinalize(guid: string | undefined, accountId: string): Pr
   }
   return claim.kind;
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("claimBlueBubblesInboundMessage", () => {
   beforeEach(() => {
@@ -122,8 +150,43 @@ describe("claimBlueBubblesInboundMessage", () => {
     expect(registerIfAbsent).toHaveBeenCalledWith(
       "g-sqlite",
       expect.objectContaining({ status: "claimed" }),
-      { ttlMs: 7 * 24 * 60 * 60 * 1_000 },
+      { ttlMs: SQLITE_CLAIM_LEASE_MS },
     );
+  });
+
+  it("reports a fresh opted-in runtime state claim as inflight", async () => {
+    const { store } = installRuntimeStateStub(true);
+    await store.register(
+      "g-fresh-claim",
+      { status: "claimed", at: Date.now() },
+      { ttlMs: SQLITE_CLAIM_LEASE_MS },
+    );
+
+    expect(
+      (await claimBlueBubblesInboundMessage({ guid: "g-fresh-claim", accountId: "acc" })).kind,
+    ).toBe("inflight");
+  });
+
+  it("reclaims expired opted-in runtime state claims after a simulated crash", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { store } = installRuntimeStateStub(true);
+
+    const first = await claimBlueBubblesInboundMessage({ guid: "g-stale-claim", accountId: "acc" });
+    expect(first.kind).toBe("claimed");
+
+    _resetBlueBubblesInboundDedupForTest();
+    vi.setSystemTime(1_000 + SQLITE_CLAIM_LEASE_MS + 1);
+
+    const replay = await claimBlueBubblesInboundMessage({
+      guid: "g-stale-claim",
+      accountId: "acc",
+    });
+    expect(replay.kind).toBe("claimed");
+    if (replay.kind === "claimed") {
+      await replay.finalize();
+    }
+    await expect(store.lookup("g-stale-claim")).resolves.toMatchObject({ status: "committed" });
   });
 
   it("releases opted-in runtime state claims so later replays can retry", async () => {

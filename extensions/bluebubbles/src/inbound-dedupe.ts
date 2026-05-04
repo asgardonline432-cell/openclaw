@@ -19,6 +19,7 @@ const DEDUP_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 const MEMORY_MAX_SIZE = 5_000;
 const FILE_MAX_ENTRIES = 50_000;
 const SQLITE_NAMESPACE_PREFIX = "inbound-dedupe";
+const SQLITE_CLAIM_LEASE_MS = 30 * 60 * 1_000;
 // Cap GUID length so a malformed or hostile payload can't bloat the on-disk
 // dedupe file. Real BB GUIDs are short (<64 chars); 512 is generous.
 const MAX_GUID_CHARS = 512;
@@ -316,11 +317,12 @@ async function claimBlueBubblesSqliteInboundMessage(params: {
     const inserted = await store.registerIfAbsent(
       params.guid,
       { status: "claimed", at: Date.now() },
-      { ttlMs: DEDUP_TTL_MS },
+      { ttlMs: SQLITE_CLAIM_LEASE_MS },
     );
     if (!inserted) {
       sqliteInflightClaims.delete(scopedClaimKey);
-      return { kind: "duplicate" };
+      const existing = await store.lookup(params.guid);
+      return existing?.status === "claimed" ? { kind: "inflight" } : { kind: "duplicate" };
     }
     return {
       kind: "claimed",
