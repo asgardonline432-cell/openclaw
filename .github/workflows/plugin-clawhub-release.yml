@@ -35,7 +35,7 @@ env:
   # Keep beta publishes on the existing owner until ClawHub transfers it.
   CLAWHUB_PACKAGE_OWNER_OVERRIDES: "@openclaw/acpx=steipete"
   # Pinned to a reviewed ClawHub commit so release behavior stays reproducible.
-  CLAWHUB_REF: "bbdde7fd5325666374a08537298d10316b1cd131"
+  CLAWHUB_REF: "0df30649ca56e7c15d3f9c4057966296de500e97"
 
 jobs:
   preview_plugins_clawhub:
