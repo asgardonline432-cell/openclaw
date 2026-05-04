@@ -36,6 +36,7 @@ type StagedNpmInstall = {
   prefix: string;
   layout: NpmGlobalPrefixLayout;
   packageRoot: string;
+  installTarget: ResolvedGlobalInstallTarget;
 };
 
 type NpmBinShimBackup = {
@@ -86,9 +87,6 @@ async function createStagedNpmInstall(
   installTarget: ResolvedGlobalInstallTarget,
   packageName: string,
 ): Promise<StagedNpmInstall | null> {
-  if (installTarget.manager !== "npm") {
-    return null;
-  }
   const targetLayout = resolveNpmGlobalPrefixLayoutFromGlobalRoot(installTarget.globalRoot);
   if (!targetLayout) {
     return null;
@@ -96,10 +94,17 @@ async function createStagedNpmInstall(
   await fs.mkdir(targetLayout.globalRoot, { recursive: true });
   const prefix = await fs.mkdtemp(path.join(targetLayout.globalRoot, ".openclaw-update-stage-"));
   const layout = resolveNpmGlobalPrefixLayoutFromPrefix(prefix);
+  const command = installTarget.manager === "npm" ? installTarget.command : "npm";
   return {
     prefix,
     layout,
     packageRoot: path.join(layout.globalRoot, packageName),
+    installTarget: {
+      manager: "npm",
+      command,
+      globalRoot: layout.globalRoot,
+      packageRoot: path.join(layout.globalRoot, packageName),
+    },
   };
 }
 
@@ -329,10 +334,11 @@ export async function runGlobalPackageUpdateSteps(params: {
       };
     }
 
+    const installCommandTarget = stagedInstall?.installTarget ?? params.installTarget;
     const updateStep = await params.runStep({
       name: "global update",
       argv: globalInstallArgs(
-        params.installTarget,
+        installCommandTarget,
         params.installSpec,
         undefined,
         stagedInstall?.prefix,
@@ -363,7 +369,7 @@ export async function runGlobalPackageUpdateSteps(params: {
       }
 
       const fallbackArgv = globalInstallFallbackArgs(
-        params.installTarget,
+        stagedInstall?.installTarget ?? params.installTarget,
         params.installSpec,
         undefined,
         stagedInstall?.prefix,

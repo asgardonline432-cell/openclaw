@@ -45,6 +45,32 @@ const LEGACY_ROOT_RUNTIME_COMPAT_ALIASES = [
   ["provider-dispatcher-BpL2E92x.js", "provider-dispatcher.runtime.js"],
   ["provider-dispatcher-JG96SkLX.js", "provider-dispatcher.runtime.js"],
 ];
+const LEGACY_PLUGIN_INSTALL_RUNTIME_MARKERS = [
+  "scanPackageInstallSource",
+  "scanFileInstallSource",
+  "scanInstalledPackageDependencyTree",
+  "scanBundleInstallSource",
+];
+const LEGACY_PLUGIN_INSTALL_RUNTIME_COMPAT_ALIASES = [
+  // Stable published releases from v2026.4.23 onward. Older updaters could
+  // overlay package dist instead of swapping it, leaving old install chunks
+  // that still import these hashed plugin install runtime files.
+  "install.runtime-DX8jy7tN.js",
+  "install.runtime-B6OA2_P8.js",
+  "install.runtime-9ZXBhZSk.js",
+  "install.runtime-DlL3C3t_.js",
+  "install.runtime-TU-jP-TN.js",
+  "install.runtime-BwuRABU1.js",
+  "install.runtime-DQ-ui3nL.js",
+  "install.runtime-Xom5hOHq.js",
+  // v2026.5.3 beta train.
+  "install.runtime-CNHwKOIb.js",
+  "install.runtime-Dzuj9tSw.js",
+  "install.runtime-BuF-YAfQ.js",
+].map((legacyFileName) => ({
+  legacyFileName,
+  sourceIncludes: LEGACY_PLUGIN_INSTALL_RUNTIME_MARKERS,
+}));
 const LEGACY_CLI_EXIT_COMPAT_CHUNKS = [
   {
     dest: "dist/memory-state-CcqRgDZU.js",
@@ -179,19 +205,76 @@ export function rewriteRootRuntimeImportsToStableAliases(params = {}) {
   }
 }
 
+function resolveLegacyRootRuntimeCompatTarget(params) {
+  if (
+    params.aliasFileName &&
+    params.fsImpl.existsSync(path.join(params.distDir, params.aliasFileName))
+  ) {
+    return params.aliasFileName;
+  }
+  if (!params.sourceIncludes?.length) {
+    return null;
+  }
+  const match = params.legacyFileName.match(ROOT_RUNTIME_ALIAS_PATTERN);
+  if (!match?.groups?.base) {
+    return null;
+  }
+  let entries = [];
+  try {
+    entries = params.fsImpl.readdirSync(params.distDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const candidates = [];
+  for (const entry of entries.toSorted((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const candidateMatch = entry.name.match(ROOT_RUNTIME_ALIAS_PATTERN);
+    if (candidateMatch?.groups?.base !== match.groups.base) {
+      continue;
+    }
+    const candidatePath = path.join(params.distDir, entry.name);
+    let source;
+    try {
+      source = params.fsImpl.readFileSync(candidatePath, "utf8");
+    } catch {
+      continue;
+    }
+    if (params.sourceIncludes.every((marker) => source.includes(marker))) {
+      candidates.push(entry.name);
+    }
+  }
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 export function writeLegacyRootRuntimeCompatAliases(params = {}) {
   const rootDir = params.rootDir ?? ROOT;
   const distDir = path.join(rootDir, "dist");
   const fsImpl = params.fs ?? fs;
-  for (const [legacyFileName, aliasFileName] of LEGACY_ROOT_RUNTIME_COMPAT_ALIASES) {
+  for (const entry of [
+    ...LEGACY_ROOT_RUNTIME_COMPAT_ALIASES.map(([legacyFileName, aliasFileName]) => ({
+      legacyFileName,
+      aliasFileName,
+    })),
+    ...LEGACY_PLUGIN_INSTALL_RUNTIME_COMPAT_ALIASES,
+  ]) {
+    const { legacyFileName } = entry;
     const legacyPath = path.join(distDir, legacyFileName);
     if (fsImpl.existsSync(legacyPath)) {
       continue;
     }
-    if (!fsImpl.existsSync(path.join(distDir, aliasFileName))) {
+    const targetFileName = resolveLegacyRootRuntimeCompatTarget({
+      distDir,
+      fsImpl,
+      legacyFileName,
+      aliasFileName: entry.aliasFileName,
+      sourceIncludes: entry.sourceIncludes,
+    });
+    if (!targetFileName) {
       continue;
     }
-    writeTextFileIfChanged(legacyPath, `export * from "./${aliasFileName}";\n`);
+    writeTextFileIfChanged(legacyPath, `export * from "./${targetFileName}";\n`);
   }
 }
 

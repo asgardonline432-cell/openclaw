@@ -29,6 +29,15 @@ function createNpmTarget(globalRoot: string): ResolvedGlobalInstallTarget {
   };
 }
 
+function createPnpmTarget(globalRoot: string): ResolvedGlobalInstallTarget {
+  return {
+    manager: "pnpm",
+    command: "pnpm",
+    globalRoot,
+    packageRoot: path.join(globalRoot, "openclaw"),
+  };
+}
+
 function createRootRunner(globalRoot: string): CommandRunner {
   return async (argv) => {
     if (argv.join(" ") === "npm root -g") {
@@ -112,6 +121,57 @@ describe("runGlobalPackageUpdateSteps", () => {
       await expect(fs.readlink(path.join(prefix, "bin", "openclaw"))).resolves.toBe(
         "../lib/node_modules/openclaw/dist/index.js",
       );
+    });
+  });
+
+  it("stages pnpm-detected updates through npm when the global root has npm prefix layout", async () => {
+    await withTempDir({ prefix: "openclaw-package-update-pnpm-staged-" }, async (base) => {
+      const prefix = path.join(base, "prefix");
+      const globalRoot = path.join(prefix, "lib", "node_modules");
+      const packageRoot = path.join(globalRoot, "openclaw");
+      const staleChunk = path.join(packageRoot, "dist", "install-C_GuuNz6.js");
+      await writePackageRoot(packageRoot, "1.0.0");
+      await fs.writeFile(staleChunk, 'import "./install.runtime-Xom5hOHq.js";\n', "utf8");
+
+      const runStep = vi.fn(async ({ name, argv, cwd }): Promise<PackageUpdateStepResult> => {
+        if (name !== "global update") {
+          throw new Error(`unexpected step ${name}`);
+        }
+        expect(argv[0]).toBe("npm");
+        expect(argv).toEqual(expect.arrayContaining(["i", "-g", "--prefix", "openclaw@2.0.0"]));
+        expect(argv).not.toContain("pnpm");
+        const prefixIndex = argv.indexOf("--prefix");
+        const stagePrefix = argv[prefixIndex + 1];
+        if (!stagePrefix) {
+          throw new Error("missing staged prefix");
+        }
+        await writePackageRoot(path.join(stagePrefix, "lib", "node_modules", "openclaw"), "2.0.0");
+        return {
+          name,
+          command: argv.join(" "),
+          cwd: cwd ?? process.cwd(),
+          durationMs: 1,
+          exitCode: 0,
+        };
+      });
+
+      const result = await runGlobalPackageUpdateSteps({
+        installTarget: createPnpmTarget(globalRoot),
+        installSpec: "openclaw@2.0.0",
+        packageName: "openclaw",
+        packageRoot,
+        runCommand: createRootRunner(globalRoot),
+        runStep,
+        timeoutMs: 1000,
+      });
+
+      expect(result.failedStep).toBeNull();
+      expect(result.afterVersion).toBe("2.0.0");
+      expect(result.steps.map((step) => step.name)).toEqual([
+        "global update",
+        "global install swap",
+      ]);
+      await expect(fs.access(staleChunk)).rejects.toMatchObject({ code: "ENOENT" });
     });
   });
 

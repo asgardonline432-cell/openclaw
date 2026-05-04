@@ -286,6 +286,42 @@ configured_plugin_installs_enabled() {
   [ "$SCENARIO" = "configured-plugin-installs" ]
 }
 
+source_only_plugin_shadow_enabled() {
+  [ "$SCENARIO" = "stale-source-plugin-shadow" ]
+}
+
+seed_source_only_plugin_shadow() {
+  source_only_plugin_shadow_enabled || return 0
+
+  local shadow_root="$OPENCLAW_STATE_DIR/extensions/opik-openclaw"
+  mkdir -p "$shadow_root/src"
+  cat >"$shadow_root/package.json" <<'JSON'
+{
+  "name": "@opik/opik-openclaw",
+  "version": "0.0.0-upgrade-survivor",
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
+  }
+}
+JSON
+  cat >"$shadow_root/openclaw.plugin.json" <<'JSON'
+{
+  "id": "opik",
+  "activation": {
+    "onStartup": false
+  }
+}
+JSON
+  cat >"$shadow_root/src/index.ts" <<'TS'
+export default {
+  id: "opik",
+  name: "Source-only Opik shadow",
+  register() {},
+};
+TS
+  echo "Seeded source-only plugin shadow: $shadow_root"
+}
+
 configure_configured_plugin_install_fixture_registry() {
   configured_plugin_installs_enabled || return 0
 
@@ -786,6 +822,7 @@ phase install-baseline-plugin-dependencies install_baseline_plugin_dependencies
 phase seed-legacy-plugin-dependency-debris seed_legacy_plugin_dependency_debris
 phase assert-legacy-plugin-dependency-debris assert_legacy_plugin_dependency_debris_present
 phase assert-baseline assert_baseline_state
+phase seed-source-only-plugin-shadow seed_source_only_plugin_shadow
 phase seed-legacy-runtime-deps-symlink seed_legacy_runtime_deps_symlink
 phase resolve-candidate resolve_candidate_version
 phase update-candidate update_candidate

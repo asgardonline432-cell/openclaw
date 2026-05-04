@@ -330,6 +330,22 @@ describe("runtime postbuild static assets", () => {
       'export * from "./provider-dispatcher.runtime-NewHash.js";\n',
       "utf8",
     );
+    await fs.writeFile(
+      path.join(distDir, "install.runtime-NewPluginHash.js"),
+      [
+        "export const scanPackageInstallSource = true;",
+        "export const scanFileInstallSource = true;",
+        "export const scanInstalledPackageDependencyTree = true;",
+        "export const scanBundleInstallSource = true;",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(distDir, "install.runtime-OtherHash.js"),
+      "export const installFromValidatedNpmSpecArchive = true;\n",
+      "utf8",
+    );
 
     writeLegacyRootRuntimeCompatAliases({ rootDir });
 
@@ -341,6 +357,18 @@ describe("runtime postbuild static assets", () => {
     ).toBe('export * from "./runtime-plugins.runtime.js";\n');
     expect(await fs.readFile(path.join(distDir, "provider-dispatcher-6EQEtc-t.js"), "utf8")).toBe(
       'export * from "./provider-dispatcher.runtime.js";\n',
+    );
+    expect(await fs.readFile(path.join(distDir, "install.runtime-DX8jy7tN.js"), "utf8")).toBe(
+      'export * from "./install.runtime-NewPluginHash.js";\n',
+    );
+    expect(await fs.readFile(path.join(distDir, "install.runtime-DQ-ui3nL.js"), "utf8")).toBe(
+      'export * from "./install.runtime-NewPluginHash.js";\n',
+    );
+    expect(await fs.readFile(path.join(distDir, "install.runtime-Xom5hOHq.js"), "utf8")).toBe(
+      'export * from "./install.runtime-NewPluginHash.js";\n',
+    );
+    expect(await fs.readFile(path.join(distDir, "install.runtime-CNHwKOIb.js"), "utf8")).toBe(
+      'export * from "./install.runtime-NewPluginHash.js";\n',
     );
   });
 
