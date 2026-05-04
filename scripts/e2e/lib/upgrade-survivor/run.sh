@@ -306,15 +306,20 @@ seed_source_only_plugin_shadow() {
 JSON
   cat >"$shadow_root/openclaw.plugin.json" <<'JSON'
 {
-  "id": "opik",
+  "id": "opik-openclaw",
   "activation": {
     "onStartup": false
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
   }
 }
 JSON
   cat >"$shadow_root/src/index.ts" <<'TS'
 export default {
-  id: "opik",
+  id: "opik-openclaw",
   name: "Source-only Opik shadow",
   register() {},
 };
