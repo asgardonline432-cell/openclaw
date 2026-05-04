@@ -534,6 +534,29 @@ describe("speech-core native voice-note routing", () => {
     expect(resolveTtsProviderOrder("mock", config.sourceConfig)).toEqual(["mock", "backup"]);
   });
 
+  it("falls back to configured speech provider discovery when no providers are loaded", async () => {
+    const mockProvider = createMockSpeechProvider("mock", { autoSelectOrder: 1 });
+    const backupProvider = createMockSpeechProvider("backup", { autoSelectOrder: 2 });
+    listLoadedSpeechProvidersMock.mockImplementation(() => []);
+    listSpeechProvidersMock.mockImplementation(() => [mockProvider, backupProvider]);
+    getSpeechProviderMock.mockImplementation(
+      (providerId: string) =>
+        [mockProvider, backupProvider].find((provider) => provider.id === providerId) ?? null,
+    );
+
+    const config = resolveTtsConfig({
+      messages: {
+        tts: {
+          enabled: true,
+          prefsPath: "/tmp/openclaw-speech-core-configured-auto.json",
+        },
+      },
+    });
+
+    expect(getTtsProvider(config, "/tmp/openclaw-speech-core-configured-auto.json")).toBe("mock");
+    expect(resolveTtsProviderOrder("mock", config.sourceConfig)).toEqual(["mock", "backup"]);
+  });
+
   it("merges active persona provider binding into synthesis config", async () => {
     const cfg: OpenClawConfig = {
       messages: {
