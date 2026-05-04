@@ -912,7 +912,6 @@ jobs:
   qa_live_slack_release_checks:
     name: Run QA Lab live Slack lane
     needs: [resolve_target]
-    if: contains(fromJSON('["all","qa","qa-live"]'), needs.resolve_target.outputs.rerun_group) && needs.resolve_target.outputs.qa_live_slack_enabled == 'true' && vars.OPENCLAW_QA_SLACK_LIVE_CI_ENABLED == 'true'
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     permissions:
