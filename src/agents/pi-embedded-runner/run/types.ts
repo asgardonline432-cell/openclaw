@@ -40,7 +40,7 @@ export type EmbeddedRunAttemptParams = EmbeddedRunAttemptBase & {
   /** Session-pinned embedded harness id. Prevents runtime hot-switching. */
   agentHarnessId?: string;
   /** OpenClaw-owned runtime policy prepared by the orchestrator for this attempt. */
-  runtimePlan?: AgentRuntimePlan;
+  runtimePlan: AgentRuntimePlan;
   /** Live observer called after wrapped tool outcomes are recorded. */
   onToolOutcome?: ToolOutcomeObserver;
   model: Model<Api>;

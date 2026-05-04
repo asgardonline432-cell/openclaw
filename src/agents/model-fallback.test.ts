@@ -439,6 +439,51 @@ describe("runWithModelFallback", () => {
     expect(run).toHaveBeenCalledWith("openai", "gpt-4.1-mini");
   });
 
+  it("reuses a prepared auth store instead of bootstrapping one again", async () => {
+    const run = vi.fn().mockResolvedValueOnce("ok");
+    const authStore: AuthProfileStore = {
+      version: AUTH_STORE_VERSION,
+      profiles: {
+        "openai:local": {
+          provider: "openai",
+          type: "api_key",
+        },
+      },
+    };
+
+    const result = await runWithModelFallback({
+      cfg: makeCfg(),
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      agentDir: "/tmp/openclaw-prepared-auth-profiles",
+      authStore,
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(authSourceCheckMock.hasAnyAuthProfileStoreSource).not.toHaveBeenCalled();
+    expect(authRuntimeMock.runtime.ensureAuthProfileStore).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledWith("openai", "gpt-4.1-mini");
+  });
+
+  it("skips auth cooldown preflight when the caller owns runtime auth resolution", async () => {
+    const run = vi.fn().mockResolvedValueOnce("ok");
+
+    const result = await runWithModelFallback({
+      cfg: makeCfg(),
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      agentDir: "/tmp/openclaw-runtime-owned-auth",
+      preflightAuthCooldown: false,
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(authSourceCheckMock.hasAnyAuthProfileStoreSource).not.toHaveBeenCalled();
+    expect(authRuntimeMock.runtime.ensureAuthProfileStore).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledWith("openai", "gpt-4.1-mini");
+  });
+
   it("resolves primary model aliases before running", () => {
     const cases = [
       {

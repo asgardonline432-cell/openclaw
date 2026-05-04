@@ -14,7 +14,6 @@ import {
   internalHookMocks,
   mocks,
   resetPluginTtsAndThreadMocks,
-  runtimePluginMocks,
   sessionBindingMocks,
   sessionStoreMocks,
   setDiscordTestRegistry,
@@ -88,7 +87,6 @@ describe("dispatchReplyFromConfig reply_dispatch hook", () => {
     diagnosticMocks.logMessageProcessed.mockReset();
     diagnosticMocks.logSessionStateChange.mockReset();
     diagnosticMocks.markDiagnosticSessionProgress.mockReset();
-    runtimePluginMocks.ensureRuntimePluginsLoaded.mockReset();
     resetPluginTtsAndThreadMocks();
   });
 
@@ -108,10 +106,6 @@ describe("dispatchReplyFromConfig reply_dispatch hook", () => {
       replyResolver: async () => ({ text: "model reply" }),
     });
 
-    expect(runtimePluginMocks.ensureRuntimePluginsLoaded).toHaveBeenCalledWith({
-      config: emptyConfig,
-      workspaceDir: expect.any(String),
-    });
     expect(hookMocks.runner.runReplyDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionKey: "agent:test:session",

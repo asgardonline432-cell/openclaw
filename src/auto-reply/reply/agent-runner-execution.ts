@@ -83,6 +83,11 @@ import { createBlockReplyDeliveryHandler } from "./reply-delivery.js";
 import type { ReplyMediaContext } from "./reply-media-paths.js";
 import { createReplyMediaContext } from "./reply-media-paths.runtime.js";
 import type { ReplyOperation } from "./reply-run-registry.js";
+import {
+  emitReplyStageSummary,
+  ReplyStageName,
+  type ReplyStageTracker,
+} from "./reply-stage-timing.js";
 import type { TypingSignaler } from "./typing-mode.js";
 
 // Maximum number of LiveSessionModelSwitchError retries before surfacing a
@@ -1104,6 +1109,7 @@ export async function runAgentTurnWithFallback(params: {
   resolvedVerboseLevel: VerboseLevel;
   toolProgressDetail?: "explain" | "raw";
   replyMediaContext?: ReplyMediaContext;
+  replyStageTracker?: ReplyStageTracker;
 }): Promise<AgentRunLoopResult> {
   const TRANSIENT_HTTP_RETRY_DELAY_MS = 2_500;
   let didLogHeartbeatStrip = false;
@@ -1118,6 +1124,7 @@ export async function runAgentTurnWithFallback(params: {
           ...params.followupRun.run,
           config: runtimeConfig,
         };
+  params.replyStageTracker?.mark(ReplyStageName.queuedRuntimeConfig);
 
   const runId = params.opts?.runId ?? crypto.randomUUID();
   const replyMediaContext =
@@ -1136,6 +1143,7 @@ export async function runAgentTurnWithFallback(params: {
       requesterSenderUsername: params.followupRun.run.senderUsername,
       requesterSenderE164: params.followupRun.run.senderE164,
     });
+  params.replyStageTracker?.mark(ReplyStageName.replyMediaContext);
   let didNotifyAgentRunStart = false;
   const notifyAgentRunStart = () => {
     if (didNotifyAgentRunStart) {
@@ -1209,6 +1217,7 @@ export async function runAgentTurnWithFallback(params: {
       isControlUiVisible: shouldSurfaceToControlUi,
     });
   }
+  params.replyStageTracker?.mark(ReplyStageName.agentRunContext);
   let runResult: Awaited<ReturnType<typeof runEmbeddedPiAgent>>;
   let fallbackProvider = params.followupRun.run.provider;
   let fallbackModel = params.followupRun.run.model;
@@ -1417,9 +1426,11 @@ export async function runAgentTurnWithFallback(params: {
         : undefined;
       const onToolResult = params.opts?.onToolResult;
       const outcomePlan = buildAgentRuntimeOutcomePlan();
+      params.replyStageTracker?.mark(ReplyStageName.fallbackSetup);
       const runLane = CommandLane.Main;
+      const modelFallbackOptions = resolveModelFallbackOptions(effectiveRun, runtimeConfig);
       const fallbackResult = await runWithModelFallback<EmbeddedAgentRunResult>({
-        ...resolveModelFallbackOptions(effectiveRun, runtimeConfig),
+        ...modelFallbackOptions,
         runId,
         sessionId: params.followupRun.run.sessionId,
         lane: runLane,
@@ -1471,6 +1482,7 @@ export async function runAgentTurnWithFallback(params: {
               `failed to persist fallback candidate selection (non-fatal): ${String(error)}`,
             );
           }
+          params.replyStageTracker?.mark(ReplyStageName.fallbackCandidateSelection);
 
           const cliExecutionProvider =
             resolveCliRuntimeExecutionProvider({
@@ -1479,6 +1491,7 @@ export async function runAgentTurnWithFallback(params: {
               agentId: params.followupRun.run.agentId,
               modelId: model,
             }) ?? provider;
+          params.replyStageTracker?.mark(ReplyStageName.runtimeSelection);
 
           if (isCliProvider(cliExecutionProvider, runtimeConfig)) {
             const startedAt = Date.now();
@@ -1502,6 +1515,7 @@ export async function runAgentTurnWithFallback(params: {
                 config: runtimeConfig,
               },
             );
+            params.replyStageTracker?.mark(ReplyStageName.authProfile);
             const hookMessageProvider = resolveOriginMessageProvider({
               originatingChannel: params.followupRun.originatingChannel,
               provider: params.sessionCtx.Provider,
@@ -1673,6 +1687,7 @@ export async function runAgentTurnWithFallback(params: {
               runId,
               allowTransientCooldownProbe: runOptions?.allowTransientCooldownProbe,
               model,
+              modelFallbacksOverride: modelFallbackOptions.fallbacksOverride,
             },
           );
           const agentHarnessPolicy = resolveAgentHarnessPolicy({
@@ -1690,6 +1705,7 @@ export async function runAgentTurnWithFallback(params: {
             config: runtimeConfig,
             workspaceDir: params.followupRun.run.workspaceDir,
           });
+          params.replyStageTracker?.mark(ReplyStageName.embeddedRunParams);
           return (async () => {
             let attemptCompactionCount = 0;
             const lifecycleBackstop = createEmbeddedLifecycleTerminalBackstop({
@@ -1697,6 +1713,15 @@ export async function runAgentTurnWithFallback(params: {
               sessionKey: params.sessionKey,
             });
             try {
+              params.replyStageTracker?.mark(ReplyStageName.embeddedRunDispatch);
+              if (params.replyStageTracker) {
+                emitReplyStageSummary({
+                  runId,
+                  sessionId: params.followupRun.run.sessionId,
+                  phase: "before-embedded-dispatch",
+                  tracker: params.replyStageTracker,
+                });
+              }
               const result = await runEmbeddedPiAgent({
                 ...embeddedContext,
                 allowGatewaySubagentBinding: true,

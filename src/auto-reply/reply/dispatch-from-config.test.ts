@@ -171,9 +171,6 @@ const replyMediaPathMocks = vi.hoisted(() => ({
     (_params?: unknown) => async (payload: ReplyPayload) => payload,
   ),
 }));
-const runtimePluginMocks = vi.hoisted(() => ({
-  ensureRuntimePluginsLoaded: vi.fn(),
-}));
 const conversationBindingMocks = vi.hoisted(() => {
   type BindingMsgContext = {
     OriginatingChannel?: string | null;
@@ -468,9 +465,6 @@ vi.mock("../../tts/tts.runtime.js", () => ({
 vi.mock("./reply-media-paths.runtime.js", () => ({
   createReplyMediaPathNormalizer: (params: unknown) =>
     replyMediaPathMocks.createReplyMediaPathNormalizer(params),
-}));
-vi.mock("./runtime-plugins.runtime.js", () => ({
-  ensureRuntimePluginsLoaded: runtimePluginMocks.ensureRuntimePluginsLoaded,
 }));
 vi.mock("./conversation-binding-input.js", () => ({
   resolveConversationBindingAccountIdFromMessage:
@@ -846,10 +840,9 @@ describe("dispatchReplyFromConfig", () => {
     replyMediaPathMocks.createReplyMediaPathNormalizer.mockReturnValue(
       async (payload: ReplyPayload) => payload,
     );
-    runtimePluginMocks.ensureRuntimePluginsLoaded.mockClear();
   });
 
-  it("loads runtime plugins before reading inbound hook state", async () => {
+  it("reads prepared inbound hook state without loading plugins", async () => {
     setNoAbort();
     const cfg = emptyConfig;
     const dispatcher = createDispatcher();

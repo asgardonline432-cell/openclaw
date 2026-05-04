@@ -16,6 +16,7 @@ const loadPluginManifestRegistry = vi.hoisted(() =>
     diagnostics: [],
   })),
 );
+const shouldPersistExternalAuthProfile = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock("../../plugins/manifest-registry.js", () => ({
   loadPluginManifestRegistry,
@@ -23,7 +24,7 @@ vi.mock("../../plugins/manifest-registry.js", () => ({
 
 vi.mock("./external-auth.js", () => ({
   overlayExternalAuthProfiles: <T>(store: T) => store,
-  shouldPersistExternalAuthProfile: () => true,
+  shouldPersistExternalAuthProfile,
 }));
 
 async function importAuthProfileModulesWithAliasRegistry() {
@@ -41,6 +42,7 @@ async function importAuthProfileModulesWithAliasRegistry() {
 describe("resolveAuthProfileOrder", () => {
   beforeEach(() => {
     loadPluginManifestRegistry.mockClear();
+    shouldPersistExternalAuthProfile.mockClear();
   });
 
   afterEach(() => {
@@ -262,6 +264,54 @@ describe("resolveAuthProfileOrder", () => {
         cooldownReason: undefined,
       });
       expect(store.usageStats?.["fixture-provider:default"]?.lastUsed).toEqual(expect.any(Number));
+    } finally {
+      await rm(agentDir, { force: true, recursive: true });
+    }
+  });
+
+  it("marks profile success with one canonical last-good and usage update", async () => {
+    const { markAuthProfileSuccess } = await importAuthProfileModulesWithAliasRegistry();
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), "openclaw-auth-profile-success-"));
+    try {
+      const store: AuthProfileStore = {
+        version: 1,
+        profiles: {
+          "fixture-provider:default": {
+            type: "oauth",
+            provider: "fixture-provider",
+            access: "token",
+            refresh: "refresh",
+            expires: Date.now() + 60_000,
+          },
+        },
+        usageStats: {
+          "fixture-provider:default": {
+            errorCount: 3,
+            cooldownUntil: Date.now() + 60_000,
+            cooldownReason: "rate_limit",
+          },
+        },
+      };
+      saveAuthProfileStore(store, agentDir);
+      shouldPersistExternalAuthProfile.mockClear();
+
+      await markAuthProfileSuccess({
+        store,
+        provider: "fixture-provider-plan",
+        profileId: "fixture-provider:default",
+        agentDir,
+      });
+
+      expect(store.lastGood).toEqual({
+        "fixture-provider": "fixture-provider:default",
+      });
+      expect(store.usageStats?.["fixture-provider:default"]).toMatchObject({
+        errorCount: 0,
+        cooldownUntil: undefined,
+        cooldownReason: undefined,
+      });
+      expect(store.usageStats?.["fixture-provider:default"]?.lastUsed).toEqual(expect.any(Number));
+      expect(shouldPersistExternalAuthProfile).toHaveBeenCalledTimes(1);
     } finally {
       await rm(agentDir, { force: true, recursive: true });
     }

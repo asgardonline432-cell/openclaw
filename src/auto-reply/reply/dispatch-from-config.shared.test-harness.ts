@@ -128,9 +128,6 @@ const replyMediaPathMocks = vi.hoisted(() => ({
     (_params?: unknown) => async (payload: ReplyPayload) => payload,
   ),
 }));
-const runtimePluginMocks = vi.hoisted(() => ({
-  ensureRuntimePluginsLoaded: vi.fn(),
-}));
 const threadInfoMocks = vi.hoisted(() => ({
   parseSessionThreadInfo: vi.fn<
     (sessionKey: string | undefined) => {
@@ -150,7 +147,6 @@ export {
   mocks,
   sessionBindingMocks,
   sessionStoreMocks,
-  runtimePluginMocks,
 };
 
 function parseGenericThreadSessionInfo(sessionKey: string | undefined) {
@@ -245,9 +241,6 @@ vi.mock("../../infra/outbound/session-binding-service.js", () => ({
 vi.mock("../../infra/agent-events.js", () => ({
   emitAgentEvent: (params: unknown) => agentEventMocks.emitAgentEvent(params),
   onAgentEvent: (listener: unknown) => agentEventMocks.onAgentEvent(listener),
-}));
-vi.mock("./runtime-plugins.runtime.js", () => ({
-  ensureRuntimePluginsLoaded: runtimePluginMocks.ensureRuntimePluginsLoaded,
 }));
 vi.mock("./conversation-binding-input.js", () => {
   const normalize = (value: unknown) =>

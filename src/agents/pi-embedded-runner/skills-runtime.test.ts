@@ -17,7 +17,7 @@ describe("resolveEmbeddedRunSkillEntries", () => {
     loadWorkspaceSkillEntriesSpy.mockReturnValue([]);
   });
 
-  it("loads skill entries with config when no resolved snapshot skills exist", () => {
+  it("loads skill entries with config when no prepared snapshot exists", () => {
     const config: OpenClawConfig = {
       plugins: {
         entries: {
@@ -29,10 +29,6 @@ describe("resolveEmbeddedRunSkillEntries", () => {
     const result = resolveEmbeddedRunSkillEntries({
       workspaceDir: "/tmp/workspace",
       config,
-      skillsSnapshot: {
-        prompt: "skills prompt",
-        skills: [],
-      },
     });
 
     expect(result.shouldLoadSkillEntries).toBe(true);
@@ -45,10 +41,6 @@ describe("resolveEmbeddedRunSkillEntries", () => {
       workspaceDir: "/tmp/workspace",
       config: {},
       agentId: "writer",
-      skillsSnapshot: {
-        prompt: "skills prompt",
-        skills: [],
-      },
     });
 
     expect(loadWorkspaceSkillEntriesSpy).toHaveBeenCalledWith("/tmp/workspace", {
@@ -85,10 +77,6 @@ describe("resolveEmbeddedRunSkillEntries", () => {
     resolveEmbeddedRunSkillEntries({
       workspaceDir: "/tmp/workspace",
       config: sourceConfig,
-      skillsSnapshot: {
-        prompt: "skills prompt",
-        skills: [],
-      },
     });
 
     expect(loadWorkspaceSkillEntriesSpy).toHaveBeenCalledWith("/tmp/workspace", {
@@ -125,15 +113,28 @@ describe("resolveEmbeddedRunSkillEntries", () => {
     resolveEmbeddedRunSkillEntries({
       workspaceDir: "/tmp/workspace",
       config: callerConfig,
-      skillsSnapshot: {
-        prompt: "skills prompt",
-        skills: [],
-      },
     });
 
     expect(loadWorkspaceSkillEntriesSpy).toHaveBeenCalledWith("/tmp/workspace", {
       config: callerConfig,
     });
+  });
+
+  it("skips skill entry loading when a prompt snapshot is present", () => {
+    const result = resolveEmbeddedRunSkillEntries({
+      workspaceDir: "/tmp/workspace",
+      config: {},
+      skillsSnapshot: {
+        prompt: "skills prompt",
+        skills: [{ name: "diffs" }],
+      },
+    });
+
+    expect(result).toEqual({
+      shouldLoadSkillEntries: false,
+      skillEntries: [],
+    });
+    expect(loadWorkspaceSkillEntriesSpy).not.toHaveBeenCalled();
   });
 
   it("skips skill entry loading when resolved snapshot skills are present", () => {

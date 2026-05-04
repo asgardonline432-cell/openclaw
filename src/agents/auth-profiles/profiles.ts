@@ -8,34 +8,9 @@ import {
   saveAuthProfileStore,
   updateAuthProfileStoreWithLock,
 } from "./store.js";
-import type { AuthProfileCredential, AuthProfileStore, ProfileUsageStats } from "./types.js";
+import type { AuthProfileCredential, AuthProfileStore } from "./types.js";
+import { resetUsageStats, updateUsageStatsEntry } from "./usage-state.js";
 export { dedupeProfileIds, listProfilesForProvider } from "./profile-list.js";
-
-function resetSuccessfulUsageStats(
-  existing: ProfileUsageStats | undefined,
-  lastUsed: number,
-): ProfileUsageStats {
-  return {
-    ...existing,
-    errorCount: 0,
-    cooldownUntil: undefined,
-    cooldownReason: undefined,
-    cooldownModel: undefined,
-    disabledUntil: undefined,
-    disabledReason: undefined,
-    failureCounts: undefined,
-    lastUsed,
-  };
-}
-
-function updateSuccessfulUsageStatsEntry(
-  store: AuthProfileStore,
-  profileId: string,
-  lastUsed: number,
-): void {
-  store.usageStats = store.usageStats ?? {};
-  store.usageStats[profileId] = resetSuccessfulUsageStats(store.usageStats[profileId], lastUsed);
-}
 
 export async function setAuthProfileOrder(params: {
   agentDir?: string;
@@ -200,7 +175,9 @@ export async function markAuthProfileSuccess(params: {
         return false;
       }
       freshStore.lastGood = { ...freshStore.lastGood, [providerKey]: profileId };
-      updateSuccessfulUsageStatsEntry(freshStore, profileId, lastUsed);
+      updateUsageStatsEntry(freshStore, profileId, (existing) =>
+        resetUsageStats(existing, { lastUsed }),
+      );
       return true;
     },
   });
@@ -214,6 +191,6 @@ export async function markAuthProfileSuccess(params: {
     return;
   }
   store.lastGood = { ...store.lastGood, [providerKey]: profileId };
-  updateSuccessfulUsageStatsEntry(store, profileId, lastUsed);
+  updateUsageStatsEntry(store, profileId, (existing) => resetUsageStats(existing, { lastUsed }));
   saveAuthProfileStore(store, agentDir);
 }

@@ -249,10 +249,12 @@ export function resolveExternalCliAuthProfiles(
       continue;
     }
     if (providerConfig.bootstrapOnly && existingOAuth) {
-      log.debug("kept local oauth over external cli bootstrap-only provider", {
-        profileId: providerConfig.profileId,
-        provider: providerConfig.provider,
-      });
+      continue;
+    }
+    const creds = providerConfig.readCredentials({
+      allowKeychainPrompt: options?.allowKeychainPrompt,
+    });
+    if (!creds) {
       continue;
     }
     if (

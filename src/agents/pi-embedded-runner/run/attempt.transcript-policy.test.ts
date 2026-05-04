@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderRuntimeModel } from "../../../plugins/provider-runtime-model.types.js";
 import type { AgentRuntimePlan } from "../../runtime-plan/types.js";
-import { resolveAttemptTranscriptPolicy } from "./attempt.transcript-policy.js";
+import {
+  resolveAttemptTranscriptPolicy,
+  shouldPersistStrictTurnSessionRepair,
+} from "./attempt.transcript-policy.js";
 
 const resolveProviderRuntimePluginMock = vi.hoisted(() => vi.fn());
 
@@ -104,5 +107,28 @@ describe("resolveAttemptTranscriptPolicy", () => {
     expect(policy.toolCallIdMode).toBe("strict");
     expect(policy.validateAnthropicTurns).toBe(true);
     expect(policy.validateGeminiTurns).toBe(false);
+  });
+});
+
+describe("shouldPersistStrictTurnSessionRepair", () => {
+  it("only trims persisted assistant prefill for strict turn policies", () => {
+    expect(
+      shouldPersistStrictTurnSessionRepair({
+        validateAnthropicTurns: false,
+        validateGeminiTurns: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldPersistStrictTurnSessionRepair({
+        validateAnthropicTurns: true,
+        validateGeminiTurns: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldPersistStrictTurnSessionRepair({
+        validateAnthropicTurns: false,
+        validateGeminiTurns: true,
+      }),
+    ).toBe(true);
   });
 });

@@ -38,6 +38,10 @@ import {
   wrapStreamFnSanitizeMalformedToolCalls,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.js";
+import {
+  shouldCreateBundleLspRuntimeForAttempt,
+  shouldCreateBundleMcpRuntimeForAttempt,
+} from "./attempt-tool-construction-plan.js";
 import { buildEmbeddedAttemptToolRunContext } from "./attempt.tool-run-context.js";
 
 type FakeWrappedStream = {
@@ -350,6 +354,34 @@ describe("normalizeMessagesForLlmBoundary", () => {
     expect(JSON.stringify(output)).not.toContain("secret prompt");
     expect(JSON.stringify(output)).not.toContain("matched secret prompt");
     expect(input[0]).toHaveProperty("__openclaw");
+  });
+
+  describe.each([
+    ["bundle MCP", shouldCreateBundleMcpRuntimeForAttempt, ["bundle-mcp", "strict__strict_probe"]],
+    [
+      "bundle LSP",
+      shouldCreateBundleLspRuntimeForAttempt,
+      ["bundle-lsp", "lsp_hover_typescript", "LSP_*"],
+    ],
+  ] as const)("%s runtime planning", (_label, shouldCreateRuntime, allowedTools) => {
+    it("skips runtime creation when tools are disabled or unavailable", () => {
+      expect(shouldCreateRuntime({ toolsEnabled: false })).toBe(false);
+      expect(shouldCreateRuntime({ toolsEnabled: true, disableTools: true })).toBe(false);
+    });
+
+    it("creates the runtime only when the allowlist can reach its tool names", () => {
+      expect(shouldCreateRuntime({ toolsEnabled: true })).toBe(true);
+      expect(shouldCreateRuntime({ toolsEnabled: true, toolsAllow: [] })).toBe(false);
+      expect(
+        shouldCreateRuntime({
+          toolsEnabled: true,
+          toolsAllow: ["memory_search", "memory_get"],
+        }),
+      ).toBe(false);
+      for (const toolName of allowedTools) {
+        expect(shouldCreateRuntime({ toolsEnabled: true, toolsAllow: [toolName] })).toBe(true);
+      }
+    });
   });
 });
 

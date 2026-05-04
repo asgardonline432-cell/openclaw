@@ -270,6 +270,12 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
       },
       messages: [{ role: "user", content: "hello" }],
     };
+    const runtimePlan = {
+      prompt: {},
+      transport: {
+        resolveExtraParams: vi.fn(() => ({})),
+      },
+    };
 
     compactTesting.prepareCompactionSessionAgent({
       session: session as never,
@@ -286,6 +292,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
       sessionAgentId: "main",
       effectiveWorkspace: "/tmp/workspace",
       agentDir: "/tmp/workspace",
+      runtimePlan: runtimePlan as never,
     });
 
     const streamArg = mockCallArg(resolveEmbeddedAgentStreamFnMock) as Record<string, unknown>;
@@ -307,7 +314,9 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
       }),
       "/tmp/workspace",
       undefined,
-      undefined,
+      expect.objectContaining({
+        preparedExtraParams: {},
+      }),
     );
   });
 
@@ -328,6 +337,87 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
       senderUsername: "alice_u",
       senderE164: "+15551234567",
     });
+  });
+
+  it("does not materialize compaction tools when the model cannot use tools", async () => {
+    resolveModelMock.mockReturnValue({
+      model: {
+        provider: "openai",
+        api: "responses",
+        id: "fake",
+        input: [],
+        compat: { supportsTools: false },
+      },
+      error: null,
+      authStorage: { setRuntimeApiKey: vi.fn() },
+      modelRegistry: {},
+    });
+
+    await compactEmbeddedPiSessionDirect({
+      sessionId: "session-1",
+      sessionFile: "/tmp/session.jsonl",
+      workspaceDir: "/tmp/workspace",
+    });
+
+    expect(createOpenClawCodingToolsMock).not.toHaveBeenCalled();
+  });
+
+  it("uses the session model fallback chain when implicit compaction fails", async () => {
+    resolveModelMock.mockImplementation((provider = "openai", modelId = "fake") => ({
+      model: { provider, api: "responses", id: modelId, input: [] },
+      error: null,
+      authStorage: { setRuntimeApiKey: vi.fn() },
+      modelRegistry: {},
+    }));
+    sessionCompactImpl
+      .mockRejectedValueOnce(
+        Object.assign(
+          new Error(
+            "400 The response was filtered due to the prompt triggering Azure OpenAI's content management policy.",
+          ),
+          { status: 400 },
+        ),
+      )
+      .mockResolvedValueOnce({
+        summary: "fallback summary",
+        firstKeptEntryId: "entry-fallback",
+        tokensBefore: 120,
+        details: { ok: true },
+      });
+
+    const result = await compactEmbeddedPiSessionDirect({
+      sessionId: "session-1",
+      sessionKey: TEST_SESSION_KEY,
+      sessionFile: "/tmp/session.jsonl",
+      workspaceDir: "/tmp/workspace",
+      provider: "openai",
+      model: "gpt-primary",
+      config: {
+        agents: {
+          defaults: {
+            model: {
+              primary: "openai/gpt-primary",
+              fallbacks: ["anthropic/claude-fallback"],
+            },
+          },
+        },
+      } as never,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.result?.summary).toBe("fallback summary");
+    expect(resolveModelMock).toHaveBeenCalledWith(
+      "openai",
+      "gpt-primary",
+      expect.any(String),
+      expect.anything(),
+    );
+    expect(resolveModelMock).toHaveBeenCalledWith(
+      "anthropic",
+      "claude-fallback",
+      expect.any(String),
+      expect.anything(),
+    );
   });
 
   it("uses the session model fallback chain when overflow compaction fails", async () => {

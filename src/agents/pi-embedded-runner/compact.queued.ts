@@ -81,6 +81,9 @@ export async function compactEmbeddedPiSession(
       ceModelId,
       agentDir,
       params.config,
+      {
+        skipPiDiscovery: true,
+      },
     );
     const ceRuntimeModel = ceModel as ProviderRuntimeModel | undefined;
     contextTokenBudget = resolveContextWindowInfo({

@@ -42,7 +42,10 @@ export type ModelAliasIndex = {
 type ManifestNormalizationContext = {
   manifestPlugins?: readonly Pick<PluginManifestRecord, "modelIdNormalization">[];
 };
-
+export type PreparedModelSelectionConfigIndex = {
+  aliasIndex: ModelAliasIndex;
+  allowlistKeys: Set<string> | null;
+};
 function sanitizeModelWarningValue(value: string): string {
   const stripped = value ? stripAnsi(value) : "";
   let controlBoundary = -1;
@@ -342,24 +345,9 @@ export function resolveAllowlistModelKey(params: {
 export function buildConfiguredAllowlistKeys(params: {
   cfg: OpenClawConfig | undefined;
   defaultProvider: string;
+  preparedModelSelectionConfigIndex?: PreparedModelSelectionConfigIndex;
 }): Set<string> | null {
-  const visibility = parseConfiguredModelVisibilityEntries({ cfg: params.cfg });
-  if (visibility.exactModelRefs.length === 0) {
-    return null;
-  }
-
-  const keys = new Set<string>();
-  for (const raw of visibility.exactModelRefs) {
-    const key = resolveAllowlistModelKey({
-      cfg: params.cfg,
-      raw,
-      defaultProvider: params.defaultProvider,
-    });
-    if (key) {
-      keys.add(key);
-    }
-  }
-  return keys.size > 0 ? keys : null;
+  return cloneAllowlistKeys(getModelSelectionConfigIndex(params).allowlistKeys);
 }
 
 export function buildModelAliasIndex(
@@ -368,17 +356,45 @@ export function buildModelAliasIndex(
     defaultProvider: string;
     allowManifestNormalization?: boolean;
     allowPluginNormalization?: boolean;
+    preparedModelSelectionConfigIndex?: PreparedModelSelectionConfigIndex;
   } & ManifestNormalizationContext,
 ): ModelAliasIndex {
+  return cloneModelAliasIndex(getModelSelectionConfigIndex(params).aliasIndex);
+}
+
+function cloneAllowlistKeys(keys: Set<string> | null): Set<string> | null {
+  return keys && keys.size > 0 ? new Set(keys) : null;
+}
+
+function cloneModelAliasIndex(index: ModelAliasIndex): ModelAliasIndex {
+  return {
+    byAlias: new Map(index.byAlias),
+    byKey: new Map([...index.byKey].map(([key, aliases]) => [key, aliases.slice()])),
+  };
+}
+
+export function prepareModelSelectionConfigIndex(
+  params: {
+    cfg: OpenClawConfig | undefined;
+    defaultProvider: string;
+    allowManifestNormalization?: boolean;
+    allowPluginNormalization?: boolean;
+  } & ManifestNormalizationContext,
+): PreparedModelSelectionConfigIndex {
+  if (!params.cfg) {
+    return {
+      aliasIndex: { byAlias: new Map(), byKey: new Map() },
+      allowlistKeys: null,
+    };
+  }
+  const rawModels = params.cfg.agents?.defaults?.models ?? {};
   const byAlias = new Map<string, { alias: string; ref: ModelRef }>();
   const byKey = new Map<string, string[]>();
+  const allowlistKeys = new Set<string>();
+  const visibility = parseConfiguredModelVisibilityEntries({ cfg: params.cfg });
 
-  const rawModels = params.cfg.agents?.defaults?.models ?? {};
-  for (const [keyRaw, entryRaw] of Object.entries(rawModels)) {
-    const trimmedKey = keyRaw.trim();
-    if (trimmedKey.endsWith("/*") && normalizeProviderId(trimmedKey.slice(0, -2))) {
-      continue;
-    }
+  for (const keyRaw of visibility.exactModelRefs) {
+    const entryRaw = rawModels[keyRaw];
     const parsed = parseModelRefWithCompatAlias({
       cfg: params.cfg,
       raw: keyRaw,
@@ -390,6 +406,7 @@ export function buildModelAliasIndex(
     if (!parsed) {
       continue;
     }
+    allowlistKeys.add(modelKey(parsed.provider, parsed.model));
     const alias =
       normalizeOptionalString((entryRaw as { alias?: string } | undefined)?.alias) ?? "";
     if (!alias) {
@@ -403,7 +420,43 @@ export function buildModelAliasIndex(
     byKey.set(key, existing);
   }
 
-  return { byAlias, byKey };
+  return {
+    aliasIndex: { byAlias, byKey },
+    allowlistKeys: allowlistKeys.size > 0 ? allowlistKeys : null,
+  };
+}
+
+export function getPreparedModelAliasIndex(
+  preparedModelSelectionConfigIndex: PreparedModelSelectionConfigIndex,
+): ModelAliasIndex {
+  return cloneModelAliasIndex(preparedModelSelectionConfigIndex.aliasIndex);
+}
+
+export function getPreparedModelAllowlistKeys(
+  preparedModelSelectionConfigIndex: PreparedModelSelectionConfigIndex,
+): Set<string> | null {
+  return cloneAllowlistKeys(preparedModelSelectionConfigIndex.allowlistKeys);
+}
+
+function getModelSelectionConfigIndex(
+  params: {
+    cfg: OpenClawConfig | undefined;
+    defaultProvider: string;
+    allowManifestNormalization?: boolean;
+    allowPluginNormalization?: boolean;
+    preparedModelSelectionConfigIndex?: PreparedModelSelectionConfigIndex;
+  } & ManifestNormalizationContext,
+): PreparedModelSelectionConfigIndex {
+  return (
+    params.preparedModelSelectionConfigIndex ??
+    prepareModelSelectionConfigIndex({
+      cfg: params.cfg,
+      defaultProvider: params.defaultProvider,
+      allowManifestNormalization: params.allowManifestNormalization,
+      allowPluginNormalization: params.allowPluginNormalization,
+      manifestPlugins: params.manifestPlugins,
+    })
+  );
 }
 
 type ModelCatalogMetadata = {
@@ -533,18 +586,24 @@ export function resolveConfiguredModelRef(params: {
   cfg: OpenClawConfig;
   defaultProvider: string;
   defaultModel: string;
+  primaryModelOverride?: string;
   allowManifestNormalization?: boolean;
   allowPluginNormalization?: boolean;
+  preparedModelSelectionConfigIndex?: PreparedModelSelectionConfigIndex;
 }): ModelRef {
-  const rawModel = resolveAgentModelPrimaryValue(params.cfg.agents?.defaults?.model) ?? "";
+  const rawModel =
+    params.primaryModelOverride ??
+    resolveAgentModelPrimaryValue(params.cfg.agents?.defaults?.model) ??
+    "";
   if (rawModel) {
     const trimmed = rawModel.trim();
-    const aliasIndex = buildModelAliasIndex({
+    const aliasIndex = getModelSelectionConfigIndex({
       cfg: params.cfg,
       defaultProvider: params.defaultProvider,
       allowManifestNormalization: params.allowManifestNormalization,
       allowPluginNormalization: params.allowPluginNormalization,
-    });
+      preparedModelSelectionConfigIndex: params.preparedModelSelectionConfigIndex,
+    }).aliasIndex;
     const aliasKey = normalizeLowercaseStringOrEmpty(trimmed);
     const aliasMatch = aliasIndex.byAlias.get(aliasKey);
     if (aliasMatch) {

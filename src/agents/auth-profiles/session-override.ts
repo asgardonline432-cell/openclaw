@@ -5,13 +5,23 @@ import {
   isConfiguredAwsSdkAuthProfileForProvider,
   resolveAuthProfileOrder,
 } from "../auth-profiles/order.js";
-import { ensureAuthProfileStore, hasAnyAuthProfileStoreSource } from "../auth-profiles/store.js";
+import {
+  ensureAuthProfileStore,
+  ensureAuthProfileStoreWithoutExternalProfiles,
+  hasAnyAuthProfileStoreSource,
+} from "../auth-profiles/store.js";
 import { isProfileInCooldown } from "../auth-profiles/usage.js";
 import { resolveProviderIdForAuth } from "../provider-auth-aliases.js";
 
 const sessionStoreRuntimeLoader = createLazyImportLoader(
   () => import("../../config/sessions/store.runtime.js"),
 );
+
+export type ResolvedSessionAuthProfileOverride = {
+  authProfileId?: string;
+  authProfileOrder?: string[];
+  authStore?: ReturnType<typeof ensureAuthProfileStore>;
+};
 
 function loadSessionStoreRuntime() {
   return sessionStoreRuntimeLoader.load();
@@ -78,7 +88,7 @@ export async function clearSessionAuthProfileOverride(params: {
   }
 }
 
-export async function resolveSessionAuthProfileOverride(params: {
+export async function resolveSessionAuthProfileOverrideState(params: {
   cfg: OpenClawConfig;
   provider: string;
   agentDir: string;
@@ -88,7 +98,7 @@ export async function resolveSessionAuthProfileOverride(params: {
   storePath?: string;
   isNewSession: boolean;
   acceptedProviderIds?: string[];
-}): Promise<string | undefined> {
+}): Promise<ResolvedSessionAuthProfileOverride> {
   const {
     cfg,
     provider,
@@ -100,7 +110,7 @@ export async function resolveSessionAuthProfileOverride(params: {
     isNewSession,
   } = params;
   if (!sessionEntry || !sessionStore || !sessionKey) {
-    return sessionEntry?.authProfileOverride;
+    return { authProfileId: sessionEntry?.authProfileOverride };
   }
 
   const hasConfiguredAuthProfiles =
@@ -111,11 +121,14 @@ export async function resolveSessionAuthProfileOverride(params: {
     !hasConfiguredAuthProfiles &&
     !hasAnyAuthProfileStoreSource(agentDir)
   ) {
-    return undefined;
+    return {};
   }
 
-  const store = ensureAuthProfileStore(agentDir, { allowKeychainPrompt: false });
   const providers = uniqueProviders(provider, params.acceptedProviderIds);
+  const baseStore = ensureAuthProfileStoreWithoutExternalProfiles(agentDir, {
+    allowKeychainPrompt: false,
+  });
+  let store = baseStore;
   const order = [
     ...new Set(
       providers.flatMap((candidateProvider) =>
@@ -123,7 +136,22 @@ export async function resolveSessionAuthProfileOverride(params: {
       ),
     ),
   ];
+  let resolvedOrder = order;
   let current = sessionEntry.authProfileOverride?.trim();
+  if ((current && !store.profiles[current]) || resolvedOrder.length === 0) {
+    const externalStore = ensureAuthProfileStore(agentDir, { allowKeychainPrompt: false });
+    const externalOrder = [
+      ...new Set(
+        providers.flatMap((candidateProvider) =>
+          resolveAuthProfileOrder({ cfg, store: externalStore, provider: candidateProvider }),
+        ),
+      ),
+    ];
+    if ((current && externalStore.profiles[current]) || externalOrder.length > 0) {
+      store = externalStore;
+      resolvedOrder = externalOrder;
+    }
+  }
   const source =
     sessionEntry.authProfileOverrideSource ??
     (typeof sessionEntry.authProfileOverrideCompactionCount === "number"
@@ -154,29 +182,29 @@ export async function resolveSessionAuthProfileOverride(params: {
   }
 
   // Explicit user picks should survive provider rotation order changes.
-  if (current && order.length > 0 && !order.includes(current) && source !== "user") {
+  if (current && resolvedOrder.length > 0 && !resolvedOrder.includes(current) && source !== "user") {
     await clearSessionAuthProfileOverride({ sessionEntry, sessionStore, sessionKey, storePath });
     current = undefined;
   }
 
-  if (order.length === 0) {
-    return undefined;
+  if (resolvedOrder.length === 0) {
+    return { authProfileOrder: [], authStore: store };
   }
 
   const pickFirstAvailable = () =>
-    order.find((profileId) => !isProfileInCooldown(store, profileId)) ?? order[0];
+    resolvedOrder.find((profileId) => !isProfileInCooldown(store, profileId)) ?? resolvedOrder[0];
   const pickNextAvailable = (active: string) => {
-    const startIndex = order.indexOf(active);
+    const startIndex = resolvedOrder.indexOf(active);
     if (startIndex < 0) {
       return pickFirstAvailable();
     }
-    for (let offset = 1; offset <= order.length; offset += 1) {
-      const candidate = order[(startIndex + offset) % order.length];
+    for (let offset = 1; offset <= resolvedOrder.length; offset += 1) {
+      const candidate = resolvedOrder[(startIndex + offset) % resolvedOrder.length];
       if (!isProfileInCooldown(store, candidate)) {
         return candidate;
       }
     }
-    return order[startIndex] ?? order[0];
+    return resolvedOrder[startIndex] ?? resolvedOrder[0];
   };
 
   const compactionCount = sessionEntry.compactionCount ?? 0;
@@ -186,13 +214,15 @@ export async function resolveSessionAuthProfileOverride(params: {
       : compactionCount;
   const replacementForUnusableCurrent =
     current && isProfileInCooldown(store, current)
-      ? order.find((profileId) => profileId !== current && !isProfileInCooldown(store, profileId))
+      ? resolvedOrder.find(
+          (profileId) => profileId !== current && !isProfileInCooldown(store, profileId),
+        )
       : undefined;
   if (replacementForUnusableCurrent) {
     current = undefined;
   }
   if (source === "user" && current && !isNewSession) {
-    return current;
+    return { authProfileId: current, authProfileOrder: resolvedOrder, authStore: store };
   }
 
   let next = current;
@@ -207,7 +237,7 @@ export async function resolveSessionAuthProfileOverride(params: {
   }
 
   if (!next) {
-    return current;
+    return { authProfileId: current, authProfileOrder: resolvedOrder, authStore: store };
   }
   const shouldPersist =
     next !== sessionEntry.authProfileOverride ||
@@ -228,5 +258,18 @@ export async function resolveSessionAuthProfileOverride(params: {
     }
   }
 
-  return next;
+  return { authProfileId: next, authProfileOrder: resolvedOrder, authStore: store };
+}
+
+export async function resolveSessionAuthProfileOverride(params: {
+  cfg: OpenClawConfig;
+  provider: string;
+  agentDir: string;
+  sessionEntry?: SessionEntry;
+  sessionStore?: Record<string, SessionEntry>;
+  sessionKey?: string;
+  storePath?: string;
+  isNewSession: boolean;
+}): Promise<string | undefined> {
+  return (await resolveSessionAuthProfileOverrideState(params)).authProfileId;
 }

@@ -1,5 +1,6 @@
 import type { StreamFn } from "@mariozechner/pi-agent-core";
 import { getApiProvider, streamSimple } from "@mariozechner/pi-ai";
+import type { ProviderRuntimePluginHandle } from "../../plugins/provider-hook-runtime.js";
 import { createAnthropicVertexStreamFnForModel } from "../anthropic-vertex-stream.js";
 import { createBoundaryAwareStreamFnForModel } from "../provider-transport-stream.js";
 import { stripSystemPromptCacheBoundary } from "../system-prompt-cache-boundary.js";
@@ -114,6 +115,7 @@ export function resolveEmbeddedAgentStreamFn(params: {
   model: EmbeddedRunAttemptParams["model"];
   resolvedApiKey?: string;
   authStorage?: { getApiKey(provider: string): Promise<string | undefined> };
+  providerRuntimeHandle?: ProviderRuntimePluginHandle;
 }): StreamFn {
   if (params.providerStreamFn) {
     return wrapEmbeddedAgentStreamFn(params.providerStreamFn, {
@@ -161,7 +163,9 @@ export function resolveEmbeddedAgentStreamFn(params: {
     isDefaultPiStreamFnForModel(params.model, params.currentStreamFn) ||
     hasResolvedRuntimeApiKey(params.resolvedApiKey)
   ) {
-    const boundaryAwareStreamFn = createBoundaryAwareStreamFnForModel(params.model);
+    const boundaryAwareStreamFn = createBoundaryAwareStreamFnForModel(params.model, {
+      providerRuntimeHandle: params.providerRuntimeHandle,
+    });
     if (boundaryAwareStreamFn) {
       // Some PI session factories return a provider-specific stream wrapper
       // once runtime auth is resolved. Keep transport-supported APIs on

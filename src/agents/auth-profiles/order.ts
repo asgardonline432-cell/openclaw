@@ -63,6 +63,15 @@ export function isConfiguredAwsSdkAuthProfileForProvider(params: {
   return providerAllowsAwsSdkAuth(params.cfg, params.provider);
 }
 
+export function preferAuthProfileFirst(
+  preferredProfile: string | undefined,
+  orderedProfiles: readonly string[],
+): string[] {
+  return preferredProfile && orderedProfiles.includes(preferredProfile)
+    ? [preferredProfile, ...orderedProfiles.filter((profileId) => profileId !== preferredProfile)]
+    : [...orderedProfiles];
+}
+
 export function resolveAuthProfileEligibility(params: {
   cfg?: OpenClawConfig;
   store: AuthProfileStore;
@@ -193,23 +202,14 @@ export function resolveAuthProfileOrder(params: {
 
     const ordered = [...available, ...cooldownSorted];
 
-    // Still put preferredProfile first if specified
-    if (preferredProfile && ordered.includes(preferredProfile)) {
-      return [preferredProfile, ...ordered.filter((e) => e !== preferredProfile)];
-    }
-    return ordered;
+    return preferAuthProfileFirst(preferredProfile, ordered);
   }
 
   // Otherwise, use round-robin: sort by lastUsed (oldest first)
   // preferredProfile goes first if specified (for explicit user choice)
   // lastGood is NOT prioritized - that would defeat round-robin
   const sorted = orderProfilesByMode(deduped, store);
-
-  if (preferredProfile && sorted.includes(preferredProfile)) {
-    return [preferredProfile, ...sorted.filter((e) => e !== preferredProfile)];
-  }
-
-  return sorted;
+  return preferAuthProfileFirst(preferredProfile, sorted);
 }
 
 function resolveAuthOrder(

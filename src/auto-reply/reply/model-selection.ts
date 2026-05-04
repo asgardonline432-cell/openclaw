@@ -3,6 +3,7 @@ import { clearSessionAuthProfileOverride } from "../../agents/auth-profiles/sess
 import { resolveContextTokensForModel } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { resolveAgentHarnessPolicy } from "../../agents/harness/selection.js";
+import { resolveModelCatalogScope } from "../../agents/model-catalog-scope.js";
 import type { ModelCatalogEntry } from "../../agents/model-catalog.js";
 import { parseConfiguredModelVisibilityEntries } from "../../agents/model-selection-shared.js";
 import {
@@ -34,6 +35,9 @@ import {
 } from "./stored-model-override.js";
 
 type ModelCatalog = ModelCatalogEntry[];
+type ThinkingCatalogOptions = {
+  hydrateRuntimeCatalog?: boolean;
+};
 
 type ModelSelectionState = {
   provider: string;
@@ -42,7 +46,7 @@ type ModelSelectionState = {
   allowedModelCatalog: ModelCatalog;
   resetModelOverride: boolean;
   resetModelOverrideRef?: string;
-  resolveThinkingCatalog: () => Promise<ModelCatalog | undefined>;
+  resolveThinkingCatalog: (options?: ThinkingCatalogOptions) => Promise<ModelCatalog | undefined>;
   resolveDefaultThinkingLevel: () => Promise<ThinkLevel>;
   /** Default reasoning level from model capability: "on" if model has reasoning, else "off". */
   resolveDefaultReasoningLevel: () => Promise<"on" | "off">;
@@ -87,8 +91,28 @@ function loadSessionStoreRuntime() {
   return sessionStoreRuntimeLoader.load();
 }
 
+async function loadScopedModelCatalogForSelection(params: {
+  cfg: OpenClawConfig;
+  workspaceDir?: string;
+  provider: string;
+  model: string;
+}): Promise<ModelCatalog> {
+  const scope = resolveModelCatalogScope({
+    cfg: params.cfg,
+    provider: params.provider,
+    model: params.model,
+  });
+  return (await loadModelCatalogRuntime()).loadModelCatalog({
+    config: params.cfg,
+    workspaceDir: params.workspaceDir,
+    providerRefs: scope.providerRefs,
+    modelRefs: scope.modelRefs,
+  });
+}
+
 export async function createModelSelectionState(params: {
   cfg: OpenClawConfig;
+  workspaceDir?: string;
   agentId?: string;
   agentCfg: NonNullable<NonNullable<OpenClawConfig["agents"]>["defaults"]> | undefined;
   sessionEntry?: SessionEntry;
@@ -181,7 +205,12 @@ export async function createModelSelectionState(params: {
   });
 
   if (needsModelCatalog) {
-    modelCatalog = await (await loadModelCatalogRuntime()).loadModelCatalog({ config: cfg });
+    modelCatalog = await loadScopedModelCatalogForSelection({
+      cfg,
+      workspaceDir: params.workspaceDir,
+      provider,
+      model,
+    });
     logStage("catalog-loaded", `entries=${modelCatalog.length}`);
     visibilityPolicy = createModelVisibilityPolicy({
       cfg,
@@ -331,8 +360,10 @@ export async function createModelSelectionState(params: {
   }
 
   let thinkingCatalog: ModelCatalog | undefined;
-  const resolveThinkingCatalog = async () => {
-    if (thinkingCatalog) {
+  let thinkingCatalogHydrated = modelCatalog !== null;
+  const resolveThinkingCatalog = async (options?: ThinkingCatalogOptions) => {
+    const hydrateRuntimeCatalog = options?.hydrateRuntimeCatalog === true;
+    if (thinkingCatalog && (!hydrateRuntimeCatalog || thinkingCatalogHydrated)) {
       return thinkingCatalog;
     }
     let catalogForThinking =
@@ -341,9 +372,16 @@ export async function createModelSelectionState(params: {
       (entry) => entry.provider === provider && entry.id === model,
     );
     const shouldHydrateRuntimeCatalog =
-      !modelCatalog && (!selectedCatalogEntry || selectedCatalogEntry.reasoning === undefined);
+      hydrateRuntimeCatalog &&
+      !modelCatalog &&
+      (!selectedCatalogEntry || selectedCatalogEntry.reasoning === undefined);
     if (shouldHydrateRuntimeCatalog) {
-      modelCatalog = await (await loadModelCatalogRuntime()).loadModelCatalog({ config: cfg });
+      modelCatalog = await loadScopedModelCatalogForSelection({
+        cfg,
+        workspaceDir: params.workspaceDir,
+        provider,
+        model,
+      });
       logStage("catalog-loaded-for-thinking", `entries=${modelCatalog.length}`);
       const runtimeSelectedEntry = modelCatalog.find(
         (entry) => entry.provider === provider && entry.id === model,
@@ -354,6 +392,7 @@ export async function createModelSelectionState(params: {
             ? modelCatalog
             : allowedModelCatalog
           : allowedModelCatalog;
+      thinkingCatalogHydrated = true;
     }
     thinkingCatalog = catalogForThinking.length > 0 ? catalogForThinking : undefined;
     return thinkingCatalog;
@@ -385,7 +424,12 @@ export async function createModelSelectionState(params: {
   const resolveDefaultReasoningLevel = async (): Promise<"on" | "off"> => {
     let catalogForReasoning = modelCatalog ?? allowedModelCatalog;
     if (!catalogForReasoning || catalogForReasoning.length === 0) {
-      modelCatalog = await (await loadModelCatalogRuntime()).loadModelCatalog({ config: cfg });
+      modelCatalog = await loadScopedModelCatalogForSelection({
+        cfg,
+        workspaceDir: params.workspaceDir,
+        provider,
+        model,
+      });
       logStage("catalog-loaded-for-reasoning", `entries=${modelCatalog.length}`);
       catalogForReasoning = modelCatalog;
     }

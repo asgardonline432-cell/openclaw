@@ -15,12 +15,18 @@ import {
   loadPluginMetadataSnapshot,
   type PluginMetadataSnapshot,
 } from "../plugins/plugin-metadata-snapshot.js";
+import {
+  createPluginCacheKey,
+  resolveConfigScopedRuntimeCacheValue,
+  type ConfigScopedRuntimeCache,
+} from "../plugins/plugin-cache-primitives.js";
 import { loadEmbeddedPiMcpConfig } from "./embedded-pi-mcp.js";
 
 const log = createSubsystemLogger("embedded-pi-settings");
 
 export const DEFAULT_EMBEDDED_PI_PROJECT_SETTINGS_POLICY = "sanitize";
 const SANITIZED_PROJECT_PI_KEYS = ["shellPath", "shellCommandPrefix"] as const;
+const bundlePiSettingsSnapshotCache: ConfigScopedRuntimeCache<PiSettingsSnapshot> = new WeakMap();
 
 export type EmbeddedPiProjectSettingsPolicy = "trusted" | "sanitize" | "ignore";
 
@@ -61,6 +67,10 @@ function resolveUnscopedCurrentPluginMetadataSnapshot(params: {
   });
 }
 
+function clonePiSettingsSnapshot(settings: PiSettingsSnapshot): PiSettingsSnapshot {
+  return structuredClone(settings) as PiSettingsSnapshot;
+}
+
 function loadBundleSettingsFile(params: {
   rootDir: string;
   relativePath: string;
@@ -83,7 +93,7 @@ function loadBundleSettingsFile(params: {
   return sanitizePiSettingsSnapshot(result.value as PiSettingsSnapshot);
 }
 
-export function loadEnabledBundlePiSettingsSnapshot(params: {
+function loadEnabledBundlePiSettingsSnapshotUncached(params: {
   cwd: string;
   cfg?: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
@@ -171,6 +181,38 @@ export function loadEnabledBundlePiSettingsSnapshot(params: {
   }
 
   return snapshot;
+}
+
+export function loadEnabledBundlePiSettingsSnapshot(params: {
+  cwd: string;
+  cfg?: OpenClawConfig;
+  pluginMetadataSnapshot?: PluginMetadataSnapshot;
+}): PiSettingsSnapshot {
+  const workspaceDir = params.cwd.trim();
+  if (!workspaceDir) {
+    return {};
+  }
+  const load = () =>
+    loadEnabledBundlePiSettingsSnapshotUncached({
+      cwd: workspaceDir,
+      cfg: params.cfg,
+      pluginMetadataSnapshot: params.pluginMetadataSnapshot,
+    });
+  if (!params.cfg || params.pluginMetadataSnapshot) {
+    return load();
+  }
+  const cached = resolveConfigScopedRuntimeCacheValue({
+    cache: bundlePiSettingsSnapshotCache,
+    config: params.cfg,
+    key: createPluginCacheKey([
+      "enabled-bundle-pi-settings",
+      workspaceDir,
+      params.cfg.plugins,
+      params.cfg.mcp,
+    ]),
+    load,
+  });
+  return clonePiSettingsSnapshot(cached);
 }
 
 export function resolveEmbeddedPiProjectSettingsPolicy(
