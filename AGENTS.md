@@ -35,9 +35,13 @@ Skills own workflows; root owns hard policy and routing.
 - New seams: backward-compatible, documented, versioned. Third-party plugins exist.
 - Channels are implementation under `src/channels/**`; plugin authors get SDK seams. Providers own auth/catalog/runtime hooks; core owns generic loop.
 - Hot paths should carry prepared facts forward: provider id, model ref, channel id, target, capability family, attachment class. Do not rediscover with broad plugin/provider/channel/capability loaders.
+- Prepared runtime facts should be small typed values produced once near startup, reply dispatch, model selection, tool planning, or channel resolution, then passed through context to consumers.
+- Compatibility fallbacks are allowed only for startup/setup/admin/standalone/legacy callers that genuinely lack prepared facts. Keep them explicit, tested, and outside migrated hot reply/tool/outbound paths.
 - Do not fix repeated request-time discovery with scattered caches. Move the canonical fact earlier; reuse prepared runtime objects; delete duplicate lookup branches.
 - Gateway protocol changes: additive first; incompatible needs versioning/docs/client follow-through.
 - Config contract: exported types, schema/help, metadata, baselines, docs aligned. Retired public keys stay retired; compat in raw migration/doctor only.
+- Direction: manifest-first control plane; targeted runtime loaders; no hidden contract bypasses; broad mutable registries transitional.
+- Request-time runtime resolution: when a path already knows the capability family, provider id, model ref, or attachment class, keep resolution scoped to that fact. Prefer prepared-runtime helpers, active/runtime registries, manifest/public-artifact lookups, single-provider resolvers, and lazy registry construction. Do not broad-load a whole provider/plugin family at request time just to find one explicit provider/model, and do not build multimodal/provider registries for document-only or otherwise non-participating paths.
 - Prompt cache: deterministic ordering for maps/sets/registries/plugin lists/files/network results before model/tool payloads. Preserve old transcript bytes when possible.
 
 ## Commands

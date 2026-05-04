@@ -37,6 +37,7 @@ export function installEmbeddedRunnerBaseE2eMocks(options?: {
     ensureContextEnginesInitialized: vi.fn(),
   }));
   vi.doMock("../../context-engine/registry.js", () => ({
+    resolveContextEngineOwnerPluginId: vi.fn(() => undefined),
     resolveContextEngine: vi.fn(async () => ({
       dispose: async () => undefined,
     })),
@@ -54,6 +55,9 @@ export function installEmbeddedRunnerFastRunE2eMocks(
   options: EmbeddedRunnerFastRunMockOptions,
 ): void {
   vi.doMock("../harness/selection.js", () => ({
+    resolveAgentHarnessPolicy: vi.fn((params: { provider?: string }) => ({
+      runtime: params.provider === "codex-cli" ? "codex" : "pi",
+    })),
     selectAgentHarness: vi.fn((params: { provider?: string }) => ({
       id: params.provider === "codex-cli" ? "codex" : "pi",
       label: "Mock agent harness",
