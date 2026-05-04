@@ -2,11 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
   completeMock: vi.fn(),
-  ensureOpenClawModelsJsonMock: vi.fn(async () => {}),
-  getApiKeyForModelMock: vi.fn(async () => ({
-    apiKey: "oauth-test", // pragma: allowlist secret
-    source: "test",
-    mode: "oauth",
+  prepareSimpleCompletionModelMock: vi.fn(async () => ({
+    model: {
+      provider: "minimax-portal",
+      id: "MiniMax-VL-01",
+      input: ["text", "image"],
+      baseUrl: "https://api.minimax.io/anthropic",
+    },
+    auth: {
+      apiKey: "oauth-test", // pragma: allowlist secret
+      source: "test",
+      mode: "oauth",
+    },
   })),
   resolveApiKeyForProviderMock: vi.fn(async () => ({
     apiKey: "oauth-test", // pragma: allowlist secret
@@ -14,39 +21,17 @@ const hoisted = vi.hoisted(() => ({
     mode: "oauth",
   })),
   requireApiKeyMock: vi.fn((auth: { apiKey?: string }) => auth.apiKey ?? ""),
-  setRuntimeApiKeyMock: vi.fn(),
-  discoverModelsMock: vi.fn(),
   fetchMock: vi.fn(),
   registerProviderStreamForModelMock: vi.fn(),
-  prepareProviderDynamicModelMock: vi.fn(async () => {}),
-  resolveModelAsyncMock: vi.fn(),
-  resolveModelWithRegistryMock: vi.fn(),
 }));
 const {
   completeMock,
-  ensureOpenClawModelsJsonMock,
-  getApiKeyForModelMock,
+  prepareSimpleCompletionModelMock,
   resolveApiKeyForProviderMock,
   requireApiKeyMock,
-  setRuntimeApiKeyMock,
-  discoverModelsMock,
   fetchMock,
   registerProviderStreamForModelMock,
-  prepareProviderDynamicModelMock,
-  resolveModelAsyncMock,
-  resolveModelWithRegistryMock,
 } = hoisted;
-
-type ResolveModelWithRegistryTestParams = {
-  modelRegistry: { find: (provider: string, modelId: string) => unknown };
-  provider: string;
-  modelId: string;
-};
-
-type AuthRequestCall = {
-  profileId?: string;
-  store?: unknown;
-};
 
 vi.mock("@mariozechner/pi-ai", async () => {
   const actual = await vi.importActual<typeof import("@mariozechner/pi-ai")>("@mariozechner/pi-ai");
@@ -56,39 +41,17 @@ vi.mock("@mariozechner/pi-ai", async () => {
   };
 });
 
-vi.mock("../agents/models-config.js", async () => ({
-  ...(await vi.importActual<typeof import("../agents/models-config.js")>(
-    "../agents/models-config.js",
-  )),
-  ensureOpenClawModelsJson: ensureOpenClawModelsJsonMock,
-}));
-
 vi.mock("../agents/model-auth.js", () => ({
-  getApiKeyForModel: getApiKeyForModelMock,
   resolveApiKeyForProvider: resolveApiKeyForProviderMock,
   requireApiKey: requireApiKeyMock,
 }));
 
+vi.mock("../agents/simple-completion-runtime.js", () => ({
+  prepareSimpleCompletionModel: prepareSimpleCompletionModelMock,
+}));
+
 vi.mock("../agents/provider-stream.js", () => ({
   registerProviderStreamForModel: registerProviderStreamForModelMock,
-}));
-
-vi.mock("../agents/pi-model-discovery-runtime.js", () => ({
-  discoverAuthStorage: () => ({
-    setRuntimeApiKey: setRuntimeApiKeyMock,
-  }),
-  discoverModels: discoverModelsMock,
-}));
-
-vi.mock("../plugins/provider-runtime.js", async () => ({
-  ...(await vi.importActual<typeof import("../plugins/provider-runtime.js")>(
-    "../plugins/provider-runtime.js",
-  )),
-  prepareProviderDynamicModel: prepareProviderDynamicModelMock,
-}));
-
-vi.mock("../agents/pi-embedded-runner/model.js", () => ({
-  resolveModelAsync: resolveModelAsyncMock,
 }));
 
 const { describeImageWithModel } = await import("./image.js");
@@ -114,45 +77,16 @@ describe("describeImageWithModel", () => {
       })),
       text: vi.fn(async () => ""),
     });
-    discoverModelsMock.mockReturnValue({
-      find: vi.fn(() => ({
+    prepareSimpleCompletionModelMock.mockResolvedValue({
+      model: {
         provider: "minimax-portal",
         id: "MiniMax-VL-01",
         input: ["text", "image"],
         baseUrl: "https://api.minimax.io/anthropic",
-      })),
-    });
-    resolveModelWithRegistryMock.mockImplementation(
-      // Delegate to modelRegistry.find so tests that override discoverModelsMock
-      // automatically get the right model through resolveModelWithRegistry.
-      ({ modelRegistry, provider, modelId }: ResolveModelWithRegistryTestParams) =>
-        modelRegistry.find(provider, modelId),
-    );
-    resolveModelAsyncMock.mockImplementation(
-      async (provider: string, modelId: string, agentDir?: string, cfg?: unknown) => {
-        const authStorage = {
-          setRuntimeApiKey: setRuntimeApiKeyMock,
-        };
-        const modelRegistry = discoverModelsMock(authStorage, agentDir);
-        const model = resolveModelWithRegistryMock({
-          provider,
-          modelId,
-          modelRegistry,
-          cfg,
-          agentDir,
-        });
-        return { authStorage, model, modelRegistry };
       },
-    );
+      auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
+    });
   });
-
-  function getApiKeyForModelCall(index = 0): AuthRequestCall {
-    const call = (getApiKeyForModelMock.mock.calls as unknown[][])[index];
-    if (!call) {
-      throw new Error(`Expected getApiKeyForModel call ${index}`);
-    }
-    return call[0] as AuthRequestCall;
-  }
 
   it("routes minimax-portal image models through the MiniMax VLM endpoint", async () => {
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
@@ -174,39 +108,47 @@ describe("describeImageWithModel", () => {
       text: "portal ok",
       model: "MiniMax-VL-01",
     });
-    expect(ensureOpenClawModelsJsonMock).toHaveBeenCalled();
-    const authRequest = getApiKeyForModelCall();
-    expect(authRequest?.store).toBe(authStore);
-    expect(requireApiKeyMock).toHaveBeenCalled();
-    expect(setRuntimeApiKeyMock).toHaveBeenCalledWith("minimax-portal", "oauth-test");
-    const [fetchUrl, fetchOptions] = fetchMock.mock.calls[0] ?? [];
-    expect(fetchUrl).toBe("https://api.minimax.io/v1/coding_plan/vlm");
-    expect(fetchOptions).toEqual({
-      method: "POST",
-      headers: {
-        Authorization: "Bearer oauth-test",
-        "Content-Type": "application/json",
-        "MM-API-Source": "OpenClaw",
-      },
-      body: JSON.stringify({
-        prompt: "Describe the image.",
-        image_url: `data:image/png;base64,${Buffer.from("png-bytes").toString("base64")}`,
+    expect(prepareSimpleCompletionModelMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cfg: {},
+        provider: "minimax-portal",
+        modelId: "MiniMax-VL-01",
+        agentDir: "/tmp/openclaw-agent",
+        profileId: undefined,
+        preferredProfile: undefined,
+        skipPiDiscovery: true,
       }),
-      signal: fetchOptions?.signal,
-    });
-    expect(fetchOptions?.signal).toBeInstanceOf(AbortSignal);
+    );
+    expect(requireApiKeyMock).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.minimax.io/v1/coding_plan/vlm",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Authorization: "Bearer oauth-test",
+          "Content-Type": "application/json",
+          "MM-API-Source": "OpenClaw",
+        },
+        body: JSON.stringify({
+          prompt: "Describe the image.",
+          image_url: `data:image/png;base64,${Buffer.from("png-bytes").toString("base64")}`,
+        }),
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(timeoutSpy).toHaveBeenCalledWith(1000);
     expect(completeMock).not.toHaveBeenCalled();
   });
 
   it("uses generic completion for non-canonical minimax-portal image models", async () => {
-    discoverModelsMock.mockReturnValue({
-      find: vi.fn(() => ({
+    prepareSimpleCompletionModelMock.mockResolvedValueOnce({
+      model: {
         provider: "minimax-portal",
         id: "custom-vision",
         input: ["text", "image"],
         baseUrl: "https://api.minimax.io/anthropic",
-      })),
+      },
+      auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
     });
     completeMock.mockResolvedValue({
       role: "assistant",
@@ -250,17 +192,16 @@ describe("describeImageWithModel", () => {
   });
 
   it("resolves configured image models when discovery has not registered the provider", async () => {
-    const registryFind = vi.fn(() => null);
-    discoverModelsMock.mockReturnValue({ find: registryFind });
-    resolveModelWithRegistryMock.mockImplementationOnce(
-      ({ provider, modelId }: ResolveModelWithRegistryTestParams) => ({
-        provider,
-        id: modelId,
+    prepareSimpleCompletionModelMock.mockResolvedValueOnce({
+      model: {
+        provider: "lmstudio",
+        id: "google/gemma-4-e2b",
         api: "anthropic-messages",
         input: ["text", "image"],
         baseUrl: "http://127.0.0.1:1234",
-      }),
-    );
+      },
+      auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
+    } as never);
     completeMock.mockResolvedValue({
       role: "assistant",
       api: "anthropic-messages",
@@ -307,25 +248,34 @@ describe("describeImageWithModel", () => {
       text: "local vision ok",
       model: "google/gemma-4-e2b",
     });
-    expect(registryFind).not.toHaveBeenCalled();
-    const [resolveRequest] = resolveModelWithRegistryMock.mock.calls[0] ?? [];
-    expect(resolveRequest?.provider).toBe("lmstudio");
-    expect(resolveRequest?.modelId).toBe("google/gemma-4-e2b");
-    expect(resolveRequest?.agentDir).toBe("/tmp/openclaw-agent");
-    expect(resolveRequest?.cfg.models?.providers?.lmstudio?.baseUrl).toBe("http://127.0.0.1:1234");
-    expect(prepareProviderDynamicModelMock).not.toHaveBeenCalled();
+    expect(prepareSimpleCompletionModelMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "lmstudio",
+        modelId: "google/gemma-4-e2b",
+        cfg: expect.objectContaining({
+          models: expect.objectContaining({
+            providers: expect.objectContaining({
+              lmstudio: expect.objectContaining({
+                baseUrl: "http://127.0.0.1:1234",
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
     expect(completeMock).toHaveBeenCalledOnce();
   });
 
   it("reports the resolved model input when an image model is text-only", async () => {
-    discoverModelsMock.mockReturnValue({
-      find: vi.fn(() => ({
+    prepareSimpleCompletionModelMock.mockResolvedValueOnce({
+      model: {
         provider: "lmstudio",
         id: "text-only",
         api: "openai-completions",
         input: ["text"],
         baseUrl: "http://127.0.0.1:1234",
-      })),
+      },
+      auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
     });
 
     await expect(
@@ -347,13 +297,14 @@ describe("describeImageWithModel", () => {
   });
 
   it("passes image prompt as system instructions for codex image requests", async () => {
-    discoverModelsMock.mockReturnValue({
-      find: vi.fn(() => ({
+    prepareSimpleCompletionModelMock.mockResolvedValueOnce({
+      model: {
         provider: "openai-codex",
         id: "gpt-5.4",
         input: ["text", "image"],
         baseUrl: "https://chatgpt.com/backend-api",
-      })),
+      },
+      auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
     });
     completeMock.mockResolvedValue({
       role: "assistant",
@@ -415,14 +366,15 @@ describe("describeImageWithModel", () => {
   });
 
   it("places OpenRouter image prompts in user content before images", async () => {
-    discoverModelsMock.mockReturnValue({
-      find: vi.fn(() => ({
+    prepareSimpleCompletionModelMock.mockResolvedValueOnce({
+      model: {
         api: "openai-completions",
         provider: "openrouter",
         id: "google/gemini-2.5-flash",
         input: ["text", "image"],
         baseUrl: "https://openrouter.ai/api/v1",
-      })),
+      },
+      auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
     });
     completeMock.mockResolvedValue({
       role: "assistant",
@@ -527,8 +479,9 @@ describe("describeImageWithModel", () => {
   ])(
     "retries reasoning-only image responses with reasoning disabled for $name",
     async ({ provider, model, expectedRetryPayload }) => {
-      discoverModelsMock.mockReturnValue({
-        find: vi.fn(() => model),
+      prepareSimpleCompletionModelMock.mockResolvedValueOnce({
+        model,
+        auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
       });
       completeMock
         .mockResolvedValueOnce({
@@ -595,14 +548,15 @@ describe("describeImageWithModel", () => {
 
   it("rejects when a generic image completion ignores the abort signal", async () => {
     vi.useFakeTimers();
-    discoverModelsMock.mockReturnValue({
-      find: vi.fn(() => ({
+    prepareSimpleCompletionModelMock.mockResolvedValueOnce({
+      model: {
         api: "openai-responses",
         provider: "openai",
         id: "gpt-5.4-mini",
         input: ["text", "image"],
         baseUrl: "https://api.openai.com/v1",
-      })),
+      },
+      auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
     });
     completeMock.mockImplementation(() => new Promise(() => {}));
 
@@ -635,7 +589,7 @@ describe("describeImageWithModel", () => {
 
   it("rejects when image runtime setup exceeds the request timeout", async () => {
     vi.useFakeTimers();
-    ensureOpenClawModelsJsonMock.mockImplementationOnce(() => new Promise(() => {}));
+    prepareSimpleCompletionModelMock.mockImplementationOnce(() => new Promise(() => {}));
 
     const result = describeImageWithModel({
       cfg: {},
@@ -656,17 +610,19 @@ describe("describeImageWithModel", () => {
   });
 
   it("normalizes deprecated google flash ids before lookup and keeps profile auth selection", async () => {
-    const findMock = vi.fn((provider: string, modelId: string) => {
-      expect(provider).toBe("google");
-      expect(modelId).toBe("gemini-3-flash-preview");
+    prepareSimpleCompletionModelMock.mockImplementationOnce(async (params) => {
+      expect(params.provider).toBe("google");
+      expect(params.modelId).toBe("gemini-3-flash-preview");
       return {
-        provider: "google",
-        id: "gemini-3-flash-preview",
-        input: ["text", "image"],
-        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        model: {
+          provider: "google",
+          id: "gemini-3-flash-preview",
+          input: ["text", "image"],
+          baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        },
+        auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
       };
     });
-    discoverModelsMock.mockReturnValue({ find: findMock });
     completeMock.mockResolvedValue({
       role: "assistant",
       api: "google-generative-ai",
@@ -694,24 +650,29 @@ describe("describeImageWithModel", () => {
       text: "flash ok",
       model: "gemini-3-flash-preview",
     });
-    expect(findMock).toHaveBeenCalledOnce();
-    const authRequest = getApiKeyForModelCall();
-    expect(authRequest?.profileId).toBe("google:default");
-    expect(setRuntimeApiKeyMock).toHaveBeenCalledWith("google", "oauth-test");
+    expect(prepareSimpleCompletionModelMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "google",
+        modelId: "gemini-3-flash-preview",
+        profileId: "google:default",
+      }),
+    );
   });
 
   it("normalizes gemini 3.1 flash-lite ids before lookup and keeps profile auth selection", async () => {
-    const findMock = vi.fn((provider: string, modelId: string) => {
-      expect(provider).toBe("google");
-      expect(modelId).toBe("gemini-3.1-flash-lite-preview");
+    prepareSimpleCompletionModelMock.mockImplementationOnce(async (params) => {
+      expect(params.provider).toBe("google");
+      expect(params.modelId).toBe("gemini-3.1-flash-lite-preview");
       return {
-        provider: "google",
-        id: "gemini-3.1-flash-lite-preview",
-        input: ["text", "image"],
-        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        model: {
+          provider: "google",
+          id: "gemini-3.1-flash-lite-preview",
+          input: ["text", "image"],
+          baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        },
+        auth: { apiKey: "oauth-test", source: "test", mode: "oauth" },
       };
     });
-    discoverModelsMock.mockReturnValue({ find: findMock });
     completeMock.mockResolvedValue({
       role: "assistant",
       api: "google-generative-ai",
@@ -739,9 +700,12 @@ describe("describeImageWithModel", () => {
       text: "flash lite ok",
       model: "gemini-3.1-flash-lite-preview",
     });
-    expect(findMock).toHaveBeenCalledOnce();
-    const authRequest = getApiKeyForModelCall();
-    expect(authRequest?.profileId).toBe("google:default");
-    expect(setRuntimeApiKeyMock).toHaveBeenCalledWith("google", "oauth-test");
+    expect(prepareSimpleCompletionModelMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "google",
+        modelId: "gemini-3.1-flash-lite-preview",
+        profileId: "google:default",
+      }),
+    );
   });
 });

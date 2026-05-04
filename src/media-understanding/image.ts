@@ -1,16 +1,11 @@
 import type { Api, Context, Model, ProviderStreamOptions } from "@mariozechner/pi-ai";
 import { complete } from "@mariozechner/pi-ai";
 import { isMinimaxVlmModel, minimaxUnderstandImage } from "../agents/minimax-vlm.js";
-import {
-  getApiKeyForModel,
-  requireApiKey,
-  resolveApiKeyForProvider,
-} from "../agents/model-auth.js";
+import { requireApiKey, resolveApiKeyForProvider } from "../agents/model-auth.js";
 import { normalizeModelRef } from "../agents/model-selection.js";
-import { ensureOpenClawModelsJson } from "../agents/models-config.js";
-import { resolveModelAsync } from "../agents/pi-embedded-runner/model.js";
 import { resolveProviderRequestCapabilities } from "../agents/provider-attribution.js";
 import { registerProviderStreamForModel } from "../agents/provider-stream.js";
+import { prepareSimpleCompletionModel } from "../agents/simple-completion-runtime.js";
 import {
   coerceImageAssistantText,
   hasImageReasoningOnlyResponse,
@@ -132,26 +127,21 @@ async function resolveImageRuntime(params: {
   preferredProfile?: string;
   authStore?: ImageDescriptionRequest["authStore"];
 }): Promise<{ apiKey: string; model: Model<Api> }> {
-  await ensureOpenClawModelsJson(params.cfg, params.agentDir);
   const resolvedRef = normalizeModelRef(params.provider, params.model);
-  const resolved = await resolveModelAsync(
-    resolvedRef.provider,
-    resolvedRef.model,
-    params.agentDir,
-    params.cfg,
-    {
-      allowBundledStaticCatalogFallback: true,
-    },
-  );
-  const { authStorage, model } = resolved;
-  if (!model) {
-    throw new Error(`Unknown model: ${resolvedRef.provider}/${resolvedRef.model}`);
+  const prepared = await prepareSimpleCompletionModel({
+    cfg: params.cfg,
+    provider: resolvedRef.provider,
+    modelId: resolvedRef.model,
+    agentDir: params.agentDir,
+    profileId: params.profile,
+    preferredProfile: params.preferredProfile,
+    skipPiDiscovery: true,
+  });
+  if ("error" in prepared) {
+    throw new Error(prepared.error);
   }
+  const { model, auth } = prepared;
   if (!model.input?.includes("image")) {
-    // resolveModelWithRegistry may synthesize a text-only fallback for configured
-    // providers, which would change "Unknown model" → "Model does not support images"
-    // and skip the MiniMax VLM recovery path. Throw Unknown model for MiniMax VLM
-    // models so the caller can attempt the fallback.
     if (isMinimaxVlmModel(resolvedRef.provider, resolvedRef.model)) {
       throw new Error(`Unknown model: ${resolvedRef.provider}/${resolvedRef.model}`);
     }
@@ -160,17 +150,10 @@ async function resolveImageRuntime(params: {
         `(resolved ${model.provider}/${model.id} input: ${formatModelInputCapabilities(model.input)})`,
     );
   }
-  const apiKeyInfo = await getApiKeyForModel({
+  return {
+    apiKey: requireApiKey(auth, model.provider),
     model,
-    cfg: params.cfg,
-    agentDir: params.agentDir,
-    profileId: params.profile,
-    preferredProfile: params.preferredProfile,
-    store: params.authStore,
-  });
-  const apiKey = requireApiKey(apiKeyInfo, model.provider);
-  authStorage.setRuntimeApiKey(model.provider, apiKey);
-  return { apiKey, model };
+  };
 }
 
 function buildImageContext(

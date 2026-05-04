@@ -124,6 +124,13 @@ vi.mock("./send.js", () => ({
   sendStickerTelegram,
 }));
 
+vi.mock("../../../src/agents/harness/selection.js", () => ({
+  maybeCompactAgentHarnessSession: vi.fn(async () => ({ compacted: false })),
+  resolveAgentHarnessPolicy: vi.fn(() => ({ runtime: "pi" })),
+  runAgentHarnessAttempt: vi.fn(),
+  selectAgentHarness: vi.fn(() => null),
+}));
+
 vi.mock("./bot-message-dispatch.runtime.js", () => ({
   generateTopicLabel,
   getAgentScopedMediaLocalRoots,

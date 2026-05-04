@@ -55,6 +55,7 @@ import {
   loadModelCatalog,
   modelSupportsVision,
   resolveAgentDir,
+  resolveModelCatalogScope,
   resolveDefaultModelForAgent,
 } from "./bot-message-dispatch.agent.runtime.js";
 import { deduplicateBlockSentMedia } from "./bot-message-dispatch.media-dedup.js";
@@ -131,8 +132,15 @@ function resolveDraftPartialText(
 
 async function resolveStickerVisionSupport(cfg: OpenClawConfig, agentId: string) {
   try {
-    const catalog = await loadModelCatalog({ config: cfg });
     const defaultModel = resolveDefaultModelForAgent({ cfg, agentId });
+    const catalog = await loadModelCatalog({
+      config: cfg,
+      ...resolveModelCatalogScope({
+        cfg,
+        provider: defaultModel.provider,
+        model: defaultModel.model,
+      }),
+    });
     const entry = findModelInCatalog(catalog, defaultModel.provider, defaultModel.model);
     if (!entry) {
       return false;

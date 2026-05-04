@@ -101,7 +101,9 @@ export async function runMediaUnderstandingFile(
     };
   }
 
-  const providerRegistry = buildProviderRegistry(undefined, cfg);
+  const providerRegistry = buildProviderRegistry(undefined, cfg, {
+    providerIds: params.activeModel?.provider ? [params.activeModel.provider] : [],
+  });
   const cache = createMediaAttachmentCache(attachments, {
     localPathRoots: [path.dirname(params.filePath)],
     ssrfPolicy: cfg.tools?.web?.fetch?.ssrfPolicy,
@@ -152,7 +154,9 @@ export async function describeImageFile(
 
 export async function describeImageFileWithModel(params: DescribeImageFileWithModelParams) {
   const timeoutMs = params.timeoutMs ?? 30_000;
-  const providerRegistry = buildProviderRegistry(undefined, params.cfg);
+  const providerRegistry = buildProviderRegistry(undefined, params.cfg, {
+    providerIds: [params.provider],
+  });
   const provider = providerRegistry.get(normalizeMediaProviderId(params.provider));
   const buffer = (await readLocalFileSafely({ filePath: params.filePath })).buffer;
   const describeImage = provider?.describeImage ?? describeImageWithModel;

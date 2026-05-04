@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/types.js";
-import { getActiveRuntimePluginRegistry } from "../plugins/active-runtime-registry.js";
+import { getLoadedRuntimePluginRegistry } from "../plugins/active-runtime-registry.js";
 import {
   resolvePluginCapabilityProvider,
   resolvePluginCapabilityProviders,
@@ -19,7 +19,7 @@ function resolveSpeechProviderPluginEntries(cfg?: OpenClawConfig): SpeechProvide
 }
 
 function resolveLoadedSpeechProviderPluginEntries(): SpeechProviderPlugin[] {
-  return (getActiveRuntimePluginRegistry()?.speechProviders ?? []).map((entry) => entry.provider);
+  return (getLoadedRuntimePluginRegistry()?.speechProviders ?? []).map((entry) => entry.provider);
 }
 
 const defaultSpeechProviderRegistryResolver: SpeechProviderRegistryResolver = {

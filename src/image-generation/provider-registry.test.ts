@@ -3,9 +3,12 @@ import type { OpenClawConfig } from "../config/types.js";
 import type { ImageGenerationProviderPlugin } from "../plugins/types.js";
 import type * as ProviderRegistry from "./provider-registry.js";
 
-const { resolvePluginCapabilityProvidersMock } = vi.hoisted(() => ({
-  resolvePluginCapabilityProvidersMock: vi.fn<() => ImageGenerationProviderPlugin[]>(() => []),
-}));
+const { resolvePluginCapabilityProviderMock, resolvePluginCapabilityProvidersMock } = vi.hoisted(
+  () => ({
+    resolvePluginCapabilityProviderMock: vi.fn<() => ImageGenerationProviderPlugin | undefined>(),
+    resolvePluginCapabilityProvidersMock: vi.fn<() => ImageGenerationProviderPlugin[]>(() => []),
+  }),
+);
 
 let getImageGenerationProvider: typeof ProviderRegistry.getImageGenerationProvider;
 let listImageGenerationProviders: typeof ProviderRegistry.listImageGenerationProviders;
@@ -29,6 +32,7 @@ function createProvider(
 async function loadProviderRegistry() {
   vi.resetModules();
   vi.doMock("../plugins/capability-provider-runtime.js", () => ({
+    resolvePluginCapabilityProvider: resolvePluginCapabilityProviderMock,
     resolvePluginCapabilityProviders: resolvePluginCapabilityProvidersMock,
   }));
   return await import("./provider-registry.js");
@@ -44,6 +48,8 @@ function requireImageProvider(id: string): ImageGenerationProviderPlugin {
 
 describe("image-generation provider registry", () => {
   beforeEach(async () => {
+    resolvePluginCapabilityProviderMock.mockReset();
+    resolvePluginCapabilityProviderMock.mockReturnValue(undefined);
     resolvePluginCapabilityProvidersMock.mockReset();
     resolvePluginCapabilityProvidersMock.mockReturnValue([]);
     ({ getImageGenerationProvider, listImageGenerationProviders } = await loadProviderRegistry());
@@ -60,13 +66,30 @@ describe("image-generation provider registry", () => {
   });
 
   it("uses active plugin providers without loading from disk", () => {
-    resolvePluginCapabilityProvidersMock.mockReturnValue([createProvider({ id: "custom-image" })]);
+    resolvePluginCapabilityProviderMock.mockReturnValue(createProvider({ id: "custom-image" }));
 
     const provider = getImageGenerationProvider("custom-image");
 
     expect(provider?.id).toBe("custom-image");
-    expect(resolvePluginCapabilityProvidersMock).toHaveBeenCalledWith({
+    expect(resolvePluginCapabilityProviderMock).toHaveBeenCalledWith({
       key: "imageGenerationProviders",
+      providerId: "custom-image",
+      cfg: undefined,
+    });
+    expect(resolvePluginCapabilityProvidersMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to alias maps when direct provider resolution misses", () => {
+    resolvePluginCapabilityProvidersMock.mockReturnValue([
+      createProvider({ id: "safe-image", aliases: ["safe-alias"] }),
+    ]);
+
+    const provider = getImageGenerationProvider("safe-alias");
+
+    expect(provider?.id).toBe("safe-image");
+    expect(resolvePluginCapabilityProviderMock).toHaveBeenCalledWith({
+      key: "imageGenerationProviders",
+      providerId: "safe-alias",
       cfg: undefined,
     });
   });
