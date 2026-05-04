@@ -367,6 +367,9 @@ describe("runtime postbuild static assets", () => {
     expect(await fs.readFile(path.join(distDir, "install.runtime-Xom5hOHq.js"), "utf8")).toBe(
       'export * from "./install.runtime-NewPluginHash.js";\n',
     );
+    expect(await fs.readFile(path.join(distDir, "install.runtime-tnhNR9WW.js"), "utf8")).toBe(
+      'export * from "./install.runtime-NewPluginHash.js";\n',
+    );
     expect(await fs.readFile(path.join(distDir, "install.runtime-CNHwKOIb.js"), "utf8")).toBe(
       'export * from "./install.runtime-NewPluginHash.js";\n',
     );

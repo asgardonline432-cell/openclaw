@@ -63,6 +63,7 @@ const LEGACY_PLUGIN_INSTALL_RUNTIME_COMPAT_ALIASES = [
   "install.runtime-BwuRABU1.js",
   "install.runtime-DQ-ui3nL.js",
   "install.runtime-Xom5hOHq.js",
+  "install.runtime-tnhNR9WW.js",
   // v2026.5.3 beta train.
   "install.runtime-CNHwKOIb.js",
   "install.runtime-Dzuj9tSw.js",
