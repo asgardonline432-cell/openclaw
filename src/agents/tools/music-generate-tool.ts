@@ -562,6 +562,7 @@ export function createMusicGenerateTool(options?: {
   sandbox?: MusicGenerateSandboxConfig;
   fsPolicy?: ToolFsPolicy;
   scheduleBackgroundWork?: MusicGenerateBackgroundScheduler;
+  precomputedAvailability?: boolean;
 }): AnyAgentTool | null {
   const cfg: OpenClawConfig = options?.config ?? getRuntimeConfig();
   if (
@@ -572,6 +573,7 @@ export function createMusicGenerateTool(options?: {
       authStore: options?.authProfileStore,
       modelConfig: cfg.agents?.defaults?.musicGenerationModel,
       providerKey: "musicGenerationProviders",
+      precomputedAvailability: options?.precomputedAvailability,
     })
   ) {
     return null;

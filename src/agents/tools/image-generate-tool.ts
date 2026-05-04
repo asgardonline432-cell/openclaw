@@ -625,6 +625,7 @@ export function createImageGenerateTool(options?: {
   workspaceDir?: string;
   sandbox?: ImageGenerateSandboxConfig;
   fsPolicy?: ToolFsPolicy;
+  precomputedAvailability?: boolean;
 }): AnyAgentTool | null {
   const cfg = options?.config ?? getRuntimeConfig();
   if (
@@ -635,6 +636,7 @@ export function createImageGenerateTool(options?: {
       authStore: options?.authProfileStore,
       modelConfig: cfg.agents?.defaults?.imageGenerationModel,
       providerKey: "imageGenerationProviders",
+      precomputedAvailability: options?.precomputedAvailability,
     })
   ) {
     return null;

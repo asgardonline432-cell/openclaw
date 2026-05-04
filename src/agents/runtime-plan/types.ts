@@ -1,5 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { TSchema } from "typebox";
+import type { RuntimeWebToolsMetadata } from "../../secrets/runtime-web-tools.types.js";
 
 export type AgentRuntimeTransport = "sse" | "websocket" | "auto";
 
@@ -289,6 +290,7 @@ export type AgentRuntimePreparedMetadataSnapshot = object;
 export type PreparedOpenClawToolPlanning = {
   metadataSnapshot?: AgentRuntimePreparedMetadataSnapshot;
   loadMetadataSnapshot?: () => AgentRuntimePreparedMetadataSnapshot;
+  runtimeWebTools?: RuntimeWebToolsMetadata;
 };
 
 export type AgentRuntimeToolPlan = {

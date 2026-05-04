@@ -26,8 +26,10 @@ import { createLazyImportLoader } from "../../shared/lazy-promise.js";
 import type { BuildStatusTextParams } from "../../status/status-text.types.js";
 import { buildTaskStatusSnapshotForRelatedSessionKeyForOwner } from "../../tasks/task-owner-access.js";
 import { formatTaskStatusDetail, formatTaskStatusTitle } from "../../tasks/task-status.js";
+import { resolveModelCatalogScope } from "../model-catalog-scope.js";
 import { loadModelCatalog } from "../model-catalog.js";
 import {
+  buildAllowedModelSet,
   buildConfiguredModelCatalog,
   buildModelAliasIndex,
   modelKey,
@@ -35,7 +37,6 @@ import {
   resolveModelRefFromString,
   resolveThinkingDefault,
 } from "../model-selection.js";
-import { createModelVisibilityPolicy } from "../model-visibility-policy.js";
 import {
   describeSessionStatusTool,
   SESSION_STATUS_TOOL_DISPLAY_SUMMARY,
@@ -287,16 +288,8 @@ async function resolveModelOverride(params: {
     cfg: params.cfg,
     defaultProvider: currentProvider,
   });
-  const catalog = await loadModelCatalog({ config: params.cfg });
-  const policy = createModelVisibilityPolicy({
-    cfg: params.cfg,
-    catalog,
-    defaultProvider: currentProvider,
-    defaultModel: currentModel,
-    agentId: params.agentId,
-  });
-
   const resolved = resolveModelRefFromString({
+    cfg: params.cfg,
     raw,
     defaultProvider: currentProvider,
     aliasIndex,
@@ -304,8 +297,25 @@ async function resolveModelOverride(params: {
   if (!resolved) {
     throw new Error(`Unrecognized model "${raw}".`);
   }
+
+  const catalog = await loadModelCatalog({
+    config: params.cfg,
+    ...resolveModelCatalogScope({
+      cfg: params.cfg,
+      provider: resolved.ref.provider,
+      model: resolved.ref.model,
+    }),
+  });
+  const allowed = buildAllowedModelSet({
+    cfg: params.cfg,
+    catalog,
+    defaultProvider: currentProvider,
+    defaultModel: currentModel,
+    agentId: params.agentId,
+  });
+
   const key = modelKey(resolved.ref.provider, resolved.ref.model);
-  if (!policy.allowsKey(key)) {
+  if (allowed.allowedKeys.size > 0 && !allowed.allowedKeys.has(key)) {
     throw new Error(`Model "${key}" is not allowed.`);
   }
   const isDefault =
@@ -723,7 +733,14 @@ export function createSessionStatusTool(opts?: {
             !configuredSelectedEntry ||
             configuredSelectedEntry.reasoning === undefined;
           const runtimeCatalog = shouldHydrateRuntimeCatalog
-            ? await loadModelCatalog({ config: cfg })
+            ? await loadModelCatalog({
+                config: cfg,
+                ...resolveModelCatalogScope({
+                  cfg,
+                  provider: providerForCard,
+                  model: defaultModelForCard,
+                }),
+              })
             : undefined;
           const runtimeSelectedEntry = runtimeCatalog?.find(
             (entry) => entry.provider === providerForCard && entry.id === defaultModelForCard,

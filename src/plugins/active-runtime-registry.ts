@@ -2,12 +2,18 @@ import { resolveCompatibleRuntimePluginRegistry, type PluginLoadOptions } from "
 import type { PluginRegistry } from "./registry-types.js";
 import {
   getActivePluginChannelRegistry,
+  getActivePluginGatewayRuntimeRegistry,
+  getActivePluginGatewayRuntimeRegistryWorkspaceDir,
   getActivePluginHttpRouteRegistry,
   getActivePluginRegistry,
   getActivePluginRegistryWorkspaceDir,
 } from "./runtime.js";
 
-export type ActiveRuntimePluginRegistrySurface = "active" | "channel" | "http-route";
+export type ActiveRuntimePluginRegistrySurface =
+  | "active"
+  | "channel"
+  | "gateway-runtime"
+  | "http-route";
 
 export function getActiveRuntimePluginRegistry(): PluginRegistry | null {
   return getActivePluginRegistry();
@@ -62,6 +68,8 @@ function resolveSurfaceRegistry(
       return getActivePluginRegistry();
     case "channel":
       return getActivePluginChannelRegistry();
+    case "gateway-runtime":
+      return getActivePluginGatewayRuntimeRegistry();
     case "http-route":
       return getActivePluginHttpRouteRegistry();
   }
@@ -89,7 +97,10 @@ export function getLoadedRuntimePluginRegistry(
     return compatible;
   }
 
-  const activeWorkspaceDir = getActivePluginRegistryWorkspaceDir();
+  const activeWorkspaceDir =
+    surface === "gateway-runtime"
+      ? getActivePluginGatewayRuntimeRegistryWorkspaceDir()
+      : getActivePluginRegistryWorkspaceDir();
   const requestedWorkspaceDir = params.workspaceDir ?? params.loadOptions?.workspaceDir;
   if (requestedWorkspaceDir !== undefined && activeWorkspaceDir !== requestedWorkspaceDir) {
     return undefined;

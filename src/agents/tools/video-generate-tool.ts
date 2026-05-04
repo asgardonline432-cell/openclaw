@@ -787,6 +787,7 @@ export function createVideoGenerateTool(options?: {
   sandbox?: VideoGenerateSandboxConfig;
   fsPolicy?: ToolFsPolicy;
   scheduleBackgroundWork?: VideoGenerateBackgroundScheduler;
+  precomputedAvailability?: boolean;
 }): AnyAgentTool | null {
   const cfg: OpenClawConfig = options?.config ?? getRuntimeConfig();
   if (
@@ -797,6 +798,7 @@ export function createVideoGenerateTool(options?: {
       authStore: options?.authProfileStore,
       modelConfig: cfg.agents?.defaults?.videoGenerationModel,
       providerKey: "videoGenerationProviders",
+      precomputedAvailability: options?.precomputedAvailability,
     })
   ) {
     return null;

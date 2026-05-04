@@ -17,6 +17,14 @@ const mocks = vi.hoisted(() => {
   return {
     stubTool,
     createCronToolOptions: vi.fn(),
+    createImageGenerateTool: vi.fn(() => stubTool("image_generate")),
+    createImageTool: vi.fn(() => stubTool("image")),
+    createMusicGenerateTool: vi.fn(() => stubTool("music_generate")),
+    createPdfTool: vi.fn(() => stubTool("pdf")),
+    createVideoGenerateTool: vi.fn(() => stubTool("video_generate")),
+    createWebFetchTool: vi.fn(() => stubTool("web_fetch")),
+    createWebSearchTool: vi.fn(() => stubTool("web_search")),
+    getActiveRuntimeWebToolsMetadata: vi.fn(() => null),
     textToSpeech: vi.fn(async () => ({
       success: true,
       audioPath: "/tmp/openclaw/tts-config-test.opus",
@@ -50,11 +58,11 @@ vi.mock("./tools/gateway-tool.js", () => ({
 }));
 
 vi.mock("./tools/image-generate-tool.js", () => ({
-  createImageGenerateTool: () => mocks.stubTool("image_generate"),
+  createImageGenerateTool: mocks.createImageGenerateTool,
 }));
 
 vi.mock("./tools/image-tool.js", () => ({
-  createImageTool: () => mocks.stubTool("image"),
+  createImageTool: mocks.createImageTool,
 }));
 
 vi.mock("./tools/message-tool.js", () => ({
@@ -62,7 +70,7 @@ vi.mock("./tools/message-tool.js", () => ({
 }));
 
 vi.mock("./tools/music-generate-tool.js", () => ({
-  createMusicGenerateTool: () => mocks.stubTool("music_generate"),
+  createMusicGenerateTool: mocks.createMusicGenerateTool,
 }));
 
 vi.mock("./tools/nodes-tool.js", () => ({
@@ -70,7 +78,7 @@ vi.mock("./tools/nodes-tool.js", () => ({
 }));
 
 vi.mock("./tools/pdf-tool.js", () => ({
-  createPdfTool: () => mocks.stubTool("pdf"),
+  createPdfTool: mocks.createPdfTool,
 }));
 
 vi.mock("./tools/session-status-tool.js", () => ({
@@ -106,12 +114,17 @@ vi.mock("./tools/update-plan-tool.js", () => ({
 }));
 
 vi.mock("./tools/video-generate-tool.js", () => ({
-  createVideoGenerateTool: () => mocks.stubTool("video_generate"),
+  createVideoGenerateTool: mocks.createVideoGenerateTool,
 }));
 
 vi.mock("./tools/web-tools.js", () => ({
-  createWebFetchTool: () => mocks.stubTool("web_fetch"),
-  createWebSearchTool: () => mocks.stubTool("web_search"),
+  createWebFetchTool: mocks.createWebFetchTool,
+  createWebSearchTool: mocks.createWebSearchTool,
+}));
+
+vi.mock("../secrets/runtime.js", () => ({
+  getActiveRuntimeWebToolsMetadata: mocks.getActiveRuntimeWebToolsMetadata,
+  getActiveSecretsRuntimeSnapshot: () => undefined,
 }));
 
 vi.mock("../tts/tts.js", () => ({
@@ -134,7 +147,63 @@ function getTextToSpeechParams() {
 describe("createOpenClawTools TTS config wiring", () => {
   beforeEach(() => {
     mocks.createCronToolOptions.mockClear();
+    mocks.createImageGenerateTool.mockClear();
+    mocks.createImageTool.mockClear();
+    mocks.createMusicGenerateTool.mockClear();
+    mocks.createPdfTool.mockClear();
+    mocks.createVideoGenerateTool.mockClear();
+    mocks.createWebFetchTool.mockClear();
+    mocks.createWebSearchTool.mockClear();
+    mocks.getActiveRuntimeWebToolsMetadata.mockClear();
     mocks.textToSpeech.mockClear();
+  });
+
+  it("does not materialize optional core tools outside an explicit allowlist", async () => {
+    const { createOpenClawTools } = await import("./openclaw-tools.js");
+
+    const tools = createOpenClawTools({
+      coreToolAllowlist: ["sessions_list"],
+      disableMessageTool: true,
+      disablePluginTools: true,
+    });
+
+    expect(tools.map((tool) => tool.name)).toEqual(["sessions_list"]);
+    expect(mocks.createImageGenerateTool).not.toHaveBeenCalled();
+    expect(mocks.createImageTool).not.toHaveBeenCalled();
+    expect(mocks.createMusicGenerateTool).not.toHaveBeenCalled();
+    expect(mocks.createPdfTool).not.toHaveBeenCalled();
+    expect(mocks.createVideoGenerateTool).not.toHaveBeenCalled();
+    expect(mocks.createWebFetchTool).not.toHaveBeenCalled();
+    expect(mocks.createWebSearchTool).not.toHaveBeenCalled();
+    expect(mocks.getActiveRuntimeWebToolsMetadata).not.toHaveBeenCalled();
+  });
+
+  it("passes planned generation availability into media tool factories", async () => {
+    const { createOpenClawTools } = await import("./openclaw-tools.js");
+
+    createOpenClawTools({
+      config: {
+        agents: {
+          defaults: {
+            imageGenerationModel: { primary: "image-owner/model" },
+            videoGenerationModel: { primary: "video-owner/model" },
+            musicGenerationModel: { primary: "music-owner/model" },
+          },
+        },
+      },
+      disableMessageTool: true,
+      disablePluginTools: true,
+    });
+
+    expect(mocks.createImageGenerateTool).toHaveBeenCalledWith(
+      expect.objectContaining({ precomputedAvailability: true }),
+    );
+    expect(mocks.createVideoGenerateTool).toHaveBeenCalledWith(
+      expect.objectContaining({ precomputedAvailability: true }),
+    );
+    expect(mocks.createMusicGenerateTool).toHaveBeenCalledWith(
+      expect.objectContaining({ precomputedAvailability: true }),
+    );
   });
 
   it("passes the resolved shared config into the tts tool", async () => {

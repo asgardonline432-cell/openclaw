@@ -9,9 +9,9 @@ import { listProfilesForProvider } from "./auth-profiles/profile-list.js";
 import type { AuthProfileStore } from "./auth-profiles/types.js";
 import { isToolAllowedByPolicyName } from "./tool-policy-match.js";
 import {
+  getCurrentCapabilityMetadataSnapshot,
   hasSnapshotCapabilityAvailability,
   hasSnapshotProviderEnvAvailability,
-  loadCapabilityMetadataSnapshot,
 } from "./tools/manifest-capability-availability.js";
 
 export type OptionalMediaToolFactoryPlan = {
@@ -22,6 +22,19 @@ export type OptionalMediaToolFactoryPlan = {
 };
 
 type ToolModelConfig = { primary?: string; fallbacks?: string[] };
+
+function loadCapabilityMetadataSnapshot(params: {
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+}): Pick<PluginMetadataSnapshot, "index" | "plugins"> {
+  return (
+    getCurrentCapabilityMetadataSnapshot(params) ??
+    ({
+      index: { plugins: [] },
+      plugins: [],
+    } as Pick<PluginMetadataSnapshot, "index" | "plugins">)
+  );
+}
 
 function coerceFactoryToolModelConfig(model?: AgentModelConfig): ToolModelConfig {
   const primary = resolveAgentModelPrimaryValue(model);
@@ -87,6 +100,8 @@ export function resolveImageToolFactoryAvailable(params: {
   agentDir?: string;
   modelHasVision?: boolean;
   authStore?: AuthProfileStore;
+  workspaceDir?: string;
+  loadCapabilitySnapshot?: () => Pick<PluginMetadataSnapshot, "index" | "plugins">;
 }): boolean {
   if (!params.agentDir?.trim()) {
     return false;
@@ -94,9 +109,12 @@ export function resolveImageToolFactoryAvailable(params: {
   if (params.modelHasVision || hasExplicitImageModelConfig(params.config)) {
     return true;
   }
-  const snapshot = loadCapabilityMetadataSnapshot({
-    config: params.config,
-  });
+  const snapshot =
+    params.loadCapabilitySnapshot?.() ??
+    loadCapabilityMetadataSnapshot({
+      config: params.config,
+      ...(params.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
+    });
   return (
     hasSnapshotCapabilityAvailability({
       snapshot,
@@ -149,32 +167,35 @@ export function resolveOptionalMediaToolFactoryPlan(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   authStore?: AuthProfileStore;
+  coreToolAllowlist?: string[];
   toolAllowlist?: string[];
   toolDenylist?: string[];
+  loadCapabilitySnapshot?: () => Pick<PluginMetadataSnapshot, "index" | "plugins">;
 }): OptionalMediaToolFactoryPlan {
   const defaults = params.config?.agents?.defaults;
+  const coreToolAllowlist = mergeFactoryPolicyList(
+    params.config?.tools?.allow,
+    params.coreToolAllowlist,
+  );
   const toolAllowlist = mergeFactoryPolicyList(params.config?.tools?.allow, params.toolAllowlist);
   const toolDenylist = mergeFactoryPolicyList(params.config?.tools?.deny, params.toolDenylist);
-  const allowImageGenerate = isToolAllowedByFactoryPolicy({
-    toolName: "image_generate",
-    allowlist: toolAllowlist,
-    denylist: toolDenylist,
-  });
-  const allowVideoGenerate = isToolAllowedByFactoryPolicy({
-    toolName: "video_generate",
-    allowlist: toolAllowlist,
-    denylist: toolDenylist,
-  });
-  const allowMusicGenerate = isToolAllowedByFactoryPolicy({
-    toolName: "music_generate",
-    allowlist: toolAllowlist,
-    denylist: toolDenylist,
-  });
-  const allowPdf = isToolAllowedByFactoryPolicy({
-    toolName: "pdf",
-    allowlist: toolAllowlist,
-    denylist: toolDenylist,
-  });
+  const isCoreToolAllowed = (toolName: string) =>
+    isToolAllowedByFactoryPolicy({
+      toolName,
+      allowlist: coreToolAllowlist,
+      denylist: toolDenylist,
+    });
+  const isOptionalMediaToolAllowed = (toolName: string) =>
+    isCoreToolAllowed(toolName) &&
+    isToolAllowedByFactoryPolicy({
+      toolName,
+      allowlist: toolAllowlist,
+      denylist: toolDenylist,
+    });
+  const allowImageGenerate = isOptionalMediaToolAllowed("image_generate");
+  const allowVideoGenerate = isOptionalMediaToolAllowed("video_generate");
+  const allowMusicGenerate = isOptionalMediaToolAllowed("music_generate");
+  const allowPdf = isOptionalMediaToolAllowed("pdf");
   const explicitImageGeneration = hasExplicitToolModelConfig(defaults?.imageGenerationModel);
   const explicitVideoGeneration = hasExplicitToolModelConfig(defaults?.videoGenerationModel);
   const explicitMusicGeneration = hasExplicitToolModelConfig(defaults?.musicGenerationModel);
@@ -187,51 +208,42 @@ export function resolveOptionalMediaToolFactoryPlan(params: {
       pdf: false,
     };
   }
-  const snapshot = loadCapabilityMetadataSnapshot({
-    config: params.config,
-    ...(params.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
-  });
+  const needsSnapshot =
+    (allowImageGenerate && !explicitImageGeneration) ||
+    (allowVideoGenerate && !explicitVideoGeneration) ||
+    (allowMusicGenerate && !explicitMusicGeneration) ||
+    (allowPdf && !explicitPdf);
+  const snapshot =
+    needsSnapshot &&
+    (params.loadCapabilitySnapshot?.() ??
+      loadCapabilityMetadataSnapshot({
+        config: params.config,
+        ...(params.workspaceDir ? { workspaceDir: params.workspaceDir } : {}),
+      }));
+  const hasCapability = (key: Parameters<typeof hasSnapshotCapabilityAvailability>[0]["key"]) =>
+    !!snapshot &&
+    hasSnapshotCapabilityAvailability({
+      snapshot,
+      authStore: params.authStore,
+      key,
+      config: params.config,
+    });
   return {
     imageGenerate:
-      allowImageGenerate &&
-      (explicitImageGeneration ||
-        hasSnapshotCapabilityAvailability({
-          snapshot,
-          authStore: params.authStore,
-          key: "imageGenerationProviders",
-          config: params.config,
-        })),
+      allowImageGenerate && (explicitImageGeneration || hasCapability("imageGenerationProviders")),
     videoGenerate:
-      allowVideoGenerate &&
-      (explicitVideoGeneration ||
-        hasSnapshotCapabilityAvailability({
-          snapshot,
-          authStore: params.authStore,
-          key: "videoGenerationProviders",
-          config: params.config,
-        })),
+      allowVideoGenerate && (explicitVideoGeneration || hasCapability("videoGenerationProviders")),
     musicGenerate:
-      allowMusicGenerate &&
-      (explicitMusicGeneration ||
-        hasSnapshotCapabilityAvailability({
-          snapshot,
-          authStore: params.authStore,
-          key: "musicGenerationProviders",
-          config: params.config,
-        })),
+      allowMusicGenerate && (explicitMusicGeneration || hasCapability("musicGenerationProviders")),
     pdf:
       allowPdf &&
       (explicitPdf ||
-        hasSnapshotCapabilityAvailability({
-          snapshot,
-          authStore: params.authStore,
-          key: "mediaUnderstandingProviders",
-          config: params.config,
-        }) ||
-        hasConfiguredVisionModelAuthSignal({
-          config: params.config,
-          snapshot,
-          authStore: params.authStore,
-        })),
+        hasCapability("mediaUnderstandingProviders") ||
+        (!!snapshot &&
+          hasConfiguredVisionModelAuthSignal({
+            config: params.config,
+            snapshot,
+            authStore: params.authStore,
+          }))),
   };
 }

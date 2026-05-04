@@ -85,6 +85,16 @@ export function resolveGatewayScopedTools(params: {
     params.cfg,
     agentId ?? resolveDefaultAgentId(params.cfg),
   );
+  const explicitToolAllowlist = collectExplicitAllowlist([
+    profilePolicyWithAlsoAllow,
+    providerProfilePolicyWithAlsoAllow,
+    globalPolicy,
+    globalProviderPolicy,
+    agentPolicy,
+    agentProviderPolicy,
+    groupPolicy,
+    subagentPolicy,
+  ]);
 
   const allTools = createOpenClawTools({
     agentSessionKey: params.sessionKey,
@@ -99,6 +109,7 @@ export function resolveGatewayScopedTools(params: {
     senderIsOwner: params.senderIsOwner,
     config: params.cfg,
     workspaceDir,
+    coreToolAllowlist: explicitToolAllowlist,
     pluginToolAllowlist: collectExplicitAllowlist([
       profilePolicy,
       providerProfilePolicy,

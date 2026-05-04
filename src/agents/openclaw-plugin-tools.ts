@@ -4,6 +4,7 @@ import {
   getRuntimeConfigSourceSnapshot,
 } from "../config/runtime-snapshot.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import { resolvePluginTools } from "../plugins/tools.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { resolveApiKeyForProfile, resolveAuthProfileOrder } from "./auth-profiles.js";
@@ -13,6 +14,7 @@ import {
   type OpenClawPluginToolOptions,
 } from "./openclaw-tools.plugin-context.js";
 import { applyPluginToolDeliveryDefaults } from "./plugin-tool-delivery-defaults.js";
+import type { PreparedOpenClawToolPlanning } from "./runtime-plan/types.js";
 import type { AnyAgentTool } from "./tools/common.js";
 
 type ResolveOpenClawPluginToolsOptions = OpenClawPluginToolOptions & {
@@ -31,6 +33,7 @@ type ResolveOpenClawPluginToolsOptions = OpenClawPluginToolOptions & {
   disableMessageTool?: boolean;
   disablePluginTools?: boolean;
   authProfileStore?: AuthProfileStore;
+  preparedToolPlanning?: PreparedOpenClawToolPlanning;
 };
 
 function resolveApplicablePluginRuntimeConfig(
@@ -58,6 +61,8 @@ export function resolveOpenClawPluginToolsForOptions(params: {
   options?: ResolveOpenClawPluginToolsOptions;
   resolvedConfig?: OpenClawConfig;
   existingToolNames?: Set<string>;
+  loadMetadataSnapshot?: () => PluginMetadataSnapshot;
+  metadataSnapshot?: PluginMetadataSnapshot;
 }): AnyAgentTool[] {
   if (params.options?.disablePluginTools) {
     return [];
@@ -119,6 +124,14 @@ export function resolveOpenClawPluginToolsForOptions(params: {
     toolDenylist: params.options?.pluginToolDenylist,
     allowGatewaySubagentBinding: params.options?.allowGatewaySubagentBinding,
     ...(hasAuthForProvider ? { hasAuthForProvider } : {}),
+    ...(params.options?.preparedToolPlanning?.metadataSnapshot
+      ? { metadataSnapshot: params.options.preparedToolPlanning.metadataSnapshot }
+      : {}),
+    ...(params.options?.preparedToolPlanning?.loadMetadataSnapshot
+      ? { loadMetadataSnapshot: params.options.preparedToolPlanning.loadMetadataSnapshot }
+      : {}),
+    ...(params.metadataSnapshot ? { metadataSnapshot: params.metadataSnapshot } : {}),
+    ...(params.loadMetadataSnapshot ? { loadMetadataSnapshot: params.loadMetadataSnapshot } : {}),
   });
 
   return applyPluginToolDeliveryDefaults({

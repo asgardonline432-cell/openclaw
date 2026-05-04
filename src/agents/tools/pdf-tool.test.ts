@@ -6,9 +6,7 @@ import type { OpenClawConfig } from "../../config/config.js";
 import * as pdfExtractModule from "../../media/pdf-extract.js";
 import * as webMedia from "../../media/web-media.js";
 import type { AuthProfileStore } from "../auth-profiles/types.js";
-import * as modelAuth from "../model-auth.js";
-import * as modelsConfig from "../models-config.js";
-import * as modelDiscovery from "../pi-model-discovery.js";
+import * as simpleCompletionRuntime from "../simple-completion-runtime.js";
 import * as pdfNativeProviders from "./pdf-native-providers.js";
 import * as pdfModelConfigModule from "./pdf-tool.model-config.js";
 import { resetPdfToolAuthEnv, withTempPdfAgentDir } from "./pdf-tool.test-support.js";
@@ -104,15 +102,13 @@ async function stubPdfToolInfra(
     loadSpy.mockResolvedValue(FAKE_PDF_MEDIA as never);
   }
 
-  vi.spyOn(modelDiscovery, "discoverAuthStorage").mockReturnValue({
-    setRuntimeApiKey: vi.fn(),
-  } as never);
-  const find =
+  vi.spyOn(simpleCompletionRuntime, "prepareSimpleCompletionModel").mockResolvedValue(
     params?.modelFound === false
-      ? () => null
-      : () =>
-          ({
+      ? ({ error: "Unknown model: test" } as never)
+      : ({
+          model: {
             provider: params?.provider ?? "anthropic",
+            id: params?.provider === "openai" ? "gpt-5.4-mini" : "claude-opus-4-6",
             api:
               params?.api ??
               (params?.provider === "openai-codex"
@@ -122,16 +118,13 @@ async function stubPdfToolInfra(
                   : "anthropic-messages"),
             maxTokens: 8192,
             input: params?.input ?? ["text", "document"],
-          }) as never;
-  vi.spyOn(modelDiscovery, "discoverModels").mockReturnValue({ find } as never);
-
-  vi.spyOn(modelsConfig, "ensureOpenClawModelsJson").mockResolvedValue({
-    agentDir,
-    wrote: false,
-  });
-
-  vi.spyOn(modelAuth, "getApiKeyForModel").mockResolvedValue({ apiKey: "test-key" } as never);
-  vi.spyOn(modelAuth, "requireApiKey").mockReturnValue("test-key");
+          },
+          auth: {
+            apiKey: "test-key",
+            mode: "api-key",
+          },
+        } as never),
+  );
 
   return { loadSpy };
 }
@@ -421,17 +414,12 @@ describe("createPdfTool", () => {
         pdf: "/tmp/doc.pdf",
       });
 
-      const ensureModelsJsonMock = vi.mocked(modelsConfig.ensureOpenClawModelsJson);
-      const [modelsConfigArg, modelsAgentDir, modelsOptions] =
-        ensureModelsJsonMock.mock.calls[0] ?? [];
-      expectFields(
-        (modelsConfigArg as { agents?: { defaults?: unknown } } | undefined)?.agents?.defaults,
-        {
-          pdfModel: { primary: ANTHROPIC_PDF_MODEL },
-        },
+      expect(simpleCompletionRuntime.prepareSimpleCompletionModel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentDir,
+          skipPiDiscovery: true,
+        }),
       );
-      expect(modelsAgentDir).toBe(agentDir);
-      expect(modelsOptions).toEqual({ workspaceDir });
       expect(extractSpy).not.toHaveBeenCalled();
       expect(result.content).toEqual([{ type: "text", text: "native summary" }]);
       expectFields(result.details, {

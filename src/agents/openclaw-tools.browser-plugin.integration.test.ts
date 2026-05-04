@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { resetConfigRuntimeState, setRuntimeConfigSnapshot } from "../config/config.js";
+import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import { activateSecretsRuntimeSnapshot, clearSecretsRuntimeSnapshot } from "../secrets/runtime.js";
 import { resolveOpenClawPluginToolsForOptions } from "./openclaw-plugin-tools.js";
 
@@ -190,6 +191,31 @@ describe("createOpenClawTools browser plugin integration", () => {
     await expect(capturedParams?.context?.resolveApiKeyForProvider?.("xai")).resolves.toBe(
       "xai-profile-key",
     );
+  });
+
+  it("forwards a shared metadata snapshot loader to plugin resolution", () => {
+    hoisted.resolvePluginTools.mockReturnValue([]);
+    const config = {
+      plugins: {
+        allow: ["browser"],
+      },
+    } as OpenClawConfig;
+    const loadMetadataSnapshot = vi.fn(
+      () => ({ plugins: [], index: {} }) as PluginMetadataSnapshot,
+    );
+
+    resolveOpenClawPluginToolsForOptions({
+      options: { config },
+      resolvedConfig: config,
+      loadMetadataSnapshot,
+    });
+
+    expect(hoisted.resolvePluginTools).toHaveBeenCalledWith(
+      expect.objectContaining({
+        loadMetadataSnapshot,
+      }),
+    );
+    expect(loadMetadataSnapshot).not.toHaveBeenCalled();
   });
 
   it("forwards plugin tool deny policy to plugin resolution", () => {

@@ -32,11 +32,19 @@ const state: RegistryState = (() => {
         registry: null,
         pinned: false,
         version: 0,
+        workspaceDir: null,
       },
       channel: {
         registry: null,
         pinned: false,
         version: 0,
+        workspaceDir: null,
+      },
+      gatewayRuntime: {
+        registry: null,
+        pinned: false,
+        version: 0,
+        workspaceDir: null,
       },
       key: null,
       workspaceDir: null,
@@ -45,6 +53,15 @@ const state: RegistryState = (() => {
     };
     globalState[PLUGIN_REGISTRY_STATE] = registryState;
   }
+  registryState.httpRoute.workspaceDir ??= null;
+  registryState.channel.workspaceDir ??= null;
+  registryState.gatewayRuntime ??= {
+    registry: null,
+    pinned: false,
+    version: 0,
+    workspaceDir: null,
+  };
+  registryState.gatewayRuntime.workspaceDir ??= null;
   return registryState;
 })();
 
@@ -104,30 +121,37 @@ function installSurfaceRegistry(
   surface: RegistrySurfaceState,
   registry: RegistryState["activeRegistry"],
   pinned: boolean,
+  workspaceDir: string | null = state.workspaceDir,
 ) {
-  if (surface.registry === registry && surface.pinned === pinned) {
+  if (
+    surface.registry === registry &&
+    surface.pinned === pinned &&
+    surface.workspaceDir === workspaceDir
+  ) {
     return;
   }
   surface.registry = registry;
   surface.pinned = pinned;
+  surface.workspaceDir = workspaceDir;
   surface.version += 1;
 }
 
 function syncTrackedSurface(
   surface: RegistrySurfaceState,
   registry: RegistryState["activeRegistry"],
+  workspaceDir: string | null = state.workspaceDir,
   refreshVersion = false,
 ) {
   if (surface.pinned) {
     return;
   }
-  if (surface.registry === registry && !surface.pinned) {
+  if (surface.registry === registry && surface.workspaceDir === workspaceDir && !surface.pinned) {
     if (refreshVersion) {
       surface.version += 1;
     }
     return;
   }
-  installSurfaceRegistry(surface, registry, false);
+  installSurfaceRegistry(surface, registry, false, workspaceDir);
 }
 
 export function setActivePluginRegistry(
@@ -143,11 +167,12 @@ export function setActivePluginRegistry(
   markPluginRegistryActive(registry);
   state.activeRegistry = registry;
   state.activeVersion += 1;
-  syncTrackedSurface(state.httpRoute, registry, true);
-  syncTrackedSurface(state.channel, registry, true);
   state.key = cacheKey ?? null;
   state.workspaceDir = workspaceDir ?? null;
   state.runtimeSubagentMode = runtimeSubagentMode;
+  syncTrackedSurface(state.httpRoute, registry, state.workspaceDir, true);
+  syncTrackedSurface(state.channel, registry, state.workspaceDir, true);
+  syncTrackedSurface(state.gatewayRuntime, registry, state.workspaceDir, true);
   syncPluginAgentEventBridge(registry);
   if (
     !previousRegistry ||
@@ -177,6 +202,7 @@ export function requireActivePluginRegistry(): PluginRegistry {
     state.activeVersion += 1;
     syncTrackedSurface(state.httpRoute, state.activeRegistry);
     syncTrackedSurface(state.channel, state.activeRegistry);
+    syncTrackedSurface(state.gatewayRuntime, state.activeRegistry);
   }
   return asPluginRegistry(state.activeRegistry)!;
 }
@@ -262,6 +288,29 @@ export function requireActivePluginChannelRegistry(): PluginRegistry {
   return created;
 }
 
+export function pinActivePluginGatewayRuntimeRegistry(registry: PluginRegistry) {
+  installSurfaceRegistry(state.gatewayRuntime, registry, true);
+}
+
+export function releasePinnedPluginGatewayRuntimeRegistry(registry?: PluginRegistry) {
+  if (registry && state.gatewayRuntime.registry !== registry) {
+    return;
+  }
+  installSurfaceRegistry(state.gatewayRuntime, state.activeRegistry, false);
+}
+
+export function getActivePluginGatewayRuntimeRegistry(): PluginRegistry | null {
+  return asPluginRegistry(state.gatewayRuntime.registry ?? state.activeRegistry);
+}
+
+export function getActivePluginGatewayRuntimeRegistryWorkspaceDir(): string | undefined {
+  return state.gatewayRuntime.workspaceDir ?? state.workspaceDir ?? undefined;
+}
+
+export function getActivePluginGatewayRuntimeRegistryVersion(): number {
+  return state.gatewayRuntime.registry ? state.gatewayRuntime.version : state.activeVersion;
+}
+
 export function getActivePluginRegistryKey(): string | null {
   return state.key;
 }
@@ -304,6 +353,7 @@ export function listImportedRuntimePluginIds(): string[] {
   collectLoadedPluginIds(asPluginRegistry(state.activeRegistry), imported);
   collectLoadedPluginIds(asPluginRegistry(state.channel.registry), imported);
   collectLoadedPluginIds(asPluginRegistry(state.httpRoute.registry), imported);
+  collectLoadedPluginIds(asPluginRegistry(state.gatewayRuntime.registry), imported);
   return [...imported].toSorted((left, right) => left.localeCompare(right));
 }
 
@@ -312,6 +362,7 @@ export function resetPluginRuntimeStateForTest(): void {
   state.activeVersion += 1;
   installSurfaceRegistry(state.httpRoute, null, false);
   installSurfaceRegistry(state.channel, null, false);
+  installSurfaceRegistry(state.gatewayRuntime, null, false);
   state.key = null;
   state.workspaceDir = null;
   state.runtimeSubagentMode = "default";
