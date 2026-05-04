@@ -277,7 +277,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${PREFLIGHT_RUN_ID}" ]]; then
-            echo "No npm preflight run id supplied; direct core npm publish path selected."
+            echo "Real publish requires preflight_run_id from a successful npm preflight run." >&2
+            exit 1
           fi
 
   publish_openclaw_npm:
@@ -337,7 +338,6 @@ jobs:
           echo "Publishing openclaw@${PACKAGE_VERSION}"
 
       - name: Verify preflight run metadata
-        if: ${{ inputs.preflight_run_id != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
@@ -348,7 +348,6 @@ jobs:
           printf '%s' "$RUN_JSON" | node -e 'const fs = require("node:fs"); const run = JSON.parse(fs.readFileSync(0, "utf8")); const checks = [["workflowName", "OpenClaw NPM Release"], ["headBranch", process.env.EXPECTED_PREFLIGHT_BRANCH], ["event", "workflow_dispatch"], ["conclusion", "success"]]; for (const [key, expected] of checks) { if (run[key] !== expected) { console.error(`Referenced npm preflight run ${process.env.PREFLIGHT_RUN_ID} must have ${key}=${expected}, got ${run[key] ?? "<missing>"}.`); process.exit(1); } } console.log(`Using npm preflight run ${process.env.PREFLIGHT_RUN_ID}: ${run.url}`);'
 
       - name: Download prepared npm tarball
-        if: ${{ inputs.preflight_run_id != '' }}
         uses: actions/download-artifact@v8
         with:
           name: openclaw-npm-preflight-${{ inputs.tag }}
@@ -374,7 +373,6 @@ jobs:
           pnpm release:openclaw:npm:check
 
       - name: Verify prepared tarball provenance
-        if: ${{ inputs.preflight_run_id != '' }}
         env:
           RELEASE_TAG: ${{ inputs.tag }}
           RELEASE_NPM_DIST_TAG: ${{ inputs.npm_dist_tag }}
@@ -406,7 +404,6 @@ jobs:
           fi
 
       - name: Resolve publish tarball
-        if: ${{ inputs.preflight_run_id != '' }}
         id: publish_tarball
         run: |
           set -euo pipefail
@@ -418,14 +415,6 @@ jobs:
           fi
           echo "path=$TARBALL_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Build direct publish payload
-        if: ${{ inputs.preflight_run_id == '' }}
-        run: |
-          set -euo pipefail
-          pnpm build
-          pnpm ui:build
-          node --import tsx scripts/write-package-dist-inventory.ts
-
       - name: Publish
         env:
           OPENCLAW_PREPACK_PREPARED: "1"
@@ -436,7 +425,5 @@ jobs:
           publish_target="${PUBLISH_TARBALL_PATH}"
           if [[ -n "${publish_target}" ]]; then
             publish_target="./${publish_target}"
-            bash scripts/openclaw-npm-publish.sh --publish "${publish_target}"
-          else
-            npm publish --access public --tag "${OPENCLAW_NPM_PUBLISH_TAG}" --provenance --ignore-scripts
           fi
+          bash scripts/openclaw-npm-publish.sh --publish "${publish_target}"
