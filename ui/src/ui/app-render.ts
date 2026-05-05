@@ -3,6 +3,7 @@ import { styleMap } from "lit/directives/style-map.js";
 import { t } from "../i18n/index.ts";
 import { getSafeLocalStorage } from "../local-storage.ts";
 import { hasAbortableSessionRun, refreshChat } from "./app-chat.ts";
+import { renderCapabilityInspector, renderCockpitSessionRail } from "./app-cockpit.ts";
 import { DEFAULT_CRON_FORM } from "./app-defaults.ts";
 import { renderUsageTab } from "./app-render-usage-tab.ts";
 import {
@@ -1332,9 +1333,11 @@ export function renderApp(state: AppViewState) {
     <div
       class="shell ${isChat ? "shell--chat" : ""} ${chatFocus
         ? "shell--chat-focus"
-        : ""} ${navCollapsed ? "shell--nav-collapsed" : ""} ${navDrawerOpen
-        ? "shell--nav-drawer-open"
-        : ""} ${state.onboarding ? "shell--onboarding" : ""}"
+        : ""} ${state.onboarding ? "" : "shell--cockpit"} ${navCollapsed
+        ? "shell--nav-collapsed"
+        : ""} ${navDrawerOpen ? "shell--nav-drawer-open" : ""} ${state.onboarding
+        ? "shell--onboarding"
+        : ""}"
       style=${styleMap(
         state.chatMessageMaxWidth ? { "--chat-message-max-width": state.chatMessageMaxWidth } : {},
       )}
@@ -1427,6 +1430,7 @@ export function renderApp(state: AppViewState) {
             </div>
             <div class="sidebar-shell__body">
               <nav class="sidebar-nav">
+                ${renderCockpitSessionRail(state, navCollapsed)}
                 ${TAB_GROUPS.map((group) => {
                   const isGroupCollapsed = state.settings.navGroupsCollapsed[group.label] ?? false;
                   const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
@@ -1504,6 +1508,7 @@ export function renderApp(state: AppViewState) {
           </div>
         </aside>
       </div>
+      ${state.onboarding ? nothing : renderCapabilityInspector(state)}
       <main class="content ${isChat ? "content--chat" : ""}">
         ${state.updateStatusBanner
           ? html`<div class="callout ${state.updateStatusBanner.tone}" role="alert">

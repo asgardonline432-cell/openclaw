@@ -266,6 +266,52 @@ It should include `broker.url`, `broker.token`, and usually `provider: aws`
 for owned-cloud lanes. Do not let that config override the OpenClaw default
 when Blacksmith proof is requested; pass `--provider blacksmith-testbox`.
 
+### OpenClaw Control UI WebVNC
+
+When Peter asks to show the OpenClaw app UI in a Crabbox desktop/WebVNC session,
+keep the OpenClaw setup as agent-local ceremony and delegate the generic desktop
+bridge to Crabbox:
+
+```sh
+lease=<lease-slug-or-id>
+
+# If no lease exists yet:
+../crabbox/bin/crabbox warmup --provider aws --target linux --desktop --browser \
+  --class beast --market on-demand --idle-timeout 90m --ttl 240m --timing-json
+
+../crabbox/bin/crabbox run --provider aws --target linux --id "$lease" \
+  --desktop --browser --keep --idle-timeout 90m --ttl 240m --timing-json \
+  --shell -- 'set -euxo pipefail
+if ! command -v node >/dev/null || ! node -e "process.exit(Number(process.versions.node.split(\".\")[0]) >= 22 ? 0 : 1)"; then
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+  sudo apt-get install -y nodejs
+fi
+sudo apt-get update
+sudo apt-get install -y build-essential python3
+sudo corepack enable
+corepack prepare pnpm@10.33.2 --activate
+pnpm install --frozen-lockfile
+pnpm --dir ui build
+if [ -f /tmp/openclaw-ui.pid ] && kill -0 "$(cat /tmp/openclaw-ui.pid)" 2>/dev/null; then
+  kill "$(cat /tmp/openclaw-ui.pid)" || true
+fi
+nohup pnpm --dir ui dev --host 0.0.0.0 --port 3001 > /tmp/openclaw-ui.log 2>&1 &
+echo $! > /tmp/openclaw-ui.pid
+for _ in $(seq 1 90); do
+  curl -fsS http://127.0.0.1:3001/ >/tmp/openclaw-ui.html && exit 0
+  sleep 1
+done
+tail -80 /tmp/openclaw-ui.log >&2 || true
+exit 1'
+
+../crabbox/bin/crabbox desktop launch --provider aws --target linux --id "$lease" \
+  --browser --url http://127.0.0.1:3001/ --webvnc --open
+```
+
+Do not add an OpenClaw-specific helper under repo `scripts/` for this. If the
+demo needs a connected app, start a throwaway gateway inside the Crabbox lease;
+do not touch Peter's Mac Studio gateway unless he explicitly asks.
+
 ## Diagnostics
 
 ```sh
