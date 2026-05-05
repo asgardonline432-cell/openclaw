@@ -1,0 +1,10 @@
+{
+  "input": "/home/runner/work/openclaw/openclaw/.artifacts/qa-e2e/mantis/slack-desktop-smoke-worktrees/candidate/.artifacts/qa-e2e/mantis/slack-desktop-smoke/slack-desktop-smoke.mp4",
+  "output": "/home/runner/work/openclaw/openclaw/.artifacts/qa-e2e/mantis/slack-desktop-smoke-worktrees/candidate/.artifacts/qa-e2e/mantis/slack-desktop-smoke/slack-desktop-smoke-preview.gif",
+  "trimmedVideoOutput": "/home/runner/work/openclaw/openclaw/.artifacts/qa-e2e/mantis/slack-desktop-smoke-worktrees/candidate/.artifacts/qa-e2e/mantis/slack-desktop-smoke/slack-desktop-smoke-change.mp4",
+  "sourceDurationSeconds": 45,
+  "previewStartSeconds": 0,
+  "previewDurationSeconds": 2.417,
+  "trimmedStaticEdges": true,
+  "detectedFreezeIntervals": 2
+}

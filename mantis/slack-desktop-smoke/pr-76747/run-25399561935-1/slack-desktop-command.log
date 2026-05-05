@@ -1,0 +1,776 @@
+remote pwd: /work/crabbox/cbx_f577c8d30431/candidate
+Scope: all 125 workspace projects
+Lockfile is up to date, resolution step is skipped
+Packages: +1291
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 0, reused 0, downloaded 1, added 0
+Progress: resolved 0, reused 0, downloaded 498, added 472
+Packages are hard linked from the content-addressable store to the virtual store.
+  Content-addressable store is at: /var/cache/crabbox/pnpm/v10
+  Virtual store is at:             node_modules/.pnpm
+Progress: resolved 0, reused 0, downloaded 1016, added 710
+Progress: resolved 0, reused 0, downloaded 1240, added 1250
+Progress: resolved 0, reused 0, downloaded 1244, added 1291, done
+node_modules/protobufjs postinstall$ node scripts/postinstall
+node_modules/esbuild postinstall$ node install.js
+node_modules/protobufjs postinstall: Done
+node_modules/@discordjs/opus install$ node-pre-gyp install --fallback-to-build
+node_modules/esbuild postinstall: Done
+node_modules/sharp install$ node install/check.js || npm run build
+node_modules/@discordjs/opus install: node-pre-gyp info it worked if it ends with ok
+node_modules/@discordjs/opus install: node-pre-gyp info using node-pre-gyp@0.4.5
+node_modules/@discordjs/opus install: node-pre-gyp info using node@22.22.2 | linux | x64
+node_modules/@discordjs/opus install: (node:9215) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+node_modules/@discordjs/opus install: (Use `node --trace-deprecation ...` to show where the warning was created)
+node_modules/@discordjs/opus install: node-pre-gyp info check checked for "/work/crabbox/cbx_f577c8d30431/candidate/node_modules/@discordjs/opus/prebuild/node-v127-napi-v3-linux-x64-glibc-2.39/opus.node" (not found)
+node_modules/@discordjs/opus install: node-pre-gyp http GET https://github.com/discordjs/opus/releases/download/v0.10.0/opus-v0.10.0-node-v127-napi-v3-linux-x64-glibc-2.39.tar.gz
+node_modules/@tloncorp/tlon-skill postinstall$ node scripts/postinstall.js
+node_modules/sharp install: Done
+.../@matrix-org/matrix-sdk-crypto-nodejs postinstall$ node download-lib.js
+node_modules/@tloncorp/tlon-skill postinstall: [tlon-skill] Binary ready: /work/crabbox/cbx_f577c8d30431/candidate/node_modules/@tloncorp/tlon-skill-linux-x64/tlon
+node_modules/@discordjs/opus install: node-pre-gyp ERR! install response status 404 Not Found on https://github.com/discordjs/opus/releases/download/v0.10.0/opus-v0.10.0-node-v127-napi-v3-linux-x64-glibc-2.39.tar.gz 
+node_modules/@discordjs/opus install: node-pre-gyp WARN Pre-built binaries not installable for @discordjs/opus@0.10.0 and node@22.22.2 (node-v127 ABI, glibc) (falling back to source compile with node-gyp) 
+node_modules/@discordjs/opus install: node-pre-gyp WARN Hit error response status 404 Not Found on https://github.com/discordjs/opus/releases/download/v0.10.0/opus-v0.10.0-node-v127-napi-v3-linux-x64-glibc-2.39.tar.gz 
+node_modules/@discordjs/opus install: gyp info it worked if it ends with ok
+node_modules/@discordjs/opus install: gyp info using node-gyp@11.5.0
+node_modules/@discordjs/opus install: gyp info using node@22.22.2 | linux | x64
+node_modules/@discordjs/opus install: gyp info ok 
+node_modules/@tloncorp/tlon-skill postinstall: Done
+node_modules/@discordjs/opus install: gyp info it worked if it ends with ok
+node_modules/@discordjs/opus install: gyp info using node-gyp@11.5.0
+node_modules/@discordjs/opus install: gyp info using node@22.22.2 | linux | x64
+.../@matrix-org/matrix-sdk-crypto-nodejs postinstall: Downloading lib matrix-sdk-crypto.linux-x64-gnu.node from https://github.com/matrix-org/matrix-rust-sdk-crypto-nodejs/releases/download/v0.5.1/matrix-sdk-crypto.linux-x64-gnu.node
+node_modules/@discordjs/opus install: gyp info find Python using Python version 3.12.3 found at "/usr/bin/python3"
+node_modules/@discordjs/opus install: gyp http GET https://nodejs.org/download/release/v22.22.2/node-v22.22.2-headers.tar.gz
+node_modules/@discordjs/opus install: gyp http 200 https://nodejs.org/download/release/v22.22.2/node-v22.22.2-headers.tar.gz
+.../@matrix-org/matrix-sdk-crypto-nodejs postinstall: Download Completed
+.../@matrix-org/matrix-sdk-crypto-nodejs postinstall: Done
+node_modules/@discordjs/opus install: gyp http GET https://nodejs.org/download/release/v22.22.2/SHASUMS256.txt
+node_modules/@discordjs/opus install: gyp http 200 https://nodejs.org/download/release/v22.22.2/SHASUMS256.txt
+node_modules/@discordjs/opus install: gyp info spawn /usr/bin/python3
+node_modules/@discordjs/opus install: gyp info spawn args [
+node_modules/@discordjs/opus install: gyp info spawn args '/home/crabbox/.cache/node/corepack/v1/pnpm/10.33.2/dist/node_modules/node-gyp/gyp/gyp_main.py',
+node_modules/@discordjs/opus install: gyp info spawn args 'binding.gyp',
+node_modules/@discordjs/opus install: gyp info spawn args '-f',
+node_modules/@discordjs/opus install: gyp info spawn args 'make',
+node_modules/@discordjs/opus install: gyp info spawn args '-I',
+node_modules/@discordjs/opus install: gyp info spawn args '/work/crabbox/cbx_f577c8d30431/candidate/node_modules/@discordjs/opus/build/config.gypi',
+node_modules/@discordjs/opus install: gyp info spawn args '-I',
+node_modules/@discordjs/opus install: gyp info spawn args '/home/crabbox/.cache/node/corepack/v1/pnpm/10.33.2/dist/node_modules/node-gyp/addon.gypi',
+node_modules/@discordjs/opus install: gyp info spawn args '-I',
+node_modules/@discordjs/opus install: gyp info spawn args '/home/crabbox/.cache/node-gyp/22.22.2/include/node/common.gypi',
+node_modules/@discordjs/opus install: gyp info spawn args '-Dlibrary=shared_library',
+node_modules/@discordjs/opus install: gyp info spawn args '-Dvisibility=default',
+node_modules/@discordjs/opus install: gyp info spawn args '-Dnode_root_dir=/home/crabbox/.cache/node-gyp/22.22.2',
+node_modules/@discordjs/opus install: gyp info spawn args '-Dnode_gyp_dir=/home/crabbox/.cache/node/corepack/v1/pnpm/10.33.2/dist/node_modules/node-gyp',
+node_modules/@discordjs/opus install: gyp info spawn args '-Dnode_lib_file=/home/crabbox/.cache/node-gyp/22.22.2/<(target_arch)/node.lib',
+node_modules/@discordjs/opus install: gyp info spawn args '-Dmodule_root_dir=/work/crabbox/cbx_f577c8d30431/candidate/node_modules/@discordjs/opus',
+node_modules/@discordjs/opus install: gyp info spawn args '-Dnode_engine=v8',
+node_modules/@discordjs/opus install: gyp info spawn args '--depth=.',
+node_modules/@discordjs/opus install: gyp info spawn args '--no-parallel',
+node_modules/@discordjs/opus install: gyp info spawn args '--generator-output',
+node_modules/@discordjs/opus install: gyp info spawn args 'build',
+node_modules/@discordjs/opus install: gyp info spawn args '-Goutput_dir=.'
+node_modules/@discordjs/opus install: gyp info spawn args ]
+node_modules/@discordjs/opus install: <string>:43: SyntaxWarning: invalid escape sequence '\$'
+node_modules/@discordjs/opus install: gyp info ok 
+node_modules/@discordjs/opus install: gyp info it worked if it ends with ok
+node_modules/@discordjs/opus install: gyp info using node-gyp@11.5.0
+node_modules/@discordjs/opus install: gyp info using node@22.22.2 | linux | x64
+node_modules/@discordjs/opus install: gyp info spawn make
+node_modules/@discordjs/opus install: gyp info spawn args [ 'BUILDTYPE=Release', '-C', 'build' ]
+node_modules/@discordjs/opus install: make: Entering directory '/work/crabbox/cbx_f577c8d30431/candidate/node_modules/@discordjs/opus/build'
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_multistream.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_projection_encoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/analysis.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/mlp_data.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_multistream_encoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_projection_decoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/mapping_matrix.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_compare.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/mlp.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_multistream_decoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_decoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/repacketizer.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/src/opus_encoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/decode_frame.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/inner_product_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/scale_vector_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/find_pred_coefs_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/schur_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/warped_autocorrelation_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/burg_modified_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/find_LPC_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/LPC_inv_pred_gain_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/scale_copy_vector_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/noise_shape_analysis_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/pitch_analysis_core_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/bwexpander_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/LTP_analysis_filter_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/LTP_scale_ctrl_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/corrMatrix_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/encode_frame_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/sort_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/find_pitch_lags_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/residual_energy_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/LPC_analysis_filter_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/autocorrelation_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/k2a_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/regularize_correlations_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/find_LTP_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/energy_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/apply_sine_window_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/wrappers_FLP.o
+node_modules/@discordjs/opus install: In file included from ../deps/opus/silk/float/structs_FLP.h:32,
+node_modules/@discordjs/opus install:                  from ../deps/opus/silk/float/main_FLP.h:33,
+node_modules/@discordjs/opus install:                  from ../deps/opus/silk/float/wrappers_FLP.c:32:
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c: In function ‘silk_NSQ_wrapper_FLP’:
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: warning: ‘silk_NSQ_del_dec_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 6 of type ‘const opus_int16[32]’ {aka ‘const short int[32]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 7 of type ‘const opus_int16[20]’ {aka ‘const short int[20]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 8 of type ‘const opus_int16[96]’ {aka ‘const short int[96]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 9 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 10 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 11 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 12 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 13 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:164:9: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:275:6: note: in a call to function ‘silk_NSQ_del_dec_c’
+node_modules/@discordjs/opus install:   275 | void silk_NSQ_del_dec_c(
+node_modules/@discordjs/opus install:       |      ^~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: warning: ‘silk_NSQ_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 6 of type ‘const opus_int16[32]’ {aka ‘const short int[32]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 7 of type ‘const opus_int16[20]’ {aka ‘const short int[20]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 8 of type ‘const opus_int16[96]’ {aka ‘const short int[96]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 9 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 10 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 11 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 12 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 13 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/float/wrappers_FLP.c:167:9: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+node_modules/@discordjs/opus install:       |         ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:249:6: note: in a call to function ‘silk_NSQ_c’
+node_modules/@discordjs/opus install:   249 | void silk_NSQ_c(
+node_modules/@discordjs/opus install:       |      ^~~~~~~~~~
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/float/process_gains_FLP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/stereo_quant_pred.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/LPC_inv_pred_gain.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/process_NLSFs.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NSQ.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/check_control_input.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF_del_dec_quant.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/LPC_analysis_filter.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/dec_API.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/sort.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/VAD.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler_private_AR2.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/LPC_fit.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/control_SNR.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/decode_parameters.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/pitch_est_tables.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/warped_autocorrelation_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/apply_sine_window_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/residual_energy16_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/schur64_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/residual_energy_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/noise_shape_analysis_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/encode_frame_FIX.o
+node_modules/@discordjs/opus install: In file included from ../deps/opus/silk/fixed/structs_FIX.h:32,
+node_modules/@discordjs/opus install:                  from ../deps/opus/silk/fixed/main_FIX.h:32,
+node_modules/@discordjs/opus install:                  from ../deps/opus/silk/fixed/encode_frame_FIX.c:33:
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c: In function ‘silk_LBRR_encode_FIX’:
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: warning: ‘silk_NSQ_del_dec_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 6 of type ‘const opus_int16[32]’ {aka ‘const short int[32]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 7 of type ‘const opus_int16[20]’ {aka ‘const short int[20]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 8 of type ‘const opus_int16[96]’ {aka ‘const short int[96]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 9 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 10 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 11 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 12 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 13 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:434:13: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   434 |             silk_NSQ_del_dec( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:275:6: note: in a call to function ‘silk_NSQ_del_dec_c’
+node_modules/@discordjs/opus install:   275 | void silk_NSQ_del_dec_c(
+node_modules/@discordjs/opus install:       |      ^~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: warning: ‘silk_NSQ_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 6 of type ‘const opus_int16[32]’ {aka ‘const short int[32]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 7 of type ‘const opus_int16[20]’ {aka ‘const short int[20]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 8 of type ‘const opus_int16[96]’ {aka ‘const short int[96]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 9 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 10 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 11 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 12 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 13 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:439:13: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   439 |             silk_NSQ( &psEnc->sCmn, &sNSQ_LBRR, psIndices_LBRR, x16,
+node_modules/@discordjs/opus install:       |             ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:249:6: note: in a call to function ‘silk_NSQ_c’
+node_modules/@discordjs/opus install:   249 | void silk_NSQ_c(
+node_modules/@discordjs/opus install:       |      ^~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c: In function ‘silk_encode_frame_FIX’:
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: warning: ‘silk_NSQ_del_dec_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 6 of type ‘const opus_int16[32]’ {aka ‘const short int[32]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 7 of type ‘const opus_int16[20]’ {aka ‘const short int[20]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 8 of type ‘const opus_int16[96]’ {aka ‘const short int[96]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 9 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 10 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 11 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 12 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:296:18: note: referencing argument 13 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   296 |     ((void)(arch),silk_NSQ_del_dec_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   297 |                            HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:201:21: note: in expansion of macro ‘silk_NSQ_del_dec’
+node_modules/@discordjs/opus install:   201 |                     silk_NSQ_del_dec( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:275:6: note: in a call to function ‘silk_NSQ_del_dec_c’
+node_modules/@discordjs/opus install:   275 | void silk_NSQ_del_dec_c(
+node_modules/@discordjs/opus install:       |      ^~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: warning: ‘silk_NSQ_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 6 of type ‘const opus_int16[32]’ {aka ‘const short int[32]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 7 of type ‘const opus_int16[20]’ {aka ‘const short int[20]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 8 of type ‘const opus_int16[96]’ {aka ‘const short int[96]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 9 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 10 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 11 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 12 of type ‘const opus_int32[4]’ {aka ‘const int[4]’}
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:270:18: note: referencing argument 13 of type ‘const int[4]’
+node_modules/@discordjs/opus install:   270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+node_modules/@discordjs/opus install:       |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install:   271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+node_modules/@discordjs/opus install:       |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/fixed/encode_frame_FIX.c:206:21: note: in expansion of macro ‘silk_NSQ’
+node_modules/@discordjs/opus install:   206 |                     silk_NSQ( &psEnc->sCmn, &psEnc->sCmn.sNSQ, &psEnc->sCmn.indices, x_frame, psEnc->sCmn.pulses,
+node_modules/@discordjs/opus install:       |                     ^~~~~~~~
+node_modules/@discordjs/opus install: ../deps/opus/silk/main.h:249:6: note: in a call to function ‘silk_NSQ_c’
+node_modules/@discordjs/opus install:   249 | void silk_NSQ_c(
+node_modules/@discordjs/opus install:       |      ^~~~~~~~~~
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/schur_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/autocorr_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/burg_modified_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/pitch_analysis_core_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/find_LTP_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/find_LPC_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/corrMatrix_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/k2a_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/LTP_scale_ctrl_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/process_gains_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/k2a_Q16_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/regularize_correlations_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/LTP_analysis_filter_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/vector_ops_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/find_pitch_lags_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/fixed/find_pred_coefs_FIX.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/control_audio_bandwidth.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/decoder_set_fs.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF_unpack.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/bwexpander.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler_rom.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/shell_coder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/decode_pulses.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/bwexpander_32.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/decode_core.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/PLC.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/tables_NLSF_CB_WB.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/table_LSF_cos.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/tables_pulses_per_block.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/tables_gain.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/inner_prod_aligned.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler_down2_3.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NSQ_del_dec.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/decode_pitch.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF_VQ_weights_laroia.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/interpolate.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/debug.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/tables_other.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/LP_variable_cutoff.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF_decode.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/encode_pulses.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/control_codec.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/stereo_LR_to_MS.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/HP_variable_cutoff.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/encode_indices.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/init_decoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/stereo_encode_pred.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF_VQ.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/init_encoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler_private_IIR_FIR.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler_private_up2_HQ.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/sigm_Q15.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/sum_sqr_shift.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/tables_LTP.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler_down2.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/code_signs.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/tables_NLSF_CB_NB_MB.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/gain_quant.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/tables_pitch_lag.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF_stabilize.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/stereo_find_predictor.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/A2NLSF.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF2A.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/VQ_WMat_EC.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/NLSF_encode.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/log2lin.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/stereo_decode_pred.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/lin2log.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/CNG.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/enc_API.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/biquad_alt.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/quant_LTP_gains.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/resampler_private_down_FIR.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/ana_filt_bank_1.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/stereo_MS_to_LR.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/silk/decode_indices.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/rate.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/entdec.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/modes.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/celt_lpc.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/laplace.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/cwrs.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/celt.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/entcode.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/celt_decoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/celt_encoder.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/mdct.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/quant_bands.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/vq.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/bands.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/kiss_fft.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/entenc.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/mathops.o
+node_modules/@discordjs/opus install:   CC(target) Release/obj.target/libopus/deps/opus/celt/pitch.o
+node_modules/@discordjs/opus install: rm -f Release/obj.target/deps/opus.a Release/obj.target/deps/opus.a.ar-file-list; mkdir -p `dirname Release/obj.target/deps/opus.a`
+node_modules/@discordjs/opus install: ar crs Release/obj.target/deps/opus.a @Release/obj.target/deps/opus.a.ar-file-list
+node_modules/@discordjs/opus install:   COPY Release/opus.a
+node_modules/@discordjs/opus install:   CXX(target) Release/obj.target/opus/src/node-opus.o
+node_modules/@discordjs/opus install: <command-line>: warning: ISO C++11 requires whitespace after the macro name
+node_modules/@discordjs/opus install:   SOLINK_MODULE(target) /work/crabbox/cbx_f577c8d30431/candidate/node_modules/@discordjs/opus/prebuild/node-v127-napi-v3-linux-x64-glibc-2.39/opus.node
+node_modules/@discordjs/opus install:   COPY Release/opus.node
+node_modules/@discordjs/opus install: make: Leaving directory '/work/crabbox/cbx_f577c8d30431/candidate/node_modules/@discordjs/opus/build'
+node_modules/@discordjs/opus install: gyp info ok 
+node_modules/@discordjs/opus install: node-pre-gyp info ok 
+node_modules/@discordjs/opus install: Done
+node_modules/@google/genai preinstall$ echo 'preinstall: no-op'
+node_modules/@google/genai preinstall: preinstall: no-op
+node_modules/@google/genai preinstall: Done
+node_modules/@whiskeysockets/baileys preinstall$ node ./engine-requirements.js
+node_modules/@whiskeysockets/baileys preinstall: Done
+
+. preinstall$ node scripts/preinstall-package-manager-warning.mjs
+. preinstall: Done
+. postinstall$ node scripts/postinstall-bundled-plugins.mjs
+. postinstall: Done
+. prepare$ command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0
+. prepare: Done
+Done in 27.6s using pnpm v10.33.2
+
+> openclaw@2026.5.5 build /work/crabbox/cbx_f577c8d30431/candidate
+> node scripts/build-all.mjs
+
+[build-all] canvas:a2ui:bundle
+
+> openclaw@2026.5.5 canvas:a2ui:bundle /work/crabbox/cbx_f577c8d30431/candidate
+> node scripts/bundle-a2ui.mjs
+
+A2UI bundle up to date; skipping.
+[build-all] tsdown
+[build-all] check-cli-bootstrap-imports
+CLI bootstrap import guard passed.
+[build-all] runtime-postbuild
+runtime-postbuild: plugin SDK root alias completed in 0ms
+runtime-postbuild: bundled plugin metadata completed in 112ms
+runtime-postbuild: official channel catalog completed in 3ms
+runtime-postbuild: bundled plugin runtime overlay completed in 96ms
+runtime-postbuild: stable root runtime imports completed in 178ms
+runtime-postbuild: stable root runtime aliases completed in 31ms
+runtime-postbuild: legacy root runtime compat aliases completed in 3ms
+runtime-postbuild: legacy CLI exit compat chunks completed in 0ms
+runtime-postbuild: static extension assets completed in 10ms
+[build-all] build-stamp
+[build-all] runtime-postbuild-stamp
+[build-all] build:plugin-sdk:dts
+
+> openclaw@2026.5.5 build:plugin-sdk:dts /work/crabbox/cbx_f577c8d30431/candidate
+> node scripts/run-tsgo.mjs -p tsconfig.plugin-sdk.dts.json --declaration true
+
+[build-all] write-plugin-sdk-entry-dts
+[build-all] check-plugin-sdk-exports
+OK: All 4 required plugin-sdk exports verified.
+[build-all] canvas-a2ui-copy
+[build-all] copy-hook-metadata
+[copy-hook-metadata] Copied 5 hook metadata files.
+[build-all] copy-export-html-templates
+[copy-export-html-templates] Copied 5 export-html assets.
+[build-all] write-build-info
+[build-all] write-cli-startup-metadata
+[build-all] write-cli-compat
+
+> openclaw@2026.5.5 openclaw /work/crabbox/cbx_f577c8d30431/candidate
+> node scripts/run-node.mjs config patch --file /tmp/openclaw-mantis-slack-desktop-2026-05-05T20-14-17-731Z/slack.socket.patch.json5 --dry-run
+
+Dry run successful: 13 update(s) validated against $OPENCLAW_HOME/.openclaw/openclaw.json.
+
+> openclaw@2026.5.5 openclaw /work/crabbox/cbx_f577c8d30431/candidate
+> node scripts/run-node.mjs config patch --file /tmp/openclaw-mantis-slack-desktop-2026-05-05T20-14-17-731Z/slack.socket.patch.json5
+
+Applied 13 config update(s). Restart the gateway to apply.

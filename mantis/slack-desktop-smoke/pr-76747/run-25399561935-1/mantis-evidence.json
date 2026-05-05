@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "id": "slack-desktop-smoke",
+  "title": "Mantis Slack Desktop Smoke QA",
+  "summary": "Mantis ran Slack QA inside a Crabbox Linux VNC desktop, started an OpenClaw Slack gateway in that VM, opened Slack Web in the visible browser, and captured screenshot/video evidence.",
+  "scenario": "slack-canary",
+  "comparison": {
+    "candidate": {
+      "sha": "26bc40c1a4f2736d88aa3b068c3cea25b989c914",
+      "expected": "Slack QA and VM gateway setup pass",
+      "status": "pass",
+      "fixed": true
+    },
+    "pass": true
+  },
+  "artifacts": [
+    {
+      "kind": "desktopScreenshot",
+      "lane": "candidate",
+      "label": "Slack desktop/VNC browser",
+      "path": "slack-desktop-smoke.png",
+      "targetPath": "slack-desktop.png",
+      "alt": "Slack Web desktop screenshot from the Mantis VM",
+      "width": 720,
+      "inline": true,
+      "required": true
+    },
+    {
+      "kind": "motionPreview",
+      "lane": "candidate",
+      "label": "Slack motion preview",
+      "path": "slack-desktop-smoke-preview.gif",
+      "targetPath": "slack-desktop-preview.gif",
+      "alt": "Animated Slack desktop preview",
+      "width": 720,
+      "inline": true,
+      "required": false
+    },
+    {
+      "kind": "motionClip",
+      "lane": "candidate",
+      "label": "Slack change MP4",
+      "path": "slack-desktop-smoke-change.mp4",
+      "targetPath": "slack-desktop-change.mp4",
+      "required": false
+    },
+    {
+      "kind": "fullVideo",
+      "lane": "candidate",
+      "label": "Slack desktop MP4",
+      "path": "slack-desktop-smoke.mp4",
+      "targetPath": "slack-desktop.mp4",
+      "required": false
+    },
+    {
+      "kind": "metadata",
+      "lane": "run",
+      "label": "Slack desktop summary",
+      "path": "mantis-slack-desktop-smoke-summary.json",
+      "targetPath": "summary.json"
+    },
+    {
+      "kind": "report",
+      "lane": "run",
+      "label": "Slack desktop report",
+      "path": "mantis-slack-desktop-smoke-report.md",
+      "targetPath": "report.md"
+    },
+    {
+      "kind": "metadata",
+      "lane": "run",
+      "label": "Slack command log",
+      "path": "slack-desktop-command.log",
+      "targetPath": "slack-desktop-command.log",
+      "required": false
+    },
+    {
+      "kind": "metadata",
+      "lane": "run",
+      "label": "Slack preview metadata",
+      "path": "slack-desktop-smoke-preview.json",
+      "targetPath": "slack-desktop-preview.json",
+      "required": false
+    },
+    {
+      "kind": "metadata",
+      "lane": "run",
+      "label": "Slack error",
+      "path": "error.txt",
+      "targetPath": "error.txt",
+      "required": false
+    }
+  ]
+}
