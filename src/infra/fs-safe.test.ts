@@ -1,3 +1,4 @@
+import type { PathLike } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -448,25 +449,19 @@ describe("fs-safe", () => {
   );
 
   it.runIf(process.platform !== "win32")(
-    "rejects final symlink stat targets outside root before invoking the pinned helper",
+    "rejects final symlink stat targets outside root through the pinned helper",
     async () => {
       const root = await tempDirs.make("openclaw-fs-safe-root-");
       const outside = await tempDirs.make("openclaw-fs-safe-outside-");
       await fs.writeFile(path.join(outside, "secret.txt"), "secret");
       await fs.symlink(path.join(outside, "secret.txt"), path.join(root, "link.txt"));
-      const runPinnedPathHelperSpy = vi.spyOn(pinnedPathHelperModule, "runPinnedPathHelper");
 
-      try {
-        await expect(
-          statPathWithinRoot({
-            rootDir: root,
-            relativePath: "link.txt",
-          }),
-        ).rejects.toMatchObject({ code: "invalid-path" });
-        expect(runPinnedPathHelperSpy).not.toHaveBeenCalled();
-      } finally {
-        runPinnedPathHelperSpy.mockRestore();
-      }
+      await expect(
+        statPathWithinRoot({
+          rootDir: root,
+          relativePath: "link.txt",
+        }),
+      ).rejects.toMatchObject({ code: "invalid-path" });
     },
   );
 
@@ -893,6 +888,46 @@ describe("fs-safe", () => {
   );
 
   it.runIf(process.platform !== "win32")(
+    "does not path-lstat stat targets before the pinned stat helper",
+    async () => {
+      const root = await tempDirs.make("openclaw-fs-safe-root-");
+      const outside = await tempDirs.make("openclaw-fs-safe-outside-");
+      const slot = path.join(root, "slot");
+      const targetPath = path.join(slot, "safe.txt");
+      await fs.mkdir(slot, { recursive: true });
+      await fs.writeFile(targetPath, "safe");
+      await fs.writeFile(path.join(outside, "safe.txt"), "secret");
+
+      const originalLstat: typeof fs.lstat = fs.lstat.bind(fs);
+      let targetPathLstat = false;
+      const lstatSpy = vi
+        .spyOn(fs, "lstat")
+        .mockImplementation(async (...args: Parameters<typeof fs.lstat>) => {
+          const [target] = args as [PathLike, ...unknown[]];
+          if (path.resolve(String(target)) === targetPath) {
+            targetPathLstat = true;
+            await fs.rm(slot, { force: true, recursive: true });
+            await fs.symlink(outside, slot);
+          }
+          return await originalLstat(...args);
+        });
+
+      try {
+        await expect(
+          statPathWithinRoot({
+            rootDir: root,
+            relativePath: path.join("slot", "safe.txt"),
+            followSymlinks: false,
+          }),
+        ).resolves.toMatchObject({ exists: true, kind: "file", size: 4 });
+        expect(targetPathLstat).toBe(false);
+      } finally {
+        lstatSpy.mockRestore();
+      }
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
     "does not stat raced final symlinks outside root when following symlinks",
     async () => {
       const root = await tempDirs.make("openclaw-fs-safe-root-");
@@ -921,7 +956,7 @@ describe("fs-safe", () => {
             rootDir: root,
             relativePath: "link.txt",
           }),
-        ).rejects.toMatchObject({ code: "outside-workspace" });
+        ).rejects.toMatchObject({ code: "invalid-path" });
       } finally {
         runPinnedPathHelperSpy.mockRestore();
       }
