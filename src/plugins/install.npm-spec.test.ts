@@ -257,6 +257,19 @@ function mockNpmViewAndInstallMany(packages: MockNpmPackage[]) {
       }
       if (argv[0] === "npm" && argv[1] === "uninstall") {
         const packageName = argv.at(-1);
+        if (packageName === "openclaw") {
+          const prefixIndex = argv.indexOf("--prefix");
+          const prefixValue = prefixIndex >= 0 ? argv[prefixIndex + 1] : undefined;
+          const npmRoot = prefixValue === "." ? options?.cwd : prefixValue;
+          if (!npmRoot) {
+            throw new Error(`unexpected npm uninstall command: ${argv.join(" ")}`);
+          }
+          fs.rmSync(path.join(npmRoot, "node_modules", "openclaw"), {
+            recursive: true,
+            force: true,
+          });
+          return successfulSpawn();
+        }
         const pkg = packageName ? packagesByName.get(packageName) : undefined;
         if (!pkg) {
           throw new Error(`unexpected npm uninstall package: ${packageName ?? ""}`);

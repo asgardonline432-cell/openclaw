@@ -1337,7 +1337,11 @@ export async function installPluginFromNpmSpec(
 
   logger.info?.(`Installing ${spec} into ${npmRoot}…`);
   if (parsedSpec.name !== "openclaw") {
-    const repairedOpenClawPeer = await repairManagedNpmRootOpenClawPeer({ npmRoot });
+    const repairedOpenClawPeer = await repairManagedNpmRootOpenClawPeer({
+      npmRoot,
+      timeoutMs,
+      logger,
+    });
     if (repairedOpenClawPeer) {
       logger.info?.(`Repaired stale openclaw peer dependency in ${npmRoot}`);
     }

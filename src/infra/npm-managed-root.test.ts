@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   repairManagedNpmRootOpenClawPeer,
   removeManagedNpmRootDependency,
@@ -11,6 +11,15 @@ import {
 } from "./npm-managed-root.js";
 
 const tempDirs: string[] = [];
+
+const successfulSpawn = {
+  code: 0,
+  stdout: "",
+  stderr: "",
+  signal: null,
+  killed: false,
+  termination: "exit" as const,
+};
 
 async function makeTempRoot(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-npm-managed-root-"));
@@ -219,8 +228,40 @@ describe("managed npm root", () => {
       path.join(npmRoot, "node_modules", "openclaw", "package.json"),
       `${JSON.stringify({ name: "openclaw", version: "2026.5.4" })}\n`,
     );
+    await fs.writeFile(
+      path.join(npmRoot, "node_modules", ".package-lock.json"),
+      `${JSON.stringify(
+        {
+          lockfileVersion: 3,
+          packages: {
+            "node_modules/openclaw": {
+              version: "2026.5.4",
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
 
-    await expect(repairManagedNpmRootOpenClawPeer({ npmRoot })).resolves.toBe(true);
+    const runCommand = vi.fn().mockResolvedValue(successfulSpawn);
+    await expect(repairManagedNpmRootOpenClawPeer({ npmRoot, runCommand })).resolves.toBe(true);
+    expect(runCommand).toHaveBeenCalledWith(
+      [
+        "npm",
+        "uninstall",
+        "--loglevel=error",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--prefix",
+        ".",
+        "openclaw",
+      ],
+      expect.objectContaining({
+        cwd: npmRoot,
+      }),
+    );
 
     const manifest = JSON.parse(await fs.readFile(path.join(npmRoot, "package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
@@ -241,6 +282,11 @@ describe("managed npm root", () => {
     expect(lockfile.packages?.["node_modules/@openclaw/discord"]?.version).toBe("2026.5.4");
     expect(lockfile.dependencies?.openclaw).toBeUndefined();
     await expect(fs.lstat(path.join(npmRoot, "node_modules", "openclaw"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(
+      fs.lstat(path.join(npmRoot, "node_modules", ".package-lock.json")),
+    ).rejects.toMatchObject({
       code: "ENOENT",
     });
   });

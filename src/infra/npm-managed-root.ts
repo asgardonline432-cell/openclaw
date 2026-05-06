@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { runCommandWithTimeout } from "../process/exec.js";
 import type { NpmSpecResolution } from "./install-source-utils.js";
 import type { ParsedRegistryNpmSpec } from "./npm-registry-spec.js";
+import { createSafeNpmInstallEnv } from "./safe-package-install.js";
 
 type ManagedNpmRootManifest = {
   private?: boolean;
@@ -20,6 +22,12 @@ type ManagedNpmRootLockfile = {
   dependencies?: Record<string, unknown>;
   [key: string]: unknown;
 };
+
+type ManagedNpmRootLogger = {
+  warn?: (message: string) => void;
+};
+
+type ManagedNpmRootRunCommand = typeof runCommandWithTimeout;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -83,10 +91,105 @@ export async function upsertManagedNpmRootDependency(params: {
 
 export async function repairManagedNpmRootOpenClawPeer(params: {
   npmRoot: string;
+  timeoutMs?: number;
+  logger?: ManagedNpmRootLogger;
+  runCommand?: ManagedNpmRootRunCommand;
 }): Promise<boolean> {
-  let changed = false;
-
   await fs.mkdir(params.npmRoot, { recursive: true });
+
+  const manifestPath = path.join(params.npmRoot, "package.json");
+  const manifest = await readManagedNpmRootManifest(manifestPath);
+  const dependencies = readDependencyRecord(manifest.dependencies);
+  const hasManifestDependency = "openclaw" in dependencies;
+  const hasLockDependency = await managedNpmRootLockfileHasOpenClawPeer(params.npmRoot);
+  const hasPackageDir = await pathExists(path.join(params.npmRoot, "node_modules", "openclaw"));
+  if (!hasManifestDependency && !hasLockDependency && !hasPackageDir) {
+    return false;
+  }
+
+  const command = params.runCommand ?? runCommandWithTimeout;
+  const npmArgs = hasManifestDependency
+    ? [
+        "npm",
+        "uninstall",
+        "--loglevel=error",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--prefix",
+        ".",
+        "openclaw",
+      ]
+    : [
+        "npm",
+        "prune",
+        "--loglevel=error",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--prefix",
+        ".",
+      ];
+  try {
+    const result = await command(npmArgs, {
+      cwd: params.npmRoot,
+      timeoutMs: Math.max(params.timeoutMs ?? 300_000, 300_000),
+      env: createSafeNpmInstallEnv(process.env, { packageLock: true, quiet: true }),
+    });
+    if (result.code !== 0) {
+      params.logger?.warn?.(
+        `npm ${hasManifestDependency ? "uninstall openclaw" : "prune"} failed while repairing managed npm root; falling back to direct cleanup: ${result.stderr.trim() || result.stdout.trim()}`,
+      );
+    }
+  } catch (error) {
+    params.logger?.warn?.(
+      `npm ${hasManifestDependency ? "uninstall openclaw" : "prune"} failed while repairing managed npm root; falling back to direct cleanup: ${String(error)}`,
+    );
+  }
+
+  await scrubManagedNpmRootOpenClawPeer({ npmRoot: params.npmRoot });
+  return true;
+}
+
+async function managedNpmRootLockfileHasOpenClawPeer(npmRoot: string): Promise<boolean> {
+  const lockPath = path.join(npmRoot, "package-lock.json");
+  try {
+    const parsed = JSON.parse(await fs.readFile(lockPath, "utf8")) as ManagedNpmRootLockfile;
+    if (isRecord(parsed.packages)) {
+      const rootPackage = parsed.packages[""];
+      if (
+        isRecord(rootPackage) &&
+        isRecord(rootPackage.dependencies) &&
+        "openclaw" in rootPackage.dependencies
+      ) {
+        return true;
+      }
+      if ("node_modules/openclaw" in parsed.packages) {
+        return true;
+      }
+    }
+    return isRecord(parsed.dependencies) && "openclaw" in parsed.dependencies;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw err;
+  }
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  return await fs
+    .lstat(filePath)
+    .then(() => true)
+    .catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") {
+        return false;
+      }
+      throw err;
+    });
+}
+
+async function scrubManagedNpmRootOpenClawPeer(params: { npmRoot: string }): Promise<void> {
   const manifestPath = path.join(params.npmRoot, "package.json");
   const manifest = await readManagedNpmRootManifest(manifestPath);
   const dependencies = readDependencyRecord(manifest.dependencies);
@@ -97,7 +200,6 @@ export async function repairManagedNpmRootOpenClawPeer(params: {
       `${JSON.stringify({ ...manifest, private: true, dependencies: nextDependencies }, null, 2)}\n`,
       "utf8",
     );
-    changed = true;
   }
 
   const lockPath = path.join(params.npmRoot, "package-lock.json");
@@ -127,7 +229,6 @@ export async function repairManagedNpmRootOpenClawPeer(params: {
     }
     if (lockChanged) {
       await fs.writeFile(lockPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
-      changed = true;
     }
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -136,21 +237,12 @@ export async function repairManagedNpmRootOpenClawPeer(params: {
   }
 
   const openclawPackageDir = path.join(params.npmRoot, "node_modules", "openclaw");
-  const openclawPackageDirExists = await fs
-    .lstat(openclawPackageDir)
-    .then(() => true)
-    .catch((err: NodeJS.ErrnoException) => {
-      if (err.code === "ENOENT") {
-        return false;
-      }
-      throw err;
-    });
-  if (openclawPackageDirExists) {
+  if (await pathExists(openclawPackageDir)) {
     await fs.rm(openclawPackageDir, { recursive: true, force: true });
-    changed = true;
   }
-
-  return changed;
+  await fs.rm(path.join(params.npmRoot, "node_modules", ".package-lock.json"), {
+    force: true,
+  });
 }
 
 export async function readManagedNpmRootInstalledDependency(params: {
