@@ -1,0 +1,17 @@
+{
+  "scenario": "discord-thread-reply-filepath-attachment",
+  "transport": "discord",
+  "pass": true,
+  "baseline": {
+    "ref": "synthetic-reverted-thread-filepath-fix",
+    "status": "fail",
+    "reproduced": true,
+    "expected": "thread reply omits filePath attachment"
+  },
+  "candidate": {
+    "ref": "ad2d13cc678c01115ed2820380b01aa72699f66f",
+    "status": "pass",
+    "fixed": true,
+    "expected": "thread reply includes filePath attachment"
+  }
+}

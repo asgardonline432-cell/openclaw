@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "discord-thread-attachment",
+  "title": "Mantis Discord Thread Attachment QA",
+  "summary": "Mantis reproduced the Discord thread-reply filePath attachment bug with a synthetic baseline that reverts only the thread attachment fix, then verified the candidate preserves the attachment.",
+  "scenario": "discord-thread-reply-filepath-attachment",
+  "comparison": {
+    "pass": true,
+    "baseline": {
+      "ref": "synthetic-reverted-thread-filepath-fix",
+      "status": "fail",
+      "expected": "thread reply omits filePath attachment"
+    },
+    "candidate": {
+      "ref": "ad2d13cc678c01115ed2820380b01aa72699f66f",
+      "status": "pass",
+      "expected": "thread reply includes filePath attachment"
+    }
+  },
+  "artifacts": [
+    {
+      "kind": "timeline",
+      "lane": "baseline",
+      "label": "Baseline missing filePath attachment",
+      "path": "baseline/discord-thread-reply-filepath-attachment-attachment.png",
+      "targetPath": "baseline.png",
+      "alt": "Baseline Discord thread reply without filePath attachment",
+      "width": 420
+    },
+    {
+      "kind": "timeline",
+      "lane": "candidate",
+      "label": "Candidate includes filePath attachment",
+      "path": "candidate/discord-thread-reply-filepath-attachment-attachment.png",
+      "targetPath": "candidate.png",
+      "alt": "Candidate Discord thread reply with filePath attachment",
+      "width": 420
+    },
+    {
+      "kind": "metadata",
+      "lane": "run",
+      "label": "Comparison JSON",
+      "path": "comparison.json",
+      "targetPath": "comparison.json"
+    },
+    {
+      "kind": "report",
+      "lane": "run",
+      "label": "Mantis report",
+      "path": "mantis-report.md",
+      "targetPath": "mantis-report.md"
+    }
+  ]
+}
