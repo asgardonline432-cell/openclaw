@@ -6,6 +6,8 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- CLI/sessions: prune old unreferenced transcript, compaction checkpoint, and trajectory artifacts during normal `sessions cleanup`, so gateway restart or crash orphans do not accumulate indefinitely outside `sessions.json`. Fixes #77608. Thanks @slideshow-dingo.
+- Doctor/Codex: repair legacy `openai-codex/*` routes in primary models, fallbacks, heartbeat/subagent/compaction overrides, hooks, channel overrides, and stale session pins to canonical `openai/*`, selecting `agentRuntime.id: "codex"` only when the Codex plugin is installed, enabled, contributes the `codex` harness, and has usable OAuth; otherwise select `agentRuntime.id: "pi"`. Thanks @vincentkoc.
 - Plugins/update: keep installed official npm and ClawHub plugins such as Codex, Discord, WhatsApp, and diagnostics plugins synced during host updates even when disabled or previously exact-pinned, while preserving third-party plugin pins. Thanks @vincentkoc.
 - Video generation: accept provider-specific aspect-ratio and resolution hints at the tool boundary, normalize `720P` to MiniMax's supported `768P`, and stop sending Google `generateAudio` on Gemini video requests so provider fallback can recover from model-specific parameter differences. Thanks @vincentkoc.
 - Status: show compact Gateway process uptime and host system uptime in `/status`, making restart and host-lifetime checks visible from chat. Thanks @vincentkoc.
