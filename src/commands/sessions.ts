@@ -38,6 +38,17 @@ type SessionRow = SessionDisplayRow & {
   runtimeLabel: string;
 };
 
+type SessionStoreTarget = {
+  agentId: string;
+  storePath: string;
+};
+
+type SessionCommandCandidate = {
+  target: SessionStoreTarget;
+  key: string;
+  entry: SessionEntry;
+};
+
 const AGENT_PAD = 10;
 const KIND_PAD = 6;
 const RUNTIME_PAD = 18;
@@ -48,32 +59,114 @@ const contextLookupRuntimeLoader = createLazyImportLoader(() => import("../agent
 
 const formatKTokens = (value: number) => `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
 
-function compareSessionRowsByUpdatedAt(a: SessionRow, b: SessionRow): number {
-  return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+function compareSessionCommandCandidatesByUpdatedAt(
+  a: SessionCommandCandidate,
+  b: SessionCommandCandidate,
+): number {
+  return (b.entry.updatedAt ?? 0) - (a.entry.updatedAt ?? 0);
 }
 
-function selectNewestSessionRows(rows: SessionRow[], limit: number | undefined): SessionRow[] {
+function insertNewestSessionCommandCandidate(
+  selected: SessionCommandCandidate[],
+  candidate: SessionCommandCandidate,
+  limit: number,
+): void {
+  const insertAt = selected.findIndex(
+    (existing) => compareSessionCommandCandidatesByUpdatedAt(candidate, existing) < 0,
+  );
+  if (insertAt >= 0) {
+    selected.splice(insertAt, 0, candidate);
+    if (selected.length > limit) {
+      selected.pop();
+    }
+  } else if (selected.length < limit) {
+    selected.push(candidate);
+  }
+}
+
+function selectNewestSessionCommandCandidates(
+  candidates: SessionCommandCandidate[],
+  limit: number | undefined,
+): SessionCommandCandidate[] {
   if (limit === undefined) {
-    return rows.toSorted(compareSessionRowsByUpdatedAt);
+    return candidates.toSorted(compareSessionCommandCandidatesByUpdatedAt);
   }
   if (limit > TOP_N_SELECTION_LIMIT) {
-    return rows.toSorted(compareSessionRowsByUpdatedAt).slice(0, limit);
+    return candidates.toSorted(compareSessionCommandCandidatesByUpdatedAt).slice(0, limit);
   }
-  const selected: SessionRow[] = [];
-  for (const row of rows) {
-    const insertAt = selected.findIndex(
-      (candidate) => compareSessionRowsByUpdatedAt(row, candidate) < 0,
-    );
-    if (insertAt >= 0) {
-      selected.splice(insertAt, 0, row);
-      if (selected.length > limit) {
-        selected.pop();
-      }
-    } else if (selected.length < limit) {
-      selected.push(row);
-    }
+  const selected: SessionCommandCandidate[] = [];
+  for (const candidate of candidates) {
+    insertNewestSessionCommandCandidate(selected, candidate, limit);
   }
   return selected;
+}
+
+function sessionMatchesActiveFilter(
+  entry: SessionEntry,
+  activeMinutes: number | undefined,
+): boolean {
+  if (activeMinutes === undefined) {
+    return true;
+  }
+  const updatedAt = entry?.updatedAt;
+  return typeof updatedAt === "number" && Date.now() - updatedAt <= activeMinutes * 60_000;
+}
+
+function collectSessionCommandCandidates(params: {
+  targets: SessionStoreTarget[];
+  activeMinutes?: number;
+  limit: number | undefined;
+}): {
+  candidates: SessionCommandCandidate[];
+  totalCount: number;
+} {
+  const retainAllCandidates = params.limit === undefined || params.limit > TOP_N_SELECTION_LIMIT;
+  const candidates: SessionCommandCandidate[] = [];
+  let totalCount = 0;
+
+  for (const target of params.targets) {
+    const store = loadSessionStore(target.storePath);
+    for (const [key, entry] of Object.entries(store)) {
+      if (!sessionMatchesActiveFilter(entry, params.activeMinutes)) {
+        continue;
+      }
+      totalCount += 1;
+      const candidate = { target, key, entry };
+      if (retainAllCandidates) {
+        candidates.push(candidate);
+      } else {
+        insertNewestSessionCommandCandidate(candidates, candidate, params.limit);
+      }
+    }
+  }
+
+  return {
+    candidates: retainAllCandidates
+      ? selectNewestSessionCommandCandidates(candidates, params.limit)
+      : candidates,
+    totalCount,
+  };
+}
+
+function toSessionCommandRow(cfg: OpenClawConfig, candidate: SessionCommandCandidate): SessionRow {
+  const row = toSessionDisplayRow(candidate.key, candidate.entry);
+  const agentId = parseAgentSessionKey(row.key)?.agentId ?? candidate.target.agentId;
+  const modelRef = resolveSessionDisplayModelRef(cfg, row);
+  const agentRuntime = resolveAgentRuntimeMetadata(cfg, agentId);
+  return Object.assign({}, row, {
+    agentId,
+    agentRuntime,
+    kind: classifySessionKey(row.key, candidate.entry),
+    runtimeLabel: resolveSessionRuntimeLabel({
+      cfg,
+      entry: candidate.entry,
+      agentRuntime,
+      modelProvider: modelRef.provider,
+      model: modelRef.model,
+      agentId,
+      sessionKey: row.key,
+    }),
+  });
 }
 
 function parseSessionsLimit(value: string | number | undefined): number | undefined | null {
@@ -277,39 +370,12 @@ export async function sessionsCommand(
     return;
   }
 
-  const allRows = targets.flatMap((target) => {
-    const store = loadSessionStore(target.storePath);
-    return Object.entries(store)
-      .filter(([, entry]) => {
-        if (activeMinutes === undefined) {
-          return true;
-        }
-        const updatedAt = entry?.updatedAt;
-        return typeof updatedAt === "number" && Date.now() - updatedAt <= activeMinutes * 60_000;
-      })
-      .map(([key, entry]) => {
-        const row = toSessionDisplayRow(key, entry);
-        const agentId = parseAgentSessionKey(row.key)?.agentId ?? target.agentId;
-        const modelRef = resolveSessionDisplayModelRef(cfg, row);
-        const agentRuntime = resolveAgentRuntimeMetadata(cfg, agentId);
-        return Object.assign({}, row, {
-          agentId,
-          agentRuntime,
-          kind: classifySessionKey(row.key, store[row.key]),
-          runtimeLabel: resolveSessionRuntimeLabel({
-            cfg,
-            entry,
-            agentRuntime,
-            modelProvider: modelRef.provider,
-            model: modelRef.model,
-            agentId,
-            sessionKey: row.key,
-          }),
-        });
-      });
+  const { candidates, totalCount } = collectSessionCommandCandidates({
+    targets,
+    activeMinutes,
+    limit,
   });
-  const totalCount = allRows.length;
-  const rows = selectNewestSessionRows(allRows, limit);
+  const rows = candidates.map((candidate) => toSessionCommandRow(cfg, candidate));
   const hasMore = rows.length < totalCount;
 
   if (opts.json) {
@@ -417,5 +483,7 @@ export async function sessionsCommand(
 }
 
 export const __testing = {
+  collectSessionCommandCandidates,
   parseSessionsLimit,
+  selectNewestSessionCommandCandidates,
 } as const;

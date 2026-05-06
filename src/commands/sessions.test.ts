@@ -255,6 +255,42 @@ describe("sessionsCommand", () => {
     expect(payload.sessions?.map((row) => row.key)).toEqual(["newest", "middle"]);
   });
 
+  it("limits session candidates before display hydration", () => {
+    const entries = Object.fromEntries(
+      Array.from({ length: 500 }, (_, index) => {
+        const key = `session-${index.toString().padStart(3, "0")}`;
+        return [
+          key,
+          {
+            sessionId: key,
+            updatedAt: Date.now() - index * 1000,
+            model: "pi:opus",
+          },
+        ];
+      }),
+    );
+    const store = writeStore(entries, "sessions-candidate-limit");
+
+    try {
+      const result = __testing.collectSessionCommandCandidates({
+        targets: [{ agentId: "main", storePath: store }],
+        limit: 5,
+      });
+
+      expect(result.totalCount).toBe(500);
+      expect(result.candidates).toHaveLength(5);
+      expect(result.candidates.map((candidate) => candidate.key)).toEqual([
+        "session-000",
+        "session-001",
+        "session-002",
+        "session-003",
+        "session-004",
+      ]);
+    } finally {
+      fs.rmSync(store, { force: true });
+    }
+  });
+
   it("allows full JSON output with --limit all", async () => {
     const store = writeStore(
       {
