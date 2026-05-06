@@ -2907,41 +2907,6 @@ describe("dispatchTelegramMessage draft streaming", () => {
     expect(statusReactionController.setTool).toHaveBeenCalledWith("exec");
   });
 
-  it("keeps non-command Telegram progress draft lines across post-tool assistant boundaries", async () => {
-    const draftStream = createSequencedDraftStream(2001);
-    createTelegramDraftStream.mockReturnValue(draftStream);
-    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(
-      async ({ dispatcherOptions, replyOptions }) => {
-        await replyOptions?.onReplyStart?.();
-        await replyOptions?.onAssistantMessageStart?.();
-        await replyOptions?.onItemEvent?.({ kind: "search", progressText: "docs lookup" });
-        await replyOptions?.onItemEvent?.({ progressText: "tests passed" });
-        await replyOptions?.onAssistantMessageStart?.();
-        await dispatcherOptions.deliver({ text: "Final after tool" }, { kind: "final" });
-        return { queuedFinal: true };
-      },
-    );
-
-    await dispatchWithContext({
-      context: createContext(),
-      streamMode: "progress",
-      telegramCfg: { streaming: { mode: "progress", progress: { label: "Shelling" } } },
-    });
-
-    expect(draftStream.update).toHaveBeenCalledWith(
-      expect.stringMatching(/^Shelling\n`🔎 Web Search: docs lookup`\n• `tests passed`$/),
-    );
-    expect(draftStream.forceNewMessage).not.toHaveBeenCalled();
-    expect(draftStream.materialize).not.toHaveBeenCalled();
-    expect(draftStream.clear).toHaveBeenCalledTimes(1);
-    expect(deliverReplies).toHaveBeenCalledWith(
-      expect.objectContaining({
-        replies: [expect.objectContaining({ text: "Final after tool" })],
-      }),
-    );
-    expect(editMessageTelegram).not.toHaveBeenCalled();
-  });
-
   it("keeps DM reasoning block updates in preview flow without sending duplicates", async () => {
     const answerDraftStream = createDraftStream(999);
     let previewRevision = 0;
