@@ -4,7 +4,7 @@
 
 Maintenance update for the current OpenClaw development release.
 
-- Gateway pairing now supports scanning QR codes from Settings and accepts full copied setup-code messages while keeping non-loopback `ws://` setup links blocked.
+- Gateway pairing now supports scanning QR codes from Settings and accepts full copied setup-code messages, private LAN/link-local/`.local` `ws://` setup links, and explicit passwords over stale bootstrap tokens while keeping Tailscale/public plaintext blocked.
 
 ## 2026.5.3 - 2026-05-03
 

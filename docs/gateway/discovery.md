@@ -114,7 +114,7 @@ For mobile node pairing, discovery hints do not relax transport security on tail
 
 - iOS/Android still require a secure first-time tailnet/public connect path (`wss://` or Tailscale Serve/Funnel).
 - A discovered raw tailnet IP is a routing hint, not permission to use plaintext remote `ws://`.
-- Private LAN direct-connect `ws://` remains supported.
+- Private LAN, link-local, and `.local` direct-connect `ws://` remains supported.
 - If you want the simplest Tailscale path for mobile nodes, use Tailscale Serve so discovery and the setup code both resolve to the same secure MagicDNS endpoint.
 
 ### 3) Manual / SSH target

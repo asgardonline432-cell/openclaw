@@ -870,10 +870,10 @@ Plaintext `ws://` is loopback-only by default. For trusted private-network
 paths, set `OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1` on the client process as
 break-glass. This is intentionally process environment only, not an
 `openclaw.json` config key.
-Mobile pairing and Android manual or scanned gateway routes are stricter:
-cleartext is accepted for loopback, but private-LAN, link-local, `.local`, and
-dotless hostnames must use TLS unless you explicitly opt into the trusted
-private-network cleartext path.
+Mobile setup-code/manual pairing has a narrower built-in cleartext exception:
+loopback, private LAN IPs, link-local IPs, and `.local` hosts may use `ws://`.
+Raw Tailscale and public mobile routes still require `wss://`, Tailscale
+Serve/Funnel, or a tunnel.
 
 Local device pairing:
 

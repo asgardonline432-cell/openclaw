@@ -247,6 +247,20 @@ describe("registerQrCli", () => {
     expectLoggedSetupCode("ws://192.168.1.8:18789");
   });
 
+  it("allows mdns cleartext setup urls", async () => {
+    loadConfig.mockReturnValue({
+      gateway: {
+        bind: "custom",
+        customBindHost: "openclaw.local",
+        auth: { mode: "token", token: "tok" },
+      },
+    });
+
+    await runQr(["--setup-code-only"]);
+
+    expectLoggedSetupCode("ws://openclaw.local:18789");
+  });
+
   it("allows android emulator cleartext override urls", async () => {
     loadConfig.mockReturnValue({
       gateway: {

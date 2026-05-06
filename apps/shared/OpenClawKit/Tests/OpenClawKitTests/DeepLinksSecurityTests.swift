@@ -37,6 +37,20 @@ private func setupCode(from payload: String) -> String {
                     password: nil)))
     }
 
+    @Test func gatewayDeepLinkAllowsPrivateLanWs() {
+        let url = URL(
+            string: "openclaw://gateway?host=192.168.1.20&port=18789&tls=0&token=abc")!
+        #expect(
+            DeepLinkParser.parse(url) == .gateway(
+                .init(
+                    host: "192.168.1.20",
+                    port: 18789,
+                    tls: false,
+                    bootstrapToken: nil,
+                    token: "abc",
+                    password: nil)))
+    }
+
     @Test func setupCodeRejectsInsecureNonLoopbackWs() {
         let payload = #"{"url":"ws://attacker.example:18789","bootstrapToken":"tok"}"#
         #expect(GatewayConnectDeepLink.fromSetupCode(setupCode(from: payload)) == nil)
@@ -52,6 +66,30 @@ private func setupCode(from payload: String) -> String {
         #expect(
             GatewayConnectDeepLink.fromSetupCode(setupCode(from: payload)) == .init(
                 host: "127.0.0.1",
+                port: 18789,
+                tls: false,
+                bootstrapToken: "tok",
+                token: nil,
+                password: nil))
+    }
+
+    @Test func setupCodeAllowsPrivateLanWs() {
+        let payload = #"{"url":"ws://192.168.1.20:18789","bootstrapToken":"tok"}"#
+        #expect(
+            GatewayConnectDeepLink.fromSetupCode(setupCode(from: payload)) == .init(
+                host: "192.168.1.20",
+                port: 18789,
+                tls: false,
+                bootstrapToken: "tok",
+                token: nil,
+                password: nil))
+    }
+
+    @Test func setupCodeAllowsMdnsHostPayload() {
+        let payload = #"{"host":"openclaw.local","port":18789,"tls":false,"bootstrapToken":"tok"}"#
+        #expect(
+            GatewayConnectDeepLink.fromSetupCode(setupCode(from: payload)) == .init(
+                host: "openclaw.local",
                 port: 18789,
                 tls: false,
                 bootstrapToken: "tok",

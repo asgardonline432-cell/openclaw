@@ -800,6 +800,28 @@ describe("GatewayClient connect auth payload", () => {
     client.stop();
   });
 
+  it("uses explicit shared password instead of bootstrap token", () => {
+    loadDeviceAuthTokenMock.mockReturnValue(undefined);
+    const client = new GatewayClient({
+      url: "ws://127.0.0.1:18789",
+      bootstrapToken: "stale-bootstrap-token",
+      password: "shared-password", // pragma: allowlist secret
+    });
+
+    client.start();
+    const ws = getLatestWs();
+    ws.emitOpen();
+    emitConnectChallenge(ws);
+
+    expect(connectFrameFrom(ws)).toMatchObject({
+      password: "shared-password", // pragma: allowlist secret
+    });
+    expect(connectFrameFrom(ws).bootstrapToken).toBeUndefined();
+    expect(connectFrameFrom(ws).token).toBeUndefined();
+    expect(connectFrameFrom(ws).deviceToken).toBeUndefined();
+    client.stop();
+  });
+
   it("uses stored device token scopes when shared token is not provided", () => {
     loadDeviceAuthTokenMock.mockReturnValue({
       token: "stored-device-token",

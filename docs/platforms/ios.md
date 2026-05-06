@@ -222,6 +222,7 @@ See [Bonjour](/gateway/bonjour) for the CoreDNS example.
 ### Manual host/port
 
 In Settings, enable **Manual Host** and enter the gateway host + port (default `18789`).
+Manual `ws://` is allowed for loopback, private LAN IPs, link-local IPs, and `.local` hosts. Tailscale and public routes should use `wss://`, Tailscale Serve/Funnel, or a tunnel.
 
 ## Canvas + A2UI
 

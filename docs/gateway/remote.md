@@ -144,6 +144,10 @@ Short version: **keep the Gateway loopback-only** unless you’re sure you need 
   set `OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1` on the client process as
   break-glass. There is no `openclaw.json` equivalent; this must be process
   environment for the client making the WebSocket connection.
+- Mobile setup-code/manual pairing has a narrower built-in exception for
+  loopback, private LAN IPs, link-local IPs, and `.local` hosts. Tailscale and
+  public mobile routes still require `wss://`, Tailscale Serve, Funnel, or a
+  tunnel.
 - **Non-loopback binds** (`lan`/`tailnet`/`custom`, or `auto` when loopback is unavailable) must use gateway auth: token, password, or an identity-aware reverse proxy with `gateway.auth.mode: "trusted-proxy"`.
 - `gateway.remote.token` / `.password` are client credential sources. They do **not** configure server auth by themselves.
 - Local call paths can use `gateway.remote.*` as fallback only when `gateway.auth.*` is unset.

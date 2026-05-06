@@ -615,14 +615,15 @@ rather than the pre-handshake defaults.
     then an explicit `deviceToken`, then a stored per-device token (keyed by
     `deviceId` + `role`).
   - `auth.bootstrapToken` is sent only when none of the above resolved an
-    `auth.token`. A shared token or any resolved device token suppresses it.
+    `auth.token` and no explicit password is set. A shared token, any resolved
+    device token, or an explicit password suppresses it.
   - Auto-promotion of a stored device token on the one-shot
     `AUTH_TOKEN_MISMATCH` retry is gated to **trusted endpoints only** —
     loopback, or `wss://` with a pinned `tlsFingerprint`. Public `wss://`
     without pinning does not qualify.
 - Additional `hello-ok.auth.deviceTokens` entries are bootstrap handoff tokens.
   Persist them only when the connect used bootstrap auth on a trusted transport
-  such as `wss://` or loopback/local pairing.
+  such as `wss://`, loopback, or private-LAN/link-local/`.local` mobile pairing.
 - If a client supplies an **explicit** `deviceToken` or explicit `scopes`, that
   caller-requested scope set remains authoritative; cached scopes are only
   reused when the client is reusing the stored per-device token.

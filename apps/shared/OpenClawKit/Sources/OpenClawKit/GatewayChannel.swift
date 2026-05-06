@@ -522,16 +522,17 @@ public actor GatewayChannelActor {
             (includeDeviceIdentity && explicitPassword == nil && explicitBootstrapToken == nil
                 ? storedToken
                 : nil)
-        let authBootstrapToken = authToken == nil ? explicitBootstrapToken : nil
+        let authBootstrapToken =
+            authToken == nil && explicitPassword == nil ? explicitBootstrapToken : nil
         let authDeviceToken = shouldUseDeviceRetryToken ? storedToken : nil
         let authSource: GatewayAuthSource = if authDeviceToken != nil || (explicitToken == nil && authToken != nil) {
             .deviceToken
         } else if authToken != nil {
             .sharedToken
-        } else if authBootstrapToken != nil {
-            .bootstrapToken
         } else if explicitPassword != nil {
             .password
+        } else if authBootstrapToken != nil {
+            .bootstrapToken
         } else {
             .none
         }
@@ -551,7 +552,7 @@ public actor GatewayChannelActor {
         if scheme == "wss" {
             return true
         }
-        if let host = self.url.host, LoopbackHost.isLoopback(host) {
+        if let host = self.url.host, LoopbackHost.isPlaintextGatewayHost(host) {
             return true
         }
         return false

@@ -453,6 +453,9 @@ See [Inferred commitments](/concepts/commitments).
   equivalent, and browser private-network config such as
   `browser.ssrfPolicy.dangerouslyAllowPrivateNetwork` does not affect Gateway
   WebSocket clients.
+- Mobile setup-code/manual pairing separately allows plaintext `ws://` for
+  loopback, private LAN IPs, link-local IPs, and `.local` hosts. Tailscale and
+  public mobile routes still need `wss://`, Tailscale Serve/Funnel, or a tunnel.
 - `gateway.remote.token` / `.password` are remote-client credential fields. They do not configure gateway auth by themselves.
 - `gateway.push.apns.relay.baseUrl`: base HTTPS URL for the external APNs relay used by official/TestFlight iOS builds after they publish relay-backed registrations to the gateway. This URL must match the relay URL compiled into the iOS build.
 - `gateway.push.apns.relay.timeoutMs`: gateway-to-relay send timeout in milliseconds. Defaults to `10000`.

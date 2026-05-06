@@ -175,11 +175,11 @@ function parseNormalizedGatewayUrl(raw: string): string | null {
 function describeSecureMobilePairingFix(source?: string): string {
   const sourceNote = source ? ` Resolved source: ${source}.` : "";
   return (
-    "Mobile pairing over non-loopback networks requires a secure gateway URL (wss://) or Tailscale Serve/Funnel." +
+    "Tailscale and public mobile pairing require a secure gateway URL (wss://) or Tailscale Serve/Funnel." +
     sourceNote +
-    " Fix: prefer gateway.tailscale.mode=serve, or set " +
+    " Fix: use a private LAN IP address, prefer gateway.tailscale.mode=serve, or set " +
     "gateway.remote.url / plugins.entries.device-pair.config.publicUrl to a wss:// URL. " +
-    "ws:// setup codes are only valid for localhost/loopback or the Android emulator."
+    "ws:// setup codes are only valid for localhost/loopback, private LAN IP addresses, .local hosts, or the Android emulator."
   );
 }
 
@@ -256,6 +256,23 @@ function isPrivateIPv4(address: string): boolean {
   return false;
 }
 
+function isLinkLocalIPv4(address: string): boolean {
+  const octets = parseIPv4Octets(address);
+  if (!octets) {
+    return false;
+  }
+  const [a, b] = octets;
+  return a === 169 && b === 254;
+}
+
+function isPrivateOrLinkLocalIPv6(address: string): boolean {
+  const normalized = normalizeHostForIpCheck(address);
+  return (
+    normalized.includes(":") &&
+    (normalized.startsWith("fe80:") || normalized.startsWith("fc") || normalized.startsWith("fd"))
+  );
+}
+
 function isTailnetIPv4(address: string): boolean {
   const octets = parseIPv4Octets(address);
   if (!octets) {
@@ -267,7 +284,14 @@ function isTailnetIPv4(address: string): boolean {
 
 function isMobilePairingCleartextAllowedHost(host: string): boolean {
   const normalized = normalizeHostForIpCheck(host);
-  return isLoopbackHost(normalized) || normalized === "10.0.2.2";
+  return (
+    isLoopbackHost(normalized) ||
+    normalized === "10.0.2.2" ||
+    normalized.endsWith(".local") ||
+    isPrivateIPv4(normalized) ||
+    isLinkLocalIPv4(normalized) ||
+    isPrivateOrLinkLocalIPv6(normalized)
+  );
 }
 
 function validateMobilePairingUrl(url: string, source?: string): string | null {

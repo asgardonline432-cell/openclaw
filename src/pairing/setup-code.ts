@@ -76,8 +76,13 @@ function describeSecureMobilePairingFix(source?: string): string {
     sourceNote +
     " Fix: use a private LAN IP address, prefer gateway.tailscale.mode=serve, or set " +
     "gateway.remote.url / plugins.entries.device-pair.config.publicUrl to a wss:// URL. " +
-    "ws:// is only valid for localhost, private LAN IP addresses, or the Android emulator."
+    "ws:// is only valid for localhost, private LAN IP addresses, .local hosts, or the Android emulator."
   );
+}
+
+function isMdnsHost(host: string): boolean {
+  const normalized = normalizeLowercaseStringOrEmpty(host).replace(/\.+$/, "");
+  return normalized.endsWith(".local");
 }
 
 function isPrivateLanIpHost(host: string): boolean {
@@ -102,7 +107,9 @@ function isPrivateLanIpHost(host: string): boolean {
 }
 
 function isMobilePairingCleartextAllowedHost(host: string): boolean {
-  return isLoopbackHost(host) || host === "10.0.2.2" || isPrivateLanIpHost(host);
+  return (
+    isLoopbackHost(host) || host === "10.0.2.2" || isPrivateLanIpHost(host) || isMdnsHost(host)
+  );
 }
 
 function validateMobilePairingUrl(url: string, source?: string): string | null {
