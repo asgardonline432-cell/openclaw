@@ -266,7 +266,7 @@ async function persistRunSessionUsageForFollowupTest(
     return;
   }
   const registeredStore = FOLLOWUP_TEST_SESSION_STORES.get(storePath);
-  const store = registeredStore ?? loadSessionStore(storePath, { skipCache: true });
+  const store = registeredStore ?? loadSessionStore(storePath);
   const entry = store[sessionKey];
   if (!entry) {
     return;
@@ -1006,7 +1006,7 @@ describe("createFollowupRunner compaction", () => {
             if (registeredStore) {
               registeredStore[params.sessionKey] = updatedEntry;
             } else {
-              const store = loadSessionStore(params.storePath, { skipCache: true });
+              const store = loadSessionStore(params.storePath);
               store[params.sessionKey] = updatedEntry;
               await saveSessionStore(params.storePath, store);
             }
