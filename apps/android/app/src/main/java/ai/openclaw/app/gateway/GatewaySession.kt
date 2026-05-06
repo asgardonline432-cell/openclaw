@@ -525,9 +525,11 @@ class GatewaySession(
     }
 
     private fun shouldPersistBootstrapHandoffTokens(authSource: GatewayConnectAuthSource): Boolean {
-      if (authSource != GatewayConnectAuthSource.BOOTSTRAP_TOKEN) return false
-      if (isLoopbackGatewayHost(endpoint.host)) return true
-      return tls != null
+      return shouldPersistBootstrapHandoffTokensForEndpoint(
+        usedBootstrapAuth = authSource == GatewayConnectAuthSource.BOOTSTRAP_TOKEN,
+        endpoint = endpoint,
+        tls = tls,
+      )
     }
 
     private fun filteredBootstrapHandoffScopes(
@@ -1072,6 +1074,16 @@ class GatewaySession(
     }
     return tls?.expectedFingerprint?.trim()?.isNotEmpty() == true
   }
+}
+
+internal fun shouldPersistBootstrapHandoffTokensForEndpoint(
+  usedBootstrapAuth: Boolean,
+  endpoint: GatewayEndpoint,
+  tls: GatewayTlsParams?,
+): Boolean {
+  if (!usedBootstrapAuth) return false
+  if (isPrivateLanGatewayHost(endpoint.host)) return true
+  return tls != null
 }
 
 internal fun buildGatewayWebSocketUrl(

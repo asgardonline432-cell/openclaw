@@ -21,7 +21,9 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -328,6 +330,22 @@ class GatewaySessionInvokeTest {
         shutdownHarness(harness, server)
       }
     }
+
+  @Test
+  fun bootstrapHandoffPersistenceTrustsPrivateLanCleartextEndpoints() {
+    assertTrue(shouldPersistBootstrapHandoffTokenForHost("192.168.1.25"))
+    assertTrue(shouldPersistBootstrapHandoffTokenForHost("openclaw.local"))
+    assertTrue(shouldPersistBootstrapHandoffTokenForHost("fd00::1"))
+    assertFalse(shouldPersistBootstrapHandoffTokenForHost("100.64.1.25"))
+    assertFalse(shouldPersistBootstrapHandoffTokenForHost("gateway.example.com"))
+    assertFalse(
+      shouldPersistBootstrapHandoffTokensForEndpoint(
+        usedBootstrapAuth = false,
+        endpoint = testEndpoint("192.168.1.25"),
+        tls = null,
+      ),
+    )
+  }
 
   @Test
   fun nonBootstrapConnect_ignoresAdditionalBootstrapDeviceTokens() =
@@ -701,6 +719,22 @@ class GatewaySessionInvokeTest {
       tls = null,
     )
   }
+
+  private fun testEndpoint(host: String): GatewayEndpoint =
+    GatewayEndpoint(
+      stableId = "manual|${host.lowercase()}|18789",
+      name = host,
+      host = host,
+      port = 18789,
+      tlsEnabled = false,
+    )
+
+  private fun shouldPersistBootstrapHandoffTokenForHost(host: String): Boolean =
+    shouldPersistBootstrapHandoffTokensForEndpoint(
+      usedBootstrapAuth = true,
+      endpoint = testEndpoint(host),
+      tls = null,
+    )
 
   private suspend fun awaitConnectedOrThrow(
     connected: CompletableDeferred<Unit>,
