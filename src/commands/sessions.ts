@@ -120,7 +120,8 @@ function collectSessionCommandCandidates(params: {
   candidates: SessionCommandCandidate[];
   totalCount: number;
 } {
-  const retainAllCandidates = params.limit === undefined || params.limit > TOP_N_SELECTION_LIMIT;
+  const limit = params.limit;
+  const retainAllCandidates = limit === undefined || limit > TOP_N_SELECTION_LIMIT;
   const candidates: SessionCommandCandidate[] = [];
   let totalCount = 0;
 
@@ -135,14 +136,14 @@ function collectSessionCommandCandidates(params: {
       if (retainAllCandidates) {
         candidates.push(candidate);
       } else {
-        insertNewestSessionCommandCandidate(candidates, candidate, params.limit);
+        insertNewestSessionCommandCandidate(candidates, candidate, limit);
       }
     }
   }
 
   return {
     candidates: retainAllCandidates
-      ? selectNewestSessionCommandCandidates(candidates, params.limit)
+      ? selectNewestSessionCommandCandidates(candidates, limit)
       : candidates,
     totalCount,
   };
