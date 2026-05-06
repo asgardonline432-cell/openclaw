@@ -80,6 +80,7 @@ describe("memory reindex state", () => {
     const firstScopeHash = resolveConfiguredScopeHash({
       workspaceDir,
       extraPaths: ["/tmp/workspace/a"],
+      maxFileScanEntries: 10_000,
       multimodal: {
         enabled: false,
         modalities: [],
@@ -89,6 +90,7 @@ describe("memory reindex state", () => {
     const secondScopeHash = resolveConfiguredScopeHash({
       workspaceDir,
       extraPaths: ["/tmp/workspace/b"],
+      maxFileScanEntries: 10_000,
       multimodal: {
         enabled: false,
         modalities: [],
@@ -116,11 +118,45 @@ describe("memory reindex state", () => {
     ).toBe(true);
   });
 
+  it("requires a full reindex when the memory file scan cap changes", () => {
+    const workspaceDir = "/tmp/workspace";
+    const firstScopeHash = resolveConfiguredScopeHash({
+      workspaceDir,
+      extraPaths: ["/tmp/workspace/a"],
+      maxFileScanEntries: 10_000,
+      multimodal: {
+        enabled: false,
+        modalities: [],
+        maxFileBytes: 20 * 1024 * 1024,
+      },
+    });
+    const secondScopeHash = resolveConfiguredScopeHash({
+      workspaceDir,
+      extraPaths: ["/tmp/workspace/a"],
+      maxFileScanEntries: 1_000,
+      multimodal: {
+        enabled: false,
+        modalities: [],
+        maxFileBytes: 20 * 1024 * 1024,
+      },
+    });
+
+    expect(
+      shouldRunFullMemoryReindex(
+        createFullReindexParams({
+          meta: createMeta({ scopeHash: firstScopeHash }),
+          configuredScopeHash: secondScopeHash,
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it("requires a full reindex when multimodal settings change", () => {
     const workspaceDir = "/tmp/workspace";
     const firstScopeHash = resolveConfiguredScopeHash({
       workspaceDir,
       extraPaths: ["/tmp/workspace/media"],
+      maxFileScanEntries: 10_000,
       multimodal: {
         enabled: false,
         modalities: [],
@@ -130,6 +166,7 @@ describe("memory reindex state", () => {
     const secondScopeHash = resolveConfiguredScopeHash({
       workspaceDir,
       extraPaths: ["/tmp/workspace/media"],
+      maxFileScanEntries: 10_000,
       multimodal: {
         enabled: true,
         modalities: ["image"],

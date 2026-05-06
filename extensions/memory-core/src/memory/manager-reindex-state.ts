@@ -52,6 +52,7 @@ function configuredMetaSourcesDiffer(params: {
 export function resolveConfiguredScopeHash(params: {
   workspaceDir: string;
   extraPaths?: string[];
+  maxFileScanEntries: number;
   multimodal: {
     enabled: boolean;
     modalities: string[];
@@ -64,6 +65,7 @@ export function resolveConfiguredScopeHash(params: {
   return hashText(
     JSON.stringify({
       extraPaths,
+      maxFileScanEntries: params.maxFileScanEntries,
       multimodal: {
         enabled: params.multimodal.enabled,
         modalities: [...params.multimodal.modalities].toSorted(),

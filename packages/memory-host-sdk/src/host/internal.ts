@@ -45,6 +45,20 @@ export type MemoryFileEntry = {
   mimeType?: string;
 };
 
+export type ListMemoryFilesTruncationReason = "budget-exhausted" | "walk-truncated";
+
+export type ListMemoryFilesTruncation = {
+  dir: string;
+  scannedEntryCount: number;
+  maxScanEntries: number;
+  reason: ListMemoryFilesTruncationReason;
+};
+
+export type ListMemoryFilesOptions = {
+  maxScanEntries?: number;
+  onTruncated?: (event: ListMemoryFilesTruncation) => void;
+};
+
 export type MemoryChunk = {
   startLine: number;
   endLine: number;
@@ -124,8 +138,10 @@ async function collectMemoryFilesFromDir(
   files: string[],
   multimodal?: MemoryMultimodalSettings,
   shouldSkipPath?: (absPath: string) => boolean,
-): Promise<void> {
+  maxScanEntries?: number,
+): Promise<{ scannedEntryCount: number; truncated: boolean }> {
   const scan = await walkDirectory(dir, {
+    maxEntries: maxScanEntries,
     symlinks: "skip",
     descend: (entry) => shouldDescendMemoryEntry(entry, shouldSkipPath),
     include: (entry) =>
@@ -134,18 +150,65 @@ async function collectMemoryFilesFromDir(
       isAllowedMemoryFilePath(entry.path, multimodal),
   });
   files.push(...scan.entries.map((entry) => entry.path));
+  return {
+    scannedEntryCount: scan.scannedEntryCount,
+    truncated: scan.truncated,
+  };
+}
+
+function normalizeMemoryFileScanLimit(value: number | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+  return Math.max(0, Math.floor(value));
 }
 
 export async function listMemoryFiles(
   workspaceDir: string,
   extraPaths?: string[],
   multimodal?: MemoryMultimodalSettings,
+  options?: ListMemoryFilesOptions,
 ): Promise<string[]> {
   const result: string[] = [];
   const memoryDir = path.join(workspaceDir, "memory");
+  const maxScanEntries = normalizeMemoryFileScanLimit(options?.maxScanEntries);
+  let remainingScanEntries = maxScanEntries;
 
   const shouldSkipWorkspaceMemoryPath = (absPath: string): boolean =>
     shouldSkipRootMemoryAuxiliaryPath({ workspaceDir, absPath });
+
+  const collectDirectory = async (dir: string) => {
+    if (remainingScanEntries !== undefined && remainingScanEntries <= 0) {
+      options?.onTruncated?.({
+        dir,
+        scannedEntryCount: 0,
+        maxScanEntries: maxScanEntries ?? 0,
+        reason: "budget-exhausted",
+      });
+      return;
+    }
+    const scan = await collectMemoryFilesFromDir(
+      dir,
+      result,
+      multimodal,
+      shouldSkipWorkspaceMemoryPath,
+      remainingScanEntries,
+    );
+    if (remainingScanEntries !== undefined) {
+      remainingScanEntries = Math.max(0, remainingScanEntries - scan.scannedEntryCount);
+    }
+    if (scan.truncated && maxScanEntries !== undefined) {
+      options?.onTruncated?.({
+        dir,
+        scannedEntryCount: scan.scannedEntryCount,
+        maxScanEntries,
+        reason: "walk-truncated",
+      });
+    }
+  };
 
   const addMarkdownFile = async (absPath: string) => {
     try {
@@ -167,7 +230,7 @@ export async function listMemoryFiles(
   try {
     const dirStat = await fs.lstat(memoryDir);
     if (!dirStat.isSymbolicLink() && dirStat.isDirectory()) {
-      await collectMemoryFilesFromDir(memoryDir, result, multimodal, shouldSkipWorkspaceMemoryPath);
+      await collectDirectory(memoryDir);
     }
   } catch {}
 
@@ -183,12 +246,7 @@ export async function listMemoryFiles(
           continue;
         }
         if (stat.isDirectory()) {
-          await collectMemoryFilesFromDir(
-            inputPath,
-            result,
-            multimodal,
-            shouldSkipWorkspaceMemoryPath,
-          );
+          await collectDirectory(inputPath);
           continue;
         }
         if (stat.isFile() && isAllowedMemoryFilePath(inputPath, multimodal)) {

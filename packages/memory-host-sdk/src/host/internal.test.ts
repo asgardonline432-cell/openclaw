@@ -78,6 +78,24 @@ describe("memory host SDK package internals", () => {
     ]);
   });
 
+  it("bounds recursive memory file discovery with a scan-entry cap", async () => {
+    const tmpDir = getTmpDir();
+    const extraDir = path.join(tmpDir, "extra");
+    fsSync.mkdirSync(extraDir, { recursive: true });
+    for (let index = 0; index < 20; index += 1) {
+      fsSync.writeFileSync(path.join(extraDir, `note-${index}.md`), `# Note ${index}`);
+    }
+    const truncations: Array<{ dir: string; reason: string }> = [];
+
+    const files = await listMemoryFiles(tmpDir, [extraDir], undefined, {
+      maxScanEntries: 5,
+      onTruncated: (event) => truncations.push({ dir: event.dir, reason: event.reason }),
+    });
+
+    expect(files.length).toBeLessThan(20);
+    expect(truncations).toEqual([{ dir: extraDir, reason: "walk-truncated" }]);
+  });
+
   it("allows top-level dreams path casing variants", () => {
     expect(isMemoryPath("dreams.md")).toBe(true);
     expect(isMemoryPath("DREAMS.md")).toBe(true);

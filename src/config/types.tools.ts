@@ -452,6 +452,8 @@ export type MemorySearchConfig = {
     watch?: boolean;
     watchDebounceMs?: number;
     intervalMinutes?: number;
+    /** Max directory entries scanned when discovering memory files (default: 10000). */
+    maxFileScanEntries?: number;
     /**
      * Timeout in seconds for inline embedding batches during memory indexing.
      * Unset uses provider defaults: 600s for local/self-hosted providers, 120s for hosted providers.

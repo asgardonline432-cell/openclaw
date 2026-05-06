@@ -56,6 +56,7 @@ export type MemoryProviderStatus = {
   extraPaths?: string[];
   sources?: MemorySource[];
   sourceCounts?: Array<{ source: MemorySource; files: number; chunks: number }>;
+  sync?: { maxFileScanEntries?: number };
   cache?: { enabled: boolean; entries?: number; maxEntries?: number };
   fts?: { enabled: boolean; available: boolean; error?: string };
   fallback?: { from: string; reason?: string };

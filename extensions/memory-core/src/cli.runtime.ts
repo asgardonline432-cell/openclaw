@@ -509,6 +509,7 @@ async function scanSessionFiles(agentId: string): Promise<SourceScan> {
 async function scanMemoryFiles(
   workspaceDir: string,
   extraPaths: string[] = [],
+  maxFileScanEntries?: number,
 ): Promise<SourceScan> {
   const issues: string[] = [];
   const memoryFile = path.join(workspaceDir, "MEMORY.md");
@@ -562,7 +563,14 @@ async function scanMemoryFiles(
   let listed: string[] = [];
   let listedOk = false;
   try {
-    listed = await listMemoryFiles(workspaceDir, resolvedExtraPaths);
+    listed = await listMemoryFiles(workspaceDir, resolvedExtraPaths, undefined, {
+      maxScanEntries: maxFileScanEntries,
+      onTruncated: (event) => {
+        issues.push(
+          `memory file scan truncated (${shortenHomePath(event.dir)}): ${event.reason}, scanned ${event.scannedEntryCount} of ${event.maxScanEntries} configured entries`,
+        );
+      },
+    });
     listedOk = true;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
@@ -627,12 +635,13 @@ async function scanMemorySources(params: {
   agentId: string;
   sources: MemorySourceName[];
   extraPaths?: string[];
+  maxFileScanEntries?: number;
 }): Promise<MemorySourceScan> {
   const scans: SourceScan[] = [];
   const extraPaths = params.extraPaths ?? [];
   for (const source of params.sources) {
     if (source === "memory") {
-      scans.push(await scanMemoryFiles(params.workspaceDir, extraPaths));
+      scans.push(await scanMemoryFiles(params.workspaceDir, extraPaths, params.maxFileScanEntries));
     }
     if (source === "sessions") {
       scans.push(await scanSessionFiles(params.agentId));
@@ -745,6 +754,7 @@ export async function runMemoryStatus(opts: MemoryCommandOptions) {
               agentId,
               sources,
               extraPaths: status.extraPaths,
+              maxFileScanEntries: status.sync?.maxFileScanEntries,
             })
           : undefined;
         let audit: ShortTermAuditSummary | undefined;

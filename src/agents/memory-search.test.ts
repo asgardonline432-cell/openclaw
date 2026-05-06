@@ -239,6 +239,7 @@ describe("memory search config", () => {
               watch: false,
               watchDebounceMs: 25,
               intervalMinutes: 3,
+              maxFileScanEntries: 1234,
               sessions: {
                 deltaBytes: 321,
                 deltaMessages: 7,
@@ -257,6 +258,7 @@ describe("memory search config", () => {
       watchDebounceMs: 25,
       intervalMinutes: 3,
       embeddingBatchTimeoutSeconds: undefined,
+      maxFileScanEntries: 1234,
       sessions: {
         deltaBytes: 321,
         deltaMessages: 7,
@@ -280,6 +282,20 @@ describe("memory search config", () => {
     });
 
     expect(resolveMemorySearchSyncConfig(cfg, "main")?.embeddingBatchTimeoutSeconds).toBe(600);
+  });
+
+  it("uses a default memory file scan cap", () => {
+    const cfg = asConfig({
+      agents: {
+        defaults: {
+          memorySearch: {
+            provider: "openai",
+          },
+        },
+      },
+    });
+
+    expect(resolveMemorySearchSyncConfig(cfg, "main")?.maxFileScanEntries).toBe(10_000);
   });
 
   it("merges defaults and overrides", () => {

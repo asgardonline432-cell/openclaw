@@ -68,6 +68,7 @@ export type ResolvedMemorySearchConfig = {
     watchDebounceMs: number;
     intervalMinutes: number;
     embeddingBatchTimeoutSeconds: number | undefined;
+    maxFileScanEntries: number;
     sessions: {
       deltaBytes: number;
       deltaMessages: number;
@@ -103,6 +104,7 @@ export type ResolvedMemorySearchSyncConfig = ResolvedMemorySearchConfig["sync"];
 const DEFAULT_CHUNK_TOKENS = 400;
 const DEFAULT_CHUNK_OVERLAP = 80;
 const DEFAULT_WATCH_DEBOUNCE_MS = 1500;
+const DEFAULT_MAX_FILE_SCAN_ENTRIES = 10_000;
 const DEFAULT_SESSION_DELTA_BYTES = 100_000;
 const DEFAULT_SESSION_DELTA_MESSAGES = 50;
 const DEFAULT_MAX_RESULTS = 6;
@@ -332,6 +334,7 @@ function mergeConfig(
   );
   const deltaBytes = clampInt(sync.sessions.deltaBytes, 0, Number.MAX_SAFE_INTEGER);
   const deltaMessages = clampInt(sync.sessions.deltaMessages, 0, Number.MAX_SAFE_INTEGER);
+  const maxFileScanEntries = clampInt(sync.maxFileScanEntries, 0, Number.MAX_SAFE_INTEGER);
   const postCompactionForce = sync.sessions.postCompactionForce;
   return {
     enabled,
@@ -354,6 +357,7 @@ function mergeConfig(
     chunking: { tokens: Math.max(1, chunking.tokens), overlap },
     sync: {
       ...sync,
+      maxFileScanEntries,
       sessions: {
         deltaBytes,
         deltaMessages,
@@ -405,6 +409,10 @@ function resolveSyncConfig(
     intervalMinutes: overrides?.sync?.intervalMinutes ?? defaults?.sync?.intervalMinutes ?? 0,
     embeddingBatchTimeoutSeconds:
       overrides?.sync?.embeddingBatchTimeoutSeconds ?? defaults?.sync?.embeddingBatchTimeoutSeconds,
+    maxFileScanEntries:
+      overrides?.sync?.maxFileScanEntries ??
+      defaults?.sync?.maxFileScanEntries ??
+      DEFAULT_MAX_FILE_SCAN_ENTRIES,
     sessions: {
       deltaBytes:
         overrides?.sync?.sessions?.deltaBytes ??

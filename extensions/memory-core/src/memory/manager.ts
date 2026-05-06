@@ -785,6 +785,9 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
       sources: Array.from(this.sources),
       extraPaths: this.settings.extraPaths,
       sourceCounts: aggregateState.sourceCounts,
+      sync: {
+        maxFileScanEntries: this.settings.sync.maxFileScanEntries,
+      },
       cache: this.cache.enabled
         ? {
             enabled: true,

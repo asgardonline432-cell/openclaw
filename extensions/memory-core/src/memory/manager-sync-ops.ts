@@ -738,6 +738,16 @@ export abstract class MemoryManagerSyncOps {
       this.workspaceDir,
       this.settings.extraPaths,
       this.settings.multimodal,
+      {
+        maxScanEntries: this.settings.sync.maxFileScanEntries,
+        onTruncated: (event) =>
+          log.warn("memory sync: memory file scan truncated", {
+            dir: event.dir,
+            scannedEntryCount: event.scannedEntryCount,
+            maxFileScanEntries: event.maxScanEntries,
+            reason: event.reason,
+          }),
+      },
     );
     const fileEntries = (
       await runWithConcurrency(
@@ -995,6 +1005,7 @@ export abstract class MemoryManagerSyncOps {
     const configuredScopeHash = resolveConfiguredScopeHash({
       workspaceDir: this.workspaceDir,
       extraPaths: this.settings.extraPaths,
+      maxFileScanEntries: this.settings.sync.maxFileScanEntries,
       multimodal: {
         enabled: this.settings.multimodal.enabled,
         modalities: this.settings.multimodal.modalities,
@@ -1247,6 +1258,7 @@ export abstract class MemoryManagerSyncOps {
             scopeHash: resolveConfiguredScopeHash({
               workspaceDir: this.workspaceDir,
               extraPaths: this.settings.extraPaths,
+              maxFileScanEntries: this.settings.sync.maxFileScanEntries,
               multimodal: {
                 enabled: this.settings.multimodal.enabled,
                 modalities: this.settings.multimodal.modalities,
@@ -1323,6 +1335,7 @@ export abstract class MemoryManagerSyncOps {
       scopeHash: resolveConfiguredScopeHash({
         workspaceDir: this.workspaceDir,
         extraPaths: this.settings.extraPaths,
+        maxFileScanEntries: this.settings.sync.maxFileScanEntries,
         multimodal: {
           enabled: this.settings.multimodal.enabled,
           modalities: this.settings.multimodal.modalities,

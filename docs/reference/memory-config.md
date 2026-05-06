@@ -308,6 +308,14 @@ For custom OpenAI-compatible endpoints or overriding provider defaults:
 Unset uses the provider default: 600 seconds for local/self-hosted providers such as `local`, `ollama`, and `lmstudio`, and 120 seconds for hosted providers. Increase this when local CPU-bound embedding batches are healthy but slow.
 </ParamField>
 
+### File discovery limits
+
+<ParamField path="sync.maxFileScanEntries" type="number" default="10000">
+  Caps directory entries scanned while discovering memory files.
+
+This protects `memorySearch.extraPaths` from accidentally indexing a huge repo, sync folder, or home directory. Raise it only for intentionally large memory corpora.
+</ParamField>
+
 ---
 
 ## Hybrid search config
@@ -442,6 +450,7 @@ Index session transcripts and surface them via `memory_search`:
 | ----------------------------- | ---------- | ------------ | --------------------------------------- |
 | `experimental.sessionMemory`  | `boolean`  | `false`      | Enable session indexing                 |
 | `sources`                     | `string[]` | `["memory"]` | Add `"sessions"` to include transcripts |
+| `sync.maxFileScanEntries`     | `number`   | `10000`      | Max memory file discovery entries       |
 | `sync.sessions.deltaBytes`    | `number`   | `100000`     | Byte threshold for reindex              |
 | `sync.sessions.deltaMessages` | `number`   | `50`         | Message threshold for reindex           |
 
