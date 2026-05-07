@@ -155,8 +155,18 @@ export function writeStableRootRuntimeAliases(params = {}) {
   }
 
   const resolveAliasCandidate = (aliasFileName, candidates) => {
-    if (candidates.length === 1) {
-      return candidates[0];
+    const implementationCandidates = candidates.filter((candidate) => {
+      const filePath = path.join(distDir, candidate);
+      let source;
+      try {
+        source = fsImpl.readFileSync(filePath, "utf8");
+      } catch {
+        return false;
+      }
+      return !source.includes(`"./${aliasFileName}"`);
+    });
+    if (implementationCandidates.length === 1) {
+      return implementationCandidates[0];
     }
     if (aliasFileName === PLUGIN_INSTALL_RUNTIME_ALIAS.aliasFileName) {
       return resolveRootRuntimeCandidateByMarkers({
@@ -166,8 +176,8 @@ export function writeStableRootRuntimeAliases(params = {}) {
         sourceIncludes: PLUGIN_INSTALL_RUNTIME_ALIAS.sourceIncludes,
       });
     }
-    const candidateSet = new Set(candidates);
-    const wrappers = candidates.filter((candidate) => {
+    const candidateSet = new Set(implementationCandidates);
+    const wrappers = implementationCandidates.filter((candidate) => {
       const filePath = path.join(distDir, candidate);
       let source;
       try {
@@ -175,7 +185,7 @@ export function writeStableRootRuntimeAliases(params = {}) {
       } catch {
         return false;
       }
-      return candidates.some(
+      return implementationCandidates.some(
         (target) =>
           target !== candidate &&
           candidateSet.has(target) &&

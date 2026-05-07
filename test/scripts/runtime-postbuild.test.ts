@@ -385,6 +385,33 @@ describe("runtime postbuild static assets", () => {
     );
   });
 
+  it("writes stable aliases when legacy compatibility wrappers already exist", async () => {
+    const rootDir = createTempDir("openclaw-runtime-postbuild-");
+    const distDir = path.join(rootDir, "dist");
+    await fs.mkdir(distDir, { recursive: true });
+    await fs.writeFile(
+      path.join(distDir, "runtime-plugins.runtime-NewHash.js"),
+      "export const ready = true;\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(distDir, "runtime-plugins.runtime-CNAfmQRG.js"),
+      'export * from "./runtime-plugins.runtime.js";\n',
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(distDir, "runtime-plugins.runtime-fLHuT7Vs.js"),
+      'export * from "./runtime-plugins.runtime.js";\n',
+      "utf8",
+    );
+
+    writeStableRootRuntimeAliases({ rootDir });
+
+    expect(await fs.readFile(path.join(distDir, "runtime-plugins.runtime.js"), "utf8")).toBe(
+      'export * from "./runtime-plugins.runtime-NewHash.js";\n',
+    );
+  });
+
   it("writes compatibility aliases for previous release runtime chunk names", async () => {
     const rootDir = createTempDir("openclaw-runtime-postbuild-");
     const distDir = path.join(rootDir, "dist");

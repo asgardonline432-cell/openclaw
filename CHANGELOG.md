@@ -155,6 +155,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- TUI/local runs: keep stable runtime plugin aliases present when legacy compatibility wrappers already exist in dist, so sending a message no longer fails with a missing `runtime-plugins.runtime.js` module.
 - Providers: preserve non-OK `text/event-stream` response bodies so provider HTTP errors keep their JSON detail instead of collapsing to generic streaming failures. Fixes #78180.
 - Chat commands: make `/model default` reset the session model override instead of treating it as a literal model name. Fixes #78182.
 - Cron: make rejected `payload.model` errors show the configured `agents.defaults.models` allowlist instead of echoing the rejected model twice. Fixes #79058.
