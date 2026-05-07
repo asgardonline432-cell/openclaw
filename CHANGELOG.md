@@ -138,6 +138,7 @@ Docs: https://docs.openclaw.ai
 ### Fixes
 
 - CLI backends: keep versioned OAuth identity matches reusable when auth profile ids rotate, so Claude CLI sessions do not reset and lose continuity during same-account OAuth refresh/profile alias changes. Fixes #78541.
+- Providers/Gemini: gate cross-model tool-call thought-signature replay trust to models that require it, so Gemini 3 transports stop forwarding signatures from incompatible upstream messages.
 - Model providers: normalize APNG sniffed PNG uploads, preserve Gemini 3 tool-call thought-signature replay with documented fallback signatures, accept legacy `__env__:VAR` custom-provider keys, and repair snake_case tool-call transcript sanitization. Fixes #51881, #48915, #77566, and #42858.
 - Telegram/models: parse provider ids containing dots in `/models` callback buttons so `hf.co` model lists render as inline keyboard buttons. Fixes #38745.
 - Anthropic: reject uppercase provider-prefixed forward-compat model ids locally instead of sending malformed dynamic ids upstream. Fixes #73715.
