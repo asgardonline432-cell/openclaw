@@ -6,7 +6,6 @@ import type {
   MiscMessageGenerationOptions,
   WAMessage,
 } from "@whiskeysockets/baileys";
-import { listMessageReceiptPlatformIds } from "openclaw/plugin-sdk/channel-message";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveWhatsAppOutboundMentions } from "./outbound-mentions.js";
 import { createWebSendApi } from "./send-api.js";
