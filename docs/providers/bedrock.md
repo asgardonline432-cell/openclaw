@@ -346,6 +346,12 @@ openclaw models list
     - OpenClaw surfaces the credential source in this order: `AWS_BEARER_TOKEN_BEDROCK`,
       then `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, then `AWS_PROFILE`, then the
       default AWS SDK chain.
+    - For shared AWS profile or config-file credentials, OpenClaw refreshes the
+      credentials before each Bedrock model, discovery, and embedding request,
+      so a long-running Gateway picks up rotated keys without restart.
+    - Persisted `type: "aws-sdk"` auth profiles are accepted, so EC2/IMDS and
+      other shared credential-chain Bedrock setups are not dropped as
+      `invalid_type`.
     - Reasoning support depends on the model; check the Bedrock model card for
       current capabilities.
     - If you prefer a managed key flow, you can also place an OpenAI-compatible

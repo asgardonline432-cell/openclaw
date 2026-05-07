@@ -162,14 +162,24 @@ Legacy refs such as `claude-cli/claude-opus-4-7` remain supported for
 compatibility, but new config should keep the provider/model canonical and put
 the execution backend in `agentRuntime.id`.
 
-`auto` mode is intentionally conservative for most providers. OpenAI agent
-models are the exception: unset runtime and `auto` both resolve to the Codex
-harness, while explicit PI runtime config is rejected for `openai/*` agent
-turns.
+`auto` mode is intentionally conservative for most providers. Official OpenAI
+agent models are the exception: when `models.providers.openai` is unset, uses
+the `openai-codex-responses` API, or points at the official
+`https://api.openai.com[/v1]` transport, both unset runtime and `auto` resolve
+to the Codex harness, and explicit PI runtime config is rejected for those
+`openai/*` agent turns.
+
+If `models.providers.openai.baseUrl` points at a custom OpenAI-compatible
+endpoint, OpenClaw treats it as a non-official transport: PI is allowed,
+`auto` does not force Codex, and `openclaw doctor --fix` does not rewrite the
+runtime. Use `agentRuntime.id: "codex"` explicitly when you want the Codex
+harness on top of a custom OpenAI provider.
 
 If `openclaw doctor` warns that the `codex` plugin is enabled while
 `openai-codex/*` remains in config, treat that as legacy route state. Run
-`openclaw doctor --fix` to rewrite it to `openai/*` with the Codex runtime.
+`openclaw doctor --fix` to rewrite it to `openai/*` with the Codex runtime;
+the same fix repairs stale official-OpenAI PI session pins while leaving
+custom-base-URL providers on PI.
 
 ## Compatibility contract
 
