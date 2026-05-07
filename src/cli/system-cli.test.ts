@@ -77,32 +77,25 @@ describe("system-cli", () => {
       "agent:main:telegram:dm:42",
     ]);
 
-    expect(callGatewayFromCli).toHaveBeenCalledTimes(1);
-    const [method, gatewayOptions, params, requestOptions] =
-      callGatewayFromCli.mock.calls.at(0) ?? [];
-    expect(method).toBe("wake");
-    expect(typeof gatewayOptions).toBe("object");
-    expect(params).toEqual({
-      mode: "next-heartbeat",
-      text: "ping",
-      sessionKey: "agent:main:telegram:dm:42",
-    });
-    expect(requestOptions).toEqual({ expectFinal: false });
+    expect(callGatewayFromCli).toHaveBeenCalledWith(
+      "wake",
+      expect.any(Object),
+      { mode: "next-heartbeat", text: "ping", sessionKey: "agent:main:telegram:dm:42" },
+      { expectFinal: false },
+    );
   });
 
   it("omits sessionKey from payload when --session-key not provided", async () => {
     await runCli(["system", "event", "--text", "ping"]);
 
-    expect(callGatewayFromCli).toHaveBeenCalledTimes(1);
-    const [, , params] = callGatewayFromCli.mock.calls.at(0) ?? [];
+    const [, , params] = callGatewayFromCli.mock.calls[0]!;
     expect(params).not.toHaveProperty("sessionKey");
   });
 
   it("treats empty --session-key as omitted", async () => {
     await runCli(["system", "event", "--text", "ping", "--session-key", "  "]);
 
-    expect(callGatewayFromCli).toHaveBeenCalledTimes(1);
-    const [, , params] = callGatewayFromCli.mock.calls.at(0) ?? [];
+    const [, , params] = callGatewayFromCli.mock.calls[0]!;
     expect(params).not.toHaveProperty("sessionKey");
   });
 
