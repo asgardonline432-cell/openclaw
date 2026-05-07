@@ -710,6 +710,7 @@ describe("memory index", () => {
         db: {
           prepare: (sql: string) => {
             get: (...args: unknown[]) => { path: string } | undefined;
+            run: (...args: unknown[]) => void;
           };
         };
       }
