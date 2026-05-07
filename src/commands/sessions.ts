@@ -31,10 +31,13 @@ import {
   toSessionDisplayRow,
 } from "./sessions-table.js";
 
-type SessionRow = SessionDisplayRow & {
+type JsonSessionRow = SessionDisplayRow & {
   agentId: string;
   kind: "cron" | "direct" | "group" | "global" | "unknown";
   agentRuntime: ReturnType<typeof resolveAgentRuntimeMetadata>;
+};
+
+type SessionRow = JsonSessionRow & {
   runtimeLabel: string;
 };
 
@@ -149,22 +152,31 @@ function collectSessionCommandCandidates(params: {
   };
 }
 
-function toSessionCommandRow(cfg: OpenClawConfig, candidate: SessionCommandCandidate): SessionRow {
+function toJsonSessionCommandRow(
+  cfg: OpenClawConfig,
+  candidate: SessionCommandCandidate,
+): JsonSessionRow {
   const row = toSessionDisplayRow(candidate.key, candidate.entry);
   const agentId = parseAgentSessionKey(row.key)?.agentId ?? candidate.target.agentId;
-  const modelRef = resolveSessionDisplayModelRef(cfg, row);
   const agentRuntime = resolveAgentRuntimeMetadata(cfg, agentId);
   return Object.assign({}, row, {
     agentId,
     agentRuntime,
     kind: classifySessionKey(row.key, candidate.entry),
+  });
+}
+
+function toSessionCommandRow(cfg: OpenClawConfig, candidate: SessionCommandCandidate): SessionRow {
+  const row = toJsonSessionCommandRow(cfg, candidate);
+  const modelRef = resolveSessionDisplayModelRef(cfg, row);
+  return Object.assign({}, row, {
     runtimeLabel: resolveSessionRuntimeLabel({
       cfg,
       entry: candidate.entry,
-      agentRuntime,
+      agentRuntime: row.agentRuntime,
       modelProvider: modelRef.provider,
       model: modelRef.model,
-      agentId,
+      agentId: row.agentId,
       sessionKey: row.key,
     }),
   });
@@ -315,12 +327,6 @@ function formatRuntimeCell(runtimeLabel: string, rich: boolean): string {
   return rich ? theme.info(label) : label;
 }
 
-function toJsonSessionRow(row: SessionRow): Omit<SessionRow, "runtimeLabel"> {
-  const { runtimeLabel, ...jsonRow } = row;
-  void runtimeLabel;
-  return jsonRow;
-}
-
 export async function sessionsCommand(
   opts: {
     json?: boolean;
@@ -376,10 +382,10 @@ export async function sessionsCommand(
     activeMinutes,
     limit,
   });
-  const rows = candidates.map((candidate) => toSessionCommandRow(cfg, candidate));
-  const hasMore = rows.length < totalCount;
 
   if (opts.json) {
+    const rows = candidates.map((candidate) => toJsonSessionCommandRow(cfg, candidate));
+    const hasMore = rows.length < totalCount;
     const multi = targets.length > 1;
     const aggregate = aggregateAgents || multi;
     writeRuntimeJson(runtime, {
@@ -398,15 +404,14 @@ export async function sessionsCommand(
       activeMinutes: activeMinutes ?? null,
       sessions: await Promise.all(
         rows.map(async (row) => {
-          const r = toJsonSessionRow(row);
-          const modelRef = resolveSessionDisplayModelRef(cfg, r);
+          const modelRef = resolveSessionDisplayModelRef(cfg, row);
           return {
-            ...r,
-            totalTokens: resolveSessionTotalTokens(r) ?? null,
+            ...row,
+            totalTokens: resolveSessionTotalTokens(row) ?? null,
             totalTokensFresh:
-              typeof r.totalTokens === "number" ? r.totalTokensFresh !== false : false,
+              typeof row.totalTokens === "number" ? row.totalTokensFresh !== false : false,
             contextTokens:
-              r.contextTokens ??
+              row.contextTokens ??
               configuredContextTokens ??
               (await lookupContextTokensForDisplay(modelRef.model)) ??
               configContextTokens ??
@@ -419,6 +424,9 @@ export async function sessionsCommand(
     });
     return;
   }
+
+  const rows = candidates.map((candidate) => toSessionCommandRow(cfg, candidate));
+  const hasMore = rows.length < totalCount;
 
   if (targets.length === 1 && !aggregateAgents) {
     runtime.log(info(`Session store: ${targets[0]?.storePath}`));
