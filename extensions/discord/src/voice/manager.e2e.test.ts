@@ -1,7 +1,12 @@
+import type { Readable } from "node:stream";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChannelType } from "../internal/discord.js";
 import { createVoiceCaptureState } from "./capture-state.js";
 import { createVoiceReceiveRecoveryState } from "./receive-recovery.js";
+
+function createReadableMock(): Readable & { destroy: ReturnType<typeof vi.fn> } {
+  return { destroy: vi.fn() } as unknown as Readable & { destroy: ReturnType<typeof vi.fn> };
+}
 
 const {
   createConnectionMock,
@@ -586,7 +591,7 @@ describe("DiscordVoiceManager", () => {
           captureSilenceGraceMs: 4_000,
         },
       });
-      const stream = { destroy: vi.fn() };
+      const stream = createReadableMock();
       const entry = {
         guildId: "g1",
         channelId: "1001",
