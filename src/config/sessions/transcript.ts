@@ -1,12 +1,13 @@
-import fs from "node:fs";
 import path from "node:path";
 import type { SessionWriteLockAcquireTimeoutConfig } from "../../agents/session-write-lock.js";
 import type { SessionManager } from "../../agents/transcript/session-transcript-contract.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { DEFAULT_AGENT_ID, normalizeAgentId } from "../../routing/session-key.js";
 import { emitSessionTranscriptUpdate } from "../../sessions/transcript-events.js";
 import { extractAssistantVisibleText } from "../../shared/chat-message-content.js";
 import {
   resolveDefaultSessionStorePath,
+  resolveAgentIdFromSessionStorePath,
   resolveSessionFilePath,
   resolveSessionFilePathOptions,
   resolveSessionTranscriptPath,
@@ -19,35 +20,9 @@ import { resolveMirroredTranscriptText } from "./transcript-mirror.js";
 import {
   hasSqliteSessionTranscriptEvents,
   loadSqliteSessionTranscriptEvents,
+  resolveSqliteSessionTranscriptScopeForPath,
 } from "./transcript-store.sqlite.js";
 import type { SessionEntry } from "./types.js";
-
-async function loadCurrentSessionVersion(): Promise<number> {
-  return (await import("../../agents/transcript/session-transcript-contract.js"))
-    .CURRENT_SESSION_VERSION;
-}
-
-async function ensureSessionHeader(params: {
-  sessionFile: string;
-  sessionId: string;
-}): Promise<void> {
-  if (fs.existsSync(params.sessionFile)) {
-    return;
-  }
-  const CURRENT_SESSION_VERSION = await loadCurrentSessionVersion();
-  await fs.promises.mkdir(path.dirname(params.sessionFile), { recursive: true });
-  const header = {
-    type: "session",
-    version: CURRENT_SESSION_VERSION,
-    id: params.sessionId,
-    timestamp: new Date().toISOString(),
-    cwd: process.cwd(),
-  };
-  await fs.promises.writeFile(params.sessionFile, `${JSON.stringify(header)}\n`, {
-    encoding: "utf-8",
-    mode: 0o600,
-  });
-}
 
 export type SessionTranscriptAppendResult =
   | { ok: true; sessionFile: string; messageId: string }
@@ -80,15 +55,23 @@ function hasTranscriptQueryScope(scope?: TranscriptQueryScope): scope is {
   return Boolean(scope?.agentId?.trim() && scope.sessionId?.trim());
 }
 
-function loadScopedSqliteTranscriptEvents(scope?: TranscriptQueryScope): unknown[] | undefined {
-  if (!hasTranscriptQueryScope(scope)) {
+function loadScopedSqliteTranscriptEvents(
+  scope?: TranscriptQueryScope,
+  transcriptPath?: string,
+): unknown[] | undefined {
+  const resolvedScope = hasTranscriptQueryScope(scope)
+    ? scope
+    : transcriptPath?.trim()
+      ? resolveSqliteSessionTranscriptScopeForPath({ transcriptPath })
+      : undefined;
+  if (!resolvedScope) {
     return undefined;
   }
   try {
-    if (!hasSqliteSessionTranscriptEvents(scope)) {
+    if (!hasSqliteSessionTranscriptEvents(resolvedScope)) {
       return undefined;
     }
-    return loadSqliteSessionTranscriptEvents(scope).map((entry) => entry.event);
+    return loadSqliteSessionTranscriptEvents(resolvedScope).map((entry) => entry.event);
   } catch {
     return undefined;
   }
@@ -172,7 +155,7 @@ export async function readLatestAssistantTextFromSessionTranscript(
   sessionFile: string | undefined,
   scope?: TranscriptQueryScope,
 ): Promise<LatestAssistantTranscriptText | undefined> {
-  const scopedEvents = loadScopedSqliteTranscriptEvents(scope);
+  const scopedEvents = loadScopedSqliteTranscriptEvents(scope, sessionFile);
   if (scopedEvents) {
     for (const event of scopedEvents.toReversed()) {
       const assistantText = parseAssistantTranscriptEventText(event);
@@ -183,20 +166,6 @@ export async function readLatestAssistantTextFromSessionTranscript(
     return undefined;
   }
 
-  if (!sessionFile?.trim()) {
-    return undefined;
-  }
-
-  for await (const line of streamSessionTranscriptLinesReverse(sessionFile)) {
-    try {
-      const assistantText = parseAssistantTranscriptText(line);
-      if (assistantText) {
-        return assistantText;
-      }
-    } catch {
-      continue;
-    }
-  }
   return undefined;
 }
 
@@ -204,23 +173,12 @@ export async function readTailAssistantTextFromSessionTranscript(
   sessionFile: string | undefined,
   scope?: TranscriptQueryScope,
 ): Promise<TailAssistantTranscriptText | undefined> {
-  const scopedEvents = loadScopedSqliteTranscriptEvents(scope);
+  const scopedEvents = loadScopedSqliteTranscriptEvents(scope, sessionFile);
   if (scopedEvents) {
     const tail = scopedEvents.at(-1);
     return tail === undefined ? undefined : parseAssistantTranscriptEventText(tail);
   }
 
-  if (!sessionFile?.trim()) {
-    return undefined;
-  }
-
-  for await (const line of streamSessionTranscriptLinesReverse(sessionFile)) {
-    try {
-      return parseAssistantTranscriptText(line);
-    } catch {
-      return undefined;
-    }
-  }
   return undefined;
 }
 
@@ -299,6 +257,9 @@ export async function appendExactAssistantMessageToSessionTranscript(params: {
   }
 
   const storePath = params.storePath ?? resolveDefaultSessionStorePath(params.agentId);
+  const agentId = normalizeAgentId(
+    params.agentId ?? resolveAgentIdFromSessionStorePath(storePath) ?? DEFAULT_AGENT_ID,
+  );
   const store = loadSessionStore(storePath);
   const normalizedKey = normalizeStoreSessionKey(sessionKey);
   const entry = (store[normalizedKey] ?? store[sessionKey]) as SessionEntry | undefined;
@@ -314,7 +275,7 @@ export async function appendExactAssistantMessageToSessionTranscript(params: {
       sessionStore: store,
       storePath,
       sessionEntry: entry,
-      agentId: params.agentId,
+      agentId,
       sessionsDir: path.dirname(storePath),
     });
     sessionFile = resolvedSessionFile.sessionFile;
@@ -325,13 +286,11 @@ export async function appendExactAssistantMessageToSessionTranscript(params: {
     };
   }
 
-  await ensureSessionHeader({ sessionFile, sessionId: entry.sessionId });
-
   const explicitIdempotencyKey =
     params.idempotencyKey ??
     ((params.message as { idempotencyKey?: unknown }).idempotencyKey as string | undefined);
   const transcriptScope = {
-    agentId: params.agentId,
+    agentId,
     sessionId: entry.sessionId,
   };
   const existingMessageId = explicitIdempotencyKey
@@ -355,10 +314,10 @@ export async function appendExactAssistantMessageToSessionTranscript(params: {
   const message = {
     ...params.message,
     ...(explicitIdempotencyKey ? { idempotencyKey: explicitIdempotencyKey } : {}),
-  } as Parameters<SessionManager["appendMessage"]>[0];
+  };
   const { messageId } = await appendSessionTranscriptMessage({
     transcriptPath: sessionFile,
-    agentId: params.agentId,
+    agentId,
     message,
     sessionId: entry.sessionId,
     config: params.config,
@@ -382,34 +341,9 @@ async function transcriptHasIdempotencyKey(
   idempotencyKey: string,
   scope?: TranscriptQueryScope,
 ): Promise<string | true | undefined> {
-  const scopedEvents = loadScopedSqliteTranscriptEvents(scope);
+  const scopedEvents = loadScopedSqliteTranscriptEvents(scope, transcriptPath);
   if (scopedEvents) {
     return findIdempotencyKeyInTranscriptEvents(scopedEvents, idempotencyKey);
-  }
-
-  try {
-    for await (const line of streamSessionTranscriptLines(transcriptPath)) {
-      try {
-        const parsed = JSON.parse(line) as {
-          id?: unknown;
-          message?: { idempotencyKey?: unknown };
-        };
-        if (
-          parsed.message?.idempotencyKey === idempotencyKey &&
-          typeof parsed.id === "string" &&
-          parsed.id
-        ) {
-          return parsed.id;
-        }
-        if (parsed.message?.idempotencyKey === idempotencyKey) {
-          return true;
-        }
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    return undefined;
   }
   return undefined;
 }
@@ -473,30 +407,9 @@ async function findLatestEquivalentAssistantMessageId(
     return undefined;
   }
 
-  const scopedEvents = loadScopedSqliteTranscriptEvents(scope);
+  const scopedEvents = loadScopedSqliteTranscriptEvents(scope, transcriptPath);
   if (scopedEvents) {
     return findLatestEquivalentAssistantMessageIdInEvents(scopedEvents, expectedText);
-  }
-
-  try {
-    const raw = await fs.promises.readFile(transcriptPath, "utf-8");
-    const lines = raw.split(/\r?\n/);
-    for (let index = lines.length - 1; index >= 0; index -= 1) {
-      const line = lines[index];
-      if (!line.trim()) {
-        continue;
-      }
-      const candidateText = extractAssistantMessageText(candidate);
-      if (candidateText !== expectedText) {
-        return undefined;
-      }
-      if (typeof parsed.id === "string" && parsed.id) {
-        return parsed.id;
-      }
-      return undefined;
-    } catch {
-      continue;
-    }
   }
 
   return undefined;
