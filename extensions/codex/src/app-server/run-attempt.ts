@@ -989,6 +989,7 @@ export async function runCodexAppServerAttempt(
         return refreshCodexAppServerAuthTokens({
           agentDir,
           authProfileId: startupAuthProfileId,
+          config: params.config,
         });
       }
       if (!turnId) {
