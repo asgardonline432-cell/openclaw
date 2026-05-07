@@ -14,6 +14,7 @@ Docs: https://docs.openclaw.ai
 - Telegram: honor `accessGroup:*` sender allowlists for DMs, groups, native commands, and callback authorization before applying Telegram's numeric sender-ID checks. Fixes #78660. Thanks @manugc.
 - Agent delivery: report `deliverySucceeded=false` when outbound delivery returns no adapter result, so claimed/empty delivery paths no longer masquerade as successful sends. Fixes #78532. Thanks @joeyfrasier.
 - Telegram: keep the polling watchdog tied to `getUpdates` liveness so unrelated outbound Bot API calls cannot mask a wedged inbound poller. Fixes #78422. Thanks @ai-hpc.
+- Agents/subagents: have completed session-mode subagent registry rows honor `agents.defaults.subagents.archiveAfterMinutes` instead of a hardcoded 5-minute TTL, so registry-backed surfaces keep one retention knob across spawn modes. (#78263) Thanks @arniesaha.
 
 ## 2026.5.6
 
