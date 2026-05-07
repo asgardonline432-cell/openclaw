@@ -734,19 +734,22 @@ export abstract class MemoryManagerSyncOps {
         ? this.db.prepare(`DELETE FROM ${FTS_TABLE} WHERE path = ? AND source = ?`)
         : null;
 
+    let memoryFileScanTruncated = false;
     const files = await listMemoryFiles(
       this.workspaceDir,
       this.settings.extraPaths,
       this.settings.multimodal,
       {
         maxScanEntries: this.settings.sync.maxFileScanEntries,
-        onTruncated: (event) =>
+        onTruncated: (event) => {
+          memoryFileScanTruncated = true;
           log.warn("memory sync: memory file scan truncated", {
             dir: event.dir,
             scannedEntryCount: event.scannedEntryCount,
             maxFileScanEntries: event.maxScanEntries,
             reason: event.reason,
-          }),
+          });
+        },
       },
     );
     const fileEntries = (
@@ -801,6 +804,15 @@ export abstract class MemoryManagerSyncOps {
       }
     });
     await runWithConcurrency(tasks, this.getIndexConcurrency());
+
+    if (memoryFileScanTruncated) {
+      log.warn("memory sync: skipped stale memory file pruning after truncated scan", {
+        activePaths: activePaths.size,
+        existingRows: existingRows.length,
+        maxFileScanEntries: this.settings.sync.maxFileScanEntries,
+      });
+      return;
+    }
 
     for (const stale of existingRows) {
       if (activePaths.has(stale.path)) {

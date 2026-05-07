@@ -245,6 +245,7 @@ describe("memory index", () => {
     minScore?: number;
     onSearch?: boolean;
     hybrid?: { enabled: boolean; vectorWeight?: number; textWeight?: number };
+    maxFileScanEntries?: number;
   }): TestCfg {
     return {
       agents: {
@@ -257,7 +258,12 @@ describe("memory index", () => {
             store: { path: params.storePath, vector: { enabled: params.vectorEnabled ?? false } },
             // Perf: keep test indexes to a single chunk to reduce sqlite work.
             chunking: { tokens: 4000, overlap: 0 },
-            sync: { watch: false, onSessionStart: false, onSearch: params.onSearch ?? true },
+            sync: {
+              watch: false,
+              onSessionStart: false,
+              onSearch: params.onSearch ?? true,
+              maxFileScanEntries: params.maxFileScanEntries,
+            },
             query: {
               minScore: params.minScore ?? 0,
               hybrid: params.hybrid ?? { enabled: false },
@@ -594,6 +600,48 @@ describe("memory index", () => {
 
     const noResults = await manager.search("nonexistent_xyz_keyword");
     expect(noResults.length).toBe(0);
+  });
+
+  it("keeps existing memory rows when file discovery truncates", async () => {
+    forceNoProvider = true;
+
+    const cfg = createCfg({
+      storePath: path.join(workspaceDir, "index-truncated-memory-scan.sqlite"),
+      maxFileScanEntries: 0,
+      hybrid: { enabled: true },
+    });
+    const manager = await getPersistentManager(cfg);
+    if (!manager.status().fts?.available) {
+      return;
+    }
+
+    await manager.sync({ reason: "test", force: true });
+    const db = (
+      manager as unknown as {
+        db: {
+          prepare: (sql: string) => {
+            get: (...args: unknown[]) => { path: string } | undefined;
+            run: (...args: unknown[]) => void;
+          };
+        };
+      }
+    ).db;
+    db.prepare("INSERT INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)").run(
+      "memory/preserved.md",
+      "memory",
+      "preserved-hash",
+      0,
+      12,
+    );
+    (manager as unknown as { dirty: boolean }).dirty = true;
+
+    await manager.sync({ reason: "test" });
+
+    expect(
+      db
+        .prepare("SELECT path FROM files WHERE path = ? AND source = ?")
+        .get("memory/preserved.md", "memory"),
+    ).toEqual({ path: "memory/preserved.md" });
   });
 
   it("prefers exact session transcript hits in FTS-only mode", async () => {
