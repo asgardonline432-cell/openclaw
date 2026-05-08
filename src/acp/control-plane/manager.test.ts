@@ -2714,7 +2714,7 @@ describe("AcpSessionManager", () => {
     hoisted.listAcpSessionEntriesMock.mockResolvedValue([
       {
         cfg: baseCfg,
-        storePath: "/tmp/sessions-acp.json",
+        agentId: "codex",
         sessionKey,
         storeSessionKey: sessionKey,
         entry: {
@@ -2772,7 +2772,7 @@ describe("AcpSessionManager", () => {
     hoisted.listAcpSessionEntriesMock.mockResolvedValue([
       {
         cfg: baseCfg,
-        storePath: "/tmp/sessions-acp.json",
+        agentId: "claude",
         sessionKey,
         storeSessionKey: sessionKey,
         entry: {
@@ -2909,7 +2909,7 @@ describe("AcpSessionManager", () => {
     hoisted.listAcpSessionEntriesMock.mockResolvedValue([
       {
         cfg: baseCfg,
-        storePath: "/tmp/sessions-acp.json",
+        agentId: "codex",
         sessionKey,
         storeSessionKey: sessionKey,
         entry: {

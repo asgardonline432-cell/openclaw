@@ -195,7 +195,7 @@ describe("maybeRepairSandboxRegistryFiles", () => {
 
     expect(migrateLegacySandboxRegistryFiles).toHaveBeenCalledTimes(1);
     expect(note).toHaveBeenCalledWith(
-      "- Migrated containers registry from /tmp/openclaw/sandbox/containers.json into 2 shards.",
+      expect.stringContaining("Migrated 2 containers registry entries"),
       "Doctor changes",
     );
   });

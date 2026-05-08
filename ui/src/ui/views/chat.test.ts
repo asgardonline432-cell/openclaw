@@ -950,7 +950,7 @@ describe("chat session controls", () => {
     };
     state.sessionsResult = {
       ts: 0,
-      path: "",
+      databasePath: "",
       count: 4,
       defaults: { modelProvider: "openai", model: "gpt-5", contextTokens: null },
       sessions: [
@@ -1022,7 +1022,7 @@ describe("chat session controls", () => {
     };
     state.sessionsResult = {
       ts: 0,
-      path: "",
+      databasePath: "",
       count: 1,
       defaults: { modelProvider: "openai", model: "gpt-5", contextTokens: null },
       sessions: [{ key: "agent:alpha:main", kind: "direct", updatedAt: 4 }],
@@ -1069,7 +1069,7 @@ describe("chat session controls", () => {
     };
     state.sessionsResult = {
       ts: 0,
-      path: "",
+      databasePath: "",
       count: 0,
       defaults: { modelProvider: "openai", model: "gpt-5", contextTokens: null },
       sessions: [],

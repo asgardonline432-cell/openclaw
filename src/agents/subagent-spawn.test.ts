@@ -3,15 +3,14 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSubagentSpawnTestConfig,
   expectPersistedRuntimeModel,
-  installSessionStoreCaptureMock,
+  installSessionEntryCaptureMock,
   loadSubagentSpawnModuleForTest,
 } from "./subagent-spawn.test-helpers.js";
 import { installAcceptedSubagentGatewayMock } from "./test-helpers/subagent-gateway.js";
 
 const hoisted = vi.hoisted(() => ({
   callGatewayMock: vi.fn(),
-  updateSessionStoreMock: vi.fn(),
-  pruneLegacyStoreKeysMock: vi.fn(),
+  upsertSessionEntryMock: vi.fn(),
   registerSubagentRunMock: vi.fn(),
   emitSessionLifecycleEventMock: vi.fn(),
   resolveAgentConfigMock: vi.fn(),
@@ -59,14 +58,12 @@ describe("spawnSubagentDirect seam flow", () => {
     ({ resetSubagentRegistryForTests, spawnSubagentDirect } = await loadSubagentSpawnModuleForTest({
       callGatewayMock: hoisted.callGatewayMock,
       getRuntimeConfig: () => hoisted.configOverride,
-      updateSessionStoreMock: hoisted.updateSessionStoreMock,
-      pruneLegacyStoreKeysMock: hoisted.pruneLegacyStoreKeysMock,
+      upsertSessionEntryMock: hoisted.upsertSessionEntryMock,
       registerSubagentRunMock: hoisted.registerSubagentRunMock,
       emitSessionLifecycleEventMock: hoisted.emitSessionLifecycleEventMock,
       resolveAgentConfig: hoisted.resolveAgentConfigMock,
       resolveSubagentSpawnModelSelection: () => "openai-codex/gpt-5.4",
       resolveSandboxRuntimeStatus: () => ({ sandboxed: false }),
-      sessionStorePath: "/tmp/subagent-spawn-session-store.json",
       resetModules: false,
     }));
   });
@@ -74,8 +71,7 @@ describe("spawnSubagentDirect seam flow", () => {
   beforeEach(() => {
     resetSubagentRegistryForTests();
     hoisted.callGatewayMock.mockReset();
-    hoisted.updateSessionStoreMock.mockReset();
-    hoisted.pruneLegacyStoreKeysMock.mockReset();
+    hoisted.upsertSessionEntryMock.mockReset();
     hoisted.registerSubagentRunMock.mockReset();
     hoisted.emitSessionLifecycleEventMock.mockReset();
     hoisted.resolveAgentConfigMock.mockReset();
@@ -86,16 +82,7 @@ describe("spawnSubagentDirect seam flow", () => {
     hoisted.configOverride = createConfigOverride();
     installAcceptedSubagentGatewayMock(hoisted.callGatewayMock);
 
-    hoisted.updateSessionStoreMock.mockImplementation(
-      async (
-        _storePath: string,
-        mutator: (store: Record<string, Record<string, unknown>>) => unknown,
-      ) => {
-        const store: Record<string, Record<string, unknown>> = {};
-        await mutator(store);
-        return store;
-      },
-    );
+    hoisted.upsertSessionEntryMock.mockImplementation(() => undefined);
   });
 
   it("rejects explicit same-agent targets when allowAgents excludes the requester", async () => {
@@ -184,7 +171,7 @@ describe("spawnSubagentDirect seam flow", () => {
       }
       return {};
     });
-    installSessionStoreCaptureMock(hoisted.updateSessionStoreMock, {
+    installSessionEntryCaptureMock(hoisted.upsertSessionEntryMock, {
       operations,
       onStore: (store) => {
         persistedStore = store;
@@ -213,9 +200,8 @@ describe("spawnSubagentDirect seam flow", () => {
     expect(result.childSessionKey).toMatch(/^agent:main:subagent:/);
 
     const childSessionKey = result.childSessionKey as string;
-    expect(hoisted.pruneLegacyStoreKeysMock).toHaveBeenCalledTimes(3);
-    expect(hoisted.updateSessionStoreMock).toHaveBeenCalledTimes(3);
-    const registerInput = requireRecord(hoisted.registerSubagentRunMock.mock.calls.at(0)?.[0]);
+    expect(hoisted.upsertSessionEntryMock).toHaveBeenCalledTimes(3);
+    const registerInput = requireRecord(hoisted.registerSubagentRunMock.mock.calls[0]?.[0]);
     const requesterOrigin = requireRecord(registerInput.requesterOrigin);
     expect(registerInput.runId).toBe("run-1");
     expect(registerInput.childSessionKey).toBe(childSessionKey);
@@ -245,9 +231,9 @@ describe("spawnSubagentDirect seam flow", () => {
       model: "gpt-5.4",
       overrideSource: "user",
     });
-    expect(operations.indexOf("store:update")).toBeGreaterThan(-1);
+    expect(operations.indexOf("store:upsert")).toBeGreaterThan(-1);
     expect(operations.indexOf("gateway:agent")).toBeGreaterThan(
-      operations.lastIndexOf("store:update"),
+      operations.lastIndexOf("store:upsert"),
     );
     const agentRequest = gatewayRequest("agent");
     const agentParams = requireRecord(agentRequest.params);
@@ -265,7 +251,7 @@ describe("spawnSubagentDirect seam flow", () => {
       }
       return {};
     });
-    installSessionStoreCaptureMock(hoisted.updateSessionStoreMock);
+    installSessionEntryCaptureMock(hoisted.upsertSessionEntryMock);
 
     const result = await spawnSubagentDirect(
       {
@@ -304,7 +290,7 @@ describe("spawnSubagentDirect seam flow", () => {
         return {};
       },
     );
-    installSessionStoreCaptureMock(hoisted.updateSessionStoreMock);
+    installSessionEntryCaptureMock(hoisted.upsertSessionEntryMock);
 
     const result = await spawnSubagentDirect(
       {
@@ -349,7 +335,7 @@ describe("spawnSubagentDirect seam flow", () => {
         return {};
       },
     );
-    installSessionStoreCaptureMock(hoisted.updateSessionStoreMock);
+    installSessionEntryCaptureMock(hoisted.upsertSessionEntryMock);
 
     const result = await spawnSubagentDirect(
       {
@@ -382,7 +368,7 @@ describe("spawnSubagentDirect seam flow", () => {
         return {};
       },
     );
-    installSessionStoreCaptureMock(hoisted.updateSessionStoreMock);
+    installSessionEntryCaptureMock(hoisted.upsertSessionEntryMock);
 
     const task = "UNIQUE_LONG_SUBAGENT_TASK_TOKEN\n  keep indentation";
     const result = await spawnSubagentDirect(
@@ -416,7 +402,7 @@ describe("spawnSubagentDirect seam flow", () => {
         return {};
       },
     );
-    hoisted.updateSessionStoreMock.mockRejectedValueOnce(new Error("invalid model: bad-model"));
+    hoisted.upsertSessionEntryMock.mockRejectedValueOnce(new Error("invalid model: bad-model"));
 
     const result = await spawnSubagentDirect(
       {
