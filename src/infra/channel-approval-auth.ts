@@ -1,4 +1,5 @@
 import { getChannelPlugin, resolveChannelApprovalCapability } from "../channels/plugins/index.js";
+import type { ChannelApprovalCapability } from "../channels/plugins/types.adapters.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { isImplicitSameChatApprovalAuthorization } from "../plugin-sdk/approval-auth-helpers.js";
 import { normalizeMessageChannel } from "../utils/message-channel.js";
@@ -15,12 +16,14 @@ export function resolveApprovalCommandAuthorization(params: {
   accountId?: string | null;
   senderId?: string | null;
   kind: "exec" | "plugin";
+  approvalCapability?: ChannelApprovalCapability;
 }): ApprovalCommandAuthorization {
   const channel = normalizeMessageChannel(params.channel);
   if (!channel) {
     return { authorized: true, explicit: false };
   }
-  const approvalCapability = resolveChannelApprovalCapability(getChannelPlugin(channel));
+  const approvalCapability =
+    params.approvalCapability ?? resolveChannelApprovalCapability(getChannelPlugin(channel));
   const resolved = approvalCapability?.authorizeActorAction?.({
     cfg: params.cfg,
     accountId: params.accountId,

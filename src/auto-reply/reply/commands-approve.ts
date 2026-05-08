@@ -142,9 +142,10 @@ export const handleApproveCommand: CommandHandler = async (params, allowTextComm
     ctx: params.ctx,
     command: params.command,
   });
-  const approvalCapability = resolveChannelApprovalCapability(
-    getChannelPlugin(params.command.channel),
-  );
+  const approvalCapability =
+    params.replyChannelRuntime && params.replyChannelRuntime.id === params.command.channel
+      ? params.replyChannelRuntime.approvalCapability
+      : resolveChannelApprovalCapability(getChannelPlugin(params.command.channel));
   const approveCommandBehavior = approvalCapability?.resolveApproveCommandBehavior?.({
     cfg: params.cfg,
     accountId: effectiveAccountId,
@@ -163,6 +164,7 @@ export const handleApproveCommand: CommandHandler = async (params, allowTextComm
     accountId: effectiveAccountId,
     senderId: params.command.senderId,
     kind: "exec",
+    approvalCapability,
   });
   const pluginApprovalAuthorization = resolveApprovalCommandAuthorization({
     cfg: params.cfg,
@@ -170,6 +172,7 @@ export const handleApproveCommand: CommandHandler = async (params, allowTextComm
     accountId: effectiveAccountId,
     senderId: params.command.senderId,
     kind: "plugin",
+    approvalCapability,
   });
   const hasExplicitApprovalAuthorization =
     (execApprovalAuthorization.explicit && execApprovalAuthorization.authorized) ||

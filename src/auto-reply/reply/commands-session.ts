@@ -47,6 +47,19 @@ const SESSION_DURATION_OFF_VALUES = new Set(["off", "disable", "disabled", "none
 const SESSION_ACTION_IDLE = "idle";
 const SESSION_ACTION_MAX_AGE = "max-age";
 
+function resolveCommandConversationBindings(
+  params: HandleCommandsParams,
+  channelId?: string,
+): NonNullable<HandleCommandsParams["replyChannelRuntime"]>["conversationBindings"] | undefined {
+  if (!channelId) {
+    return undefined;
+  }
+  if (params.replyChannelRuntime && params.replyChannelRuntime.id === channelId) {
+    return params.replyChannelRuntime.conversationBindings;
+  }
+  return getChannelPlugin(channelId)?.conversationBindings;
+}
+
 function buildRestartCommandSentinel(params: HandleCommandsParams): RestartSentinelPayload | null {
   const sessionKey = normalizeOptionalString(params.sessionKey);
   if (!sessionKey) {
@@ -477,9 +490,7 @@ export const handleSessionCommand: CommandHandler = async (params, allowTextComm
     params.command.channelId ??
     normalizeChannelId(resolveCommandSurfaceChannel(params)) ??
     undefined;
-  const commandConversationBindings = channelId
-    ? getChannelPlugin(channelId)?.conversationBindings
-    : undefined;
+  const commandConversationBindings = resolveCommandConversationBindings(params, channelId);
   const commandSupportsCurrentConversationBinding = Boolean(
     commandConversationBindings?.supportsCurrentConversationBinding,
   );
@@ -509,9 +520,7 @@ export const handleSessionCommand: CommandHandler = async (params, allowTextComm
     };
   }
   const resolvedChannelId = bindingContext.channel || channelId;
-  const conversationBindings = resolvedChannelId
-    ? getChannelPlugin(resolvedChannelId)?.conversationBindings
-    : undefined;
+  const conversationBindings = resolveCommandConversationBindings(params, resolvedChannelId);
   const supportsCurrentConversationBinding = Boolean(
     conversationBindings?.supportsCurrentConversationBinding,
   );

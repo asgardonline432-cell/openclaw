@@ -27,6 +27,7 @@ import {
   shouldSkipMessageByAbortCutoff,
 } from "./abort-cutoff.js";
 import { getAbortMemory, isAbortRequestText } from "./abort-primitives.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import type { buildStatusReply, handleCommands } from "./commands.runtime.js";
 import { isDirectiveOnly } from "./directive-handling.directive-only.js";
 import type { InlineDirectives } from "./directive-handling.parse.js";
@@ -201,6 +202,7 @@ export async function handleInlineActions(params: {
   directiveAck?: ReplyPayload;
   abortedLastRun: boolean;
   skillFilter?: string[];
+  replyChannelRuntime?: ReplyChannelRuntime;
 }): Promise<InlineActionResult> {
   const {
     ctx,
@@ -484,6 +486,7 @@ export async function handleInlineActions(params: {
       isGroup,
       skillCommands,
       typing,
+      replyChannelRuntime: params.replyChannelRuntime,
     });
   };
 
@@ -508,8 +511,15 @@ export async function handleInlineActions(params: {
   }
 
   const isEmptyConfig = Object.keys(cfg).length === 0;
+  const preparedCommands =
+    params.replyChannelRuntime && params.replyChannelRuntime.id === command.channelId
+      ? params.replyChannelRuntime.commands
+      : undefined;
   const skipWhenConfigEmpty = command.channelId
-    ? Boolean(getChannelPlugin(command.channelId)?.commands?.skipWhenConfigEmpty)
+    ? Boolean(
+        preparedCommands?.skipWhenConfigEmpty ??
+        getChannelPlugin(command.channelId)?.commands?.skipWhenConfigEmpty,
+      )
     : false;
   if (
     skipWhenConfigEmpty &&

@@ -24,7 +24,7 @@ import {
   requireCommandFlagEnabled,
   requireGatewayClientScopeForInternalChannel,
 } from "./command-gates.js";
-import type { CommandHandler } from "./commands-types.js";
+import type { CommandHandler, HandleCommandsParams } from "./commands-types.js";
 import { resolveConfigWriteDeniedText } from "./config-write-authorization.js";
 
 type AllowlistScope = "dm" | "group" | "all";
@@ -35,6 +35,7 @@ type ResolvedAllowlistName = {
   resolved: boolean;
   name?: string | null;
 };
+type AllowlistCommandRuntime = NonNullable<HandleCommandsParams["replyChannelRuntime"]>;
 
 type AllowlistCommand =
   | {
@@ -63,14 +64,15 @@ function resolveAllowlistAccountId(params: {
   channelId: ChannelId;
   parsedAccount?: string;
   ctxAccountId?: string;
+  runtime?: Pick<AllowlistCommandRuntime, "defaultAccountId">;
 }): string {
   const explicitAccountId = normalizeOptionalAccountId(params.parsedAccount);
   if (explicitAccountId) {
     return explicitAccountId;
   }
-  const plugin = getChannelPlugin(params.channelId);
   const configuredDefaultAccountId = normalizeOptionalString(
-    plugin?.config.defaultAccountId?.(params.cfg),
+    params.runtime?.defaultAccountId?.(params.cfg) ??
+      getChannelPlugin(params.channelId)?.config.defaultAccountId?.(params.cfg),
   );
   const ctxAccountId = normalizeOptionalAccountId(params.ctxAccountId);
   return configuredDefaultAccountId || ctxAccountId || DEFAULT_ACCOUNT_ID;
@@ -174,10 +176,12 @@ function normalizeAllowFrom(params: {
   channelId: ChannelId;
   accountId?: string | null;
   values: Array<string | number>;
+  runtime?: Pick<AllowlistCommandRuntime, "formatAllowFrom">;
 }): string[] {
-  const plugin = getChannelPlugin(params.channelId);
-  if (plugin?.config.formatAllowFrom) {
-    return plugin.config.formatAllowFrom({
+  const formatAllowFrom =
+    params.runtime?.formatAllowFrom ?? getChannelPlugin(params.channelId)?.config.formatAllowFrom;
+  if (formatAllowFrom) {
+    return formatAllowFrom({
       cfg: params.cfg,
       accountId: params.accountId,
       allowFrom: params.values,
@@ -239,9 +243,10 @@ async function resolveAllowlistNames(params: {
   accountId?: string | null;
   scope: "dm" | "group";
   entries: string[];
+  runtime?: Pick<AllowlistCommandRuntime, "allowlist">;
 }) {
-  const plugin = getChannelPlugin(params.channelId);
-  const resolved = await plugin?.allowlist?.resolveNames?.({
+  const allowlist = params.runtime?.allowlist ?? getChannelPlugin(params.channelId)?.allowlist;
+  const resolved = await allowlist?.resolveNames?.({
     cfg: params.cfg,
     accountId: params.accountId,
     scope: params.scope,
@@ -254,10 +259,11 @@ async function readAllowlistConfig(params: {
   cfg: OpenClawConfig;
   channelId: ChannelId;
   accountId?: string | null;
+  runtime?: Pick<AllowlistCommandRuntime, "allowlist">;
 }) {
-  const plugin = getChannelPlugin(params.channelId);
+  const allowlist = params.runtime?.allowlist ?? getChannelPlugin(params.channelId)?.allowlist;
   return (
-    (await plugin?.allowlist?.readConfig?.({
+    (await allowlist?.readConfig?.({
       cfg: params.cfg,
       accountId: params.accountId,
     })) ?? {}
@@ -296,6 +302,10 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
       reply: { text: "⚠️ Unknown channel. Add channel=<id> to the command." },
     };
   }
+  const runtime =
+    params.replyChannelRuntime && params.replyChannelRuntime.id === channelId
+      ? params.replyChannelRuntime
+      : undefined;
   if (normalizeOptionalString(parsed.account) && !normalizeOptionalAccountId(parsed.account)) {
     return {
       shouldContinue: false,
@@ -309,12 +319,15 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
     channelId,
     parsedAccount: parsed.account,
     ctxAccountId: params.ctx.AccountId,
+    runtime,
   });
-  const plugin = getChannelPlugin(channelId);
+  const plugin = runtime ? undefined : getChannelPlugin(channelId);
+  const allowlist = runtime?.allowlist ?? plugin?.allowlist;
+  const pairing = runtime?.pairing ?? plugin?.pairing;
 
   if (parsed.action === "list") {
-    const supportsStore = Boolean(plugin?.pairing);
-    if (!plugin?.allowlist?.readConfig && !supportsStore) {
+    const supportsStore = Boolean(pairing);
+    if (!allowlist?.readConfig && !supportsStore) {
       return {
         shouldContinue: false,
         reply: { text: `⚠️ ${channelId} does not expose allowlist configuration.` },
@@ -327,6 +340,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
       cfg: params.cfg,
       channelId,
       accountId,
+      runtime,
     });
 
     const dmAllowFrom = (configState.dmAllowFrom ?? []).map(String);
@@ -341,12 +355,14 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
       channelId,
       accountId,
       values: dmAllowFrom,
+      runtime,
     });
     const groupDisplay = normalizeAllowFrom({
       cfg: params.cfg,
       channelId,
       accountId,
       values: groupAllowFrom,
+      runtime,
     });
     const groupOverrideEntries = groupOverrides.flatMap((entry) => entry.entries);
     const groupOverrideDisplay = normalizeAllowFrom({
@@ -354,6 +370,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
       channelId,
       accountId,
       values: groupOverrideEntries,
+      runtime,
     });
 
     const resolvedDm =
@@ -364,6 +381,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
             accountId,
             scope: "dm",
             entries: dmDisplay,
+            runtime,
           })
         : undefined;
     const resolvedGroup =
@@ -374,6 +392,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
             accountId,
             scope: "group",
             entries: groupOverrideDisplay,
+            runtime,
           })
         : undefined;
 
@@ -397,6 +416,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
         channelId,
         accountId,
         values: storeAllowFrom,
+        runtime,
       });
       lines.push(`Paired allowFrom (store): ${formatEntryList(storeLabel)}`);
     }
@@ -412,6 +432,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
             channelId,
             accountId,
             values: entry.entries,
+            runtime,
           });
           lines.push(`- ${entry.label}: ${formatEntryList(normalized, resolvedGroup)}`);
         }
@@ -440,7 +461,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
   }
 
   const shouldUpdateConfig = parsed.target !== "store";
-  const shouldTouchStore = parsed.target !== "config" && Boolean(plugin?.pairing);
+  const shouldTouchStore = parsed.target !== "config" && Boolean(pairing);
 
   if (shouldUpdateConfig) {
     if (parsed.scope === "all") {
@@ -449,7 +470,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
         reply: { text: "⚠️ /allowlist add|remove requires scope dm or group." },
       };
     }
-    if (!plugin?.allowlist?.applyConfigEdit) {
+    if (!allowlist?.applyConfigEdit) {
       return {
         shouldContinue: false,
         reply: {
@@ -466,7 +487,7 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
       };
     }
     const parsedConfig = structuredClone(snapshot.parsed as Record<string, unknown>);
-    const editResult = await plugin.allowlist.applyConfigEdit({
+    const editResult = await allowlist.applyConfigEdit({
       cfg: params.cfg,
       parsedConfig,
       accountId,

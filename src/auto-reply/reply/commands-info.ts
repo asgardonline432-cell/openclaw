@@ -63,16 +63,23 @@ export const handleCommandsListCommand: CommandHandler = async (params, allowTex
       agentIds: agentId ? [agentId] : undefined,
     });
   const surface = params.ctx.Surface;
-  const commandPlugin = surface ? getChannelPlugin(surface) : null;
+  const preparedCommands =
+    params.replyChannelRuntime && params.replyChannelRuntime.id === surface
+      ? params.replyChannelRuntime.commands
+      : undefined;
+  const commandPlugin = preparedCommands || !surface ? null : getChannelPlugin(surface);
   const paginated = buildCommandsMessagePaginated(params.cfg, skillCommands, {
     page: 1,
     surface,
+    commands: preparedCommands,
   });
-  const channelData = commandPlugin?.commands?.buildCommandsListChannelData?.({
-    currentPage: paginated.currentPage,
-    totalPages: paginated.totalPages,
-    agentId,
-  });
+  const channelData = (preparedCommands ?? commandPlugin?.commands)?.buildCommandsListChannelData?.(
+    {
+      currentPage: paginated.currentPage,
+      totalPages: paginated.totalPages,
+      agentId,
+    },
+  );
   if (channelData) {
     return {
       shouldContinue: false,
@@ -85,7 +92,12 @@ export const handleCommandsListCommand: CommandHandler = async (params, allowTex
 
   return {
     shouldContinue: false,
-    reply: { text: buildCommandsMessage(params.cfg, skillCommands, { surface }) },
+    reply: {
+      text: buildCommandsMessage(params.cfg, skillCommands, {
+        surface,
+        commands: preparedCommands,
+      }),
+    },
   };
 };
 

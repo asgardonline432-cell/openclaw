@@ -6,6 +6,7 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { MsgContext } from "../templating.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "../thinking.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import type { InlineDirectives } from "./directive-handling.parse.js";
 import type { TypingController } from "./typing.js";
 
@@ -66,6 +67,7 @@ export type HandleCommandsParams = {
   isGroup: boolean;
   skillCommands?: SkillCommandSpec[];
   typing?: TypingController;
+  replyChannelRuntime?: ReplyChannelRuntime;
 };
 
 export type CommandHandlerResult = {

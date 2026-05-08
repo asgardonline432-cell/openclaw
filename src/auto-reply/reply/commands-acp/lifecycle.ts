@@ -81,12 +81,17 @@ function resolveAcpBindingLabelNoun(params: {
 async function resolveBoundReplyPayload(params: {
   binding: SessionBindingRecord;
   placement: "current" | "child";
+  commandParams: HandleCommandsParams;
 }): Promise<Pick<ReplyPayload, "channelData" | "delivery" | "presentation"> | undefined> {
   const channelId = normalizeChannelId(params.binding.conversation.channel);
   if (!channelId) {
     return undefined;
   }
-  const buildPayload = getChannelPlugin(channelId)?.conversationBindings?.buildBoundReplyPayload;
+  const buildPayload =
+    params.commandParams.replyChannelRuntime &&
+    params.commandParams.replyChannelRuntime.id === channelId
+      ? params.commandParams.replyChannelRuntime.conversationBindings?.buildBoundReplyPayload
+      : getChannelPlugin(channelId)?.conversationBindings?.buildBoundReplyPayload;
   if (!buildPayload) {
     return undefined;
   }
@@ -624,6 +629,7 @@ export async function handleAcpSpawnAction(
     const boundReplyPayload = await resolveBoundReplyPayload({
       binding,
       placement: bindingPlacement,
+      commandParams: params,
     });
     if (boundReplyPayload) {
       return {

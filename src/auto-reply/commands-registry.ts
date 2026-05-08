@@ -5,6 +5,7 @@ import {
 } from "../agents/model-selection.js";
 import type { SkillCommandSpec } from "../agents/skills.js";
 import { getChannelPlugin, getLoadedChannelPlugin } from "../channels/plugins/index.js";
+import type { ChannelCommandAdapter } from "../channels/plugins/types.public.js";
 import type { OpenClawConfig } from "../config/types.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { listChatCommands, listChatCommandsForConfig } from "./commands-registry-list.js";
@@ -51,6 +52,7 @@ export type {
 
 type NativeCommandProviderLookupOptions = {
   includeBundledChannelFallback?: boolean;
+  commands?: Pick<ChannelCommandAdapter, "resolveNativeCommandName">;
 };
 
 function resolveNativeName(
@@ -61,24 +63,32 @@ function resolveNativeName(
   if (!command.nativeName) {
     return undefined;
   }
-  if (!provider) {
+  const preparedCommands = options?.commands;
+  if (!provider && !preparedCommands) {
     return command.nativeName;
   }
-  const channelPlugin =
-    options?.includeBundledChannelFallback === false
-      ? getLoadedChannelPlugin(provider)
-      : getChannelPlugin(provider);
+  const channelPlugin = preparedCommands
+    ? undefined
+    : provider
+      ? options?.includeBundledChannelFallback === false
+        ? getLoadedChannelPlugin(provider)
+        : getChannelPlugin(provider)
+      : undefined;
   return (
-    channelPlugin?.commands?.resolveNativeCommandName?.({
+    (preparedCommands ?? channelPlugin?.commands)?.resolveNativeCommandName?.({
       commandKey: command.key,
       defaultName: command.nativeName,
     }) ?? command.nativeName
   );
 }
 
-function toNativeCommandSpec(command: ChatCommandDefinition, provider?: string): NativeCommandSpec {
+function toNativeCommandSpec(
+  command: ChatCommandDefinition,
+  provider?: string,
+  options?: NativeCommandProviderLookupOptions,
+): NativeCommandSpec {
   const spec: NativeCommandSpec = {
-    name: resolveNativeName(command, provider) ?? command.key,
+    name: resolveNativeName(command, provider, options) ?? command.key,
     description: command.description,
     acceptsArgs: Boolean(command.acceptsArgs),
     args: command.args,
@@ -89,8 +99,12 @@ function toNativeCommandSpec(command: ChatCommandDefinition, provider?: string):
   return spec;
 }
 
-function resolveNativeNames(command: ChatCommandDefinition, provider?: string): string[] {
-  const primary = resolveNativeName(command, provider);
+function resolveNativeNames(
+  command: ChatCommandDefinition,
+  provider?: string,
+  options?: NativeCommandProviderLookupOptions,
+): string[] {
+  const primary = resolveNativeName(command, provider, options);
   return [primary, ...(command.nativeAliases ?? [])].filter((name): name is string =>
     Boolean(name),
   );
@@ -99,12 +113,13 @@ function resolveNativeNames(command: ChatCommandDefinition, provider?: string): 
 function listNativeSpecsFromCommands(
   commands: ChatCommandDefinition[],
   provider?: string,
+  options?: NativeCommandProviderLookupOptions,
 ): NativeCommandSpec[] {
   return commands
     .filter((command) => command.scope !== "text" && command.nativeName)
     .flatMap((command) => {
-      const spec = toNativeCommandSpec(command, provider);
-      return resolveNativeNames(command, provider).map((name) => {
+      const spec = toNativeCommandSpec(command, provider, options);
+      return resolveNativeNames(command, provider, options).map((name) => {
         const nativeSpec: NativeCommandSpec = {
           name,
           description: spec.description,
@@ -124,18 +139,26 @@ function listNativeSpecsFromCommands(
 export function listNativeCommandSpecs(params?: {
   skillCommands?: SkillCommandSpec[];
   provider?: string;
+  commands?: NativeCommandProviderLookupOptions["commands"];
 }): NativeCommandSpec[] {
   return listNativeSpecsFromCommands(
     listChatCommands({ skillCommands: params?.skillCommands }),
     params?.provider,
+    { commands: params?.commands },
   );
 }
 
 export function listNativeCommandSpecsForConfig(
   cfg: OpenClawConfig,
-  params?: { skillCommands?: SkillCommandSpec[]; provider?: string },
+  params?: {
+    skillCommands?: SkillCommandSpec[];
+    provider?: string;
+    commands?: NativeCommandProviderLookupOptions["commands"];
+  },
 ): NativeCommandSpec[] {
-  return listNativeSpecsFromCommands(listChatCommandsForConfig(cfg, params), params?.provider);
+  return listNativeSpecsFromCommands(listChatCommandsForConfig(cfg, params), params?.provider, {
+    commands: params?.commands,
+  });
 }
 
 export function findCommandByNativeName(

@@ -18,10 +18,16 @@ function formatConversationBindingText(params: { conversationId: string }): stri
   return `binding:${params.conversationId}`;
 }
 
-function supportsConversationBindings(channel: string): boolean {
+function supportsConversationBindings(ctx: SubagentsCommandContext, channel: string): boolean {
   const channelId = normalizeChannelId(channel);
   if (!channelId) {
     return false;
+  }
+  if (ctx.params.replyChannelRuntime && ctx.params.replyChannelRuntime.id === channelId) {
+    return (
+      ctx.params.replyChannelRuntime.conversationBindings?.supportsCurrentConversationBinding ===
+      true
+    );
   }
   return (
     getChannelPlugin(channelId)?.conversationBindings?.supportsCurrentConversationBinding === true
@@ -33,7 +39,7 @@ export function handleSubagentsAgentsAction(ctx: SubagentsCommandContext): Comma
   const runsSnapshot = getSubagentRunsSnapshotForRead(subagentRuns);
   const channel = resolveCommandSurfaceChannel(params);
   const accountId = resolveChannelAccountId(params);
-  const currentConversationBindingsSupported = supportsConversationBindings(channel);
+  const currentConversationBindingsSupported = supportsConversationBindings(ctx, channel);
   const bindingService = getSessionBindingService();
   const bindingsBySession = new Map<string, ReturnType<typeof bindingService.listBySession>>();
 

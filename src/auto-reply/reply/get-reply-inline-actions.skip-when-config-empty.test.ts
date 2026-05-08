@@ -204,6 +204,35 @@ describe("handleInlineActions", () => {
     });
   });
 
+  it("uses prepared command policy without resolving the channel plugin", async () => {
+    const typing = createTypingController();
+    getChannelPluginMock.mockImplementation(() => {
+      throw new Error("unexpected channel plugin lookup");
+    });
+
+    const ctx = buildTestCtx({
+      From: "whatsapp:+999",
+      To: "whatsapp:+123",
+      Body: "hi",
+    });
+
+    await expectInlineActionSkipped({
+      ctx,
+      typing,
+      cleanedBody: "hi",
+      command: { to: "whatsapp:+123" },
+      overrides: {
+        replyChannelRuntime: {
+          id: "whatsapp",
+          label: "WhatsApp",
+          chatTypes: ["direct"],
+          commands: { skipWhenConfigEmpty: true },
+        },
+      },
+    });
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
+  });
+
   it("forwards agentDir into handleCommands", async () => {
     const typing = createTypingController();
 

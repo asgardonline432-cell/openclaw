@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as channelPlugins from "../channels/plugins/index.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createChannelTestPluginBase, createTestRegistry } from "../test-utils/channel-plugins.js";
 import {
@@ -309,6 +310,39 @@ describe("commands registry", () => {
       includeBundledChannelFallback: false,
     });
     expect(command?.key).toBe("status");
+  });
+
+  it("uses prepared command metadata without resolving channel plugins", () => {
+    const getChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected channel plugin lookup");
+      });
+    const getLoadedChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getLoadedChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected loaded channel plugin lookup");
+      });
+    const commands = {
+      resolveNativeCommandName: ({ commandKey, defaultName }) =>
+        commandKey === "tts" ? "voice" : defaultName,
+    } satisfies Parameters<typeof listNativeCommandSpecsForConfig>[1]["commands"];
+
+    try {
+      const native = listNativeCommandSpecsForConfig(
+        { commands: { native: true } },
+        { provider: "discord", commands },
+      );
+
+      expect(native.find((spec) => spec.name === "voice")).toBeTruthy();
+      expect(findCommandByNativeName("voice", "discord", { commands })?.key).toBe("tts");
+      expect(findCommandByNativeName("tts", "discord", { commands })).toBeUndefined();
+      expect(getChannelPluginSpy).not.toHaveBeenCalled();
+      expect(getLoadedChannelPluginSpy).not.toHaveBeenCalled();
+    } finally {
+      getChannelPluginSpy.mockRestore();
+      getLoadedChannelPluginSpy.mockRestore();
+    }
   });
 
   it("keeps discord native command specs within slash-command limits", () => {

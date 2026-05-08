@@ -6,8 +6,9 @@ import type {
   CommandArgDefinition,
 } from "../../auto-reply/commands-registry.types.js";
 import { listSkillCommandsForAgents } from "../../auto-reply/skill-commands.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
+import type { ChannelCommandAdapter } from "../../channels/plugins/types.public.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { resolveOutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { getPluginCommandSpecs } from "../../plugins/command-specs.js";
 import { listPluginCommands } from "../../plugins/commands.js";
 import { normalizeOptionalLowercaseString } from "../../shared/string-coerce.js";
@@ -70,13 +71,19 @@ function resolveAgentIdOrRespondError(
   return { cfg, agentId };
 }
 
-function resolveNativeName(cmd: ChatCommandDefinition, provider?: string): string {
+type GatewayCommandAdapter = Pick<ChannelCommandAdapter, "resolveNativeCommandName">;
+
+function resolveNativeName(
+  cmd: ChatCommandDefinition,
+  provider?: string,
+  commands?: GatewayCommandAdapter,
+): string {
   const baseName = cmd.nativeName ?? cmd.key;
   if (!provider || !cmd.nativeName) {
     return baseName;
   }
   return (
-    getChannelPlugin(provider)?.commands?.resolveNativeCommandName?.({
+    commands?.resolveNativeCommandName?.({
       commandKey: cmd.key,
       defaultName: cmd.nativeName,
     }) ?? baseName
@@ -150,9 +157,10 @@ function mapCommand(
   includeArgs: boolean,
   nameSurface: CommandNameSurface,
   provider?: string,
+  commands?: GatewayCommandAdapter,
 ): CommandEntry {
   const shouldIncludeArgs = includeArgs && cmd.acceptsArgs && cmd.args?.length;
-  const nativeName = cmd.scope === "text" ? undefined : resolveNativeName(cmd, provider);
+  const nativeName = cmd.scope === "text" ? undefined : resolveNativeName(cmd, provider, commands);
   return {
     name: clampString(
       nameSurface === "text" ? resolvePrimaryTextName(cmd) : (nativeName ?? cmd.key),
@@ -214,6 +222,9 @@ export function buildCommandsListResult(params: {
   const scopeFilter = params.scope ?? "both";
   const nameSurface: CommandNameSurface = scopeFilter === "text" ? "text" : "native";
   const provider = normalizeOptionalLowercaseString(params.provider);
+  const providerCommands = provider
+    ? resolveOutboundChannelRuntime({ channel: provider, cfg: params.cfg })?.commands
+    : undefined;
 
   const skillCommands = listSkillCommandsForAgents({ cfg: params.cfg, agentIds: [params.agentId] });
   const chatCommands = listChatCommandsForConfig(params.cfg, { skillCommands });
@@ -232,6 +243,7 @@ export function buildCommandsListResult(params: {
         includeArgs,
         nameSurface,
         provider,
+        providerCommands,
       ),
     );
   }

@@ -1,5 +1,6 @@
 import type { SkillCommandSpec } from "../agents/skills.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
+import type { ChannelCommandAdapter } from "../channels/plugins/types.public.js";
 import { isCommandFlagEnabled } from "../config/commands.flags.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { listPluginCommands } from "../plugins/commands.js";
@@ -94,6 +95,10 @@ export type CommandsMessageOptions = {
   page?: number;
   surface?: string;
   forcePaginatedList?: boolean;
+  commands?: Pick<
+    ChannelCommandAdapter,
+    "buildCommandsListChannelData" | "resolveNativeCommandName"
+  >;
 };
 
 export type CommandsMessageResult = {
@@ -199,7 +204,10 @@ export function buildCommandsMessagePaginated(
   const surface = normalizeOptionalLowercaseString(options?.surface);
   const prefersPaginatedList =
     options?.forcePaginatedList === true ||
-    Boolean(surface && getChannelPlugin(surface)?.commands?.buildCommandsListChannelData);
+    Boolean(
+      options?.commands?.buildCommandsListChannelData ??
+      (surface && getChannelPlugin(surface)?.commands?.buildCommandsListChannelData),
+    );
 
   const commands = cfg
     ? listChatCommandsForConfig(cfg, { skillCommands })

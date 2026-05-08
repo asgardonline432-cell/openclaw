@@ -19,6 +19,7 @@ import {
 import { createModelVisibilityPolicy } from "../../agents/model-visibility-policy.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../agents/workspace.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
+import type { ChannelCommandAdapter } from "../../channels/plugins/types.public.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
@@ -358,6 +359,13 @@ export async function resolveModelsCommandReply(params: {
   agentDir?: string;
   workspaceDir?: string;
   sessionEntry?: ModelsCommandSessionEntry;
+  commands?: Pick<
+    ChannelCommandAdapter,
+    | "buildModelBrowseChannelData"
+    | "buildModelsMenuChannelData"
+    | "buildModelsProviderChannelData"
+    | "buildModelsListChannelData"
+  >;
 }): Promise<ReplyPayload | null> {
   const body = params.commandBodyNormalized.trim();
   if (!body.startsWith("/models")) {
@@ -375,12 +383,19 @@ export async function resolveModelsCommandReply(params: {
       workspaceDir: params.workspaceDir,
     },
   );
-  const commandPlugin = params.surface ? getChannelPlugin(params.surface) : null;
+  const commandPlugin =
+    params.commands || !params.surface ? null : getChannelPlugin(params.surface);
   const providerInfos = buildProviderInfos({ providers, byProvider });
 
   if (parsed.action === "providers") {
     const channelData =
+      params.commands?.buildModelsMenuChannelData?.({
+        providers: providerInfos,
+      }) ??
       commandPlugin?.commands?.buildModelsMenuChannelData?.({
+        providers: providerInfos,
+      }) ??
+      params.commands?.buildModelsProviderChannelData?.({
         providers: providerInfos,
       }) ??
       commandPlugin?.commands?.buildModelsProviderChannelData?.({
@@ -404,7 +419,9 @@ export async function resolveModelsCommandReply(params: {
   const { provider, page, pageSize, all } = parsed;
 
   if (!provider) {
-    const channelData = commandPlugin?.commands?.buildModelsProviderChannelData?.({
+    const channelData = (
+      params.commands ?? commandPlugin?.commands
+    )?.buildModelsProviderChannelData?.({
       providers: providerInfos,
     });
     if (channelData) {
@@ -455,7 +472,9 @@ export async function resolveModelsCommandReply(params: {
   const interactivePageSize = 8;
   const interactiveTotalPages = Math.max(1, Math.ceil(total / interactivePageSize));
   const interactivePage = Math.max(1, Math.min(page, interactiveTotalPages));
-  const interactiveChannelData = commandPlugin?.commands?.buildModelsListChannelData?.({
+  const interactiveChannelData = (
+    params.commands ?? commandPlugin?.commands
+  )?.buildModelsListChannelData?.({
     provider,
     models,
     currentModel: params.currentModel,
@@ -561,6 +580,10 @@ export const handleModelsCommand: CommandHandler = async (params, allowTextComma
       targetSessionEntry?.spawnedWorkspaceDir ??
       (modelsAgentId === currentAgentId ? params.workspaceDir : undefined),
     sessionEntry: targetSessionEntry,
+    commands:
+      params.replyChannelRuntime && params.replyChannelRuntime.id === params.ctx.Surface
+        ? params.replyChannelRuntime.commands
+        : undefined,
   });
   if (!reply) {
     return null;
