@@ -248,6 +248,11 @@ export function buildGroupChatContext(params: {
   lines.push(
     "Use link previews thoughtfully: one relevant link can preview; if your reply has two or more links, suppress previews for all of them where the chat app supports it.",
   );
+  if (normalizeOptionalLowercaseString(params.sessionCtx.Provider) === "discord") {
+    lines.push(
+      "Discord: suppress multi-link previews by wrapping each URL in angle brackets, for example <https://example.com>.",
+    );
+  }
   lines.push(
     "Prefer linked labels over pasted raw URLs: link the human-readable identifier or title, such as a PR, issue, commit, release, doc, ticket, article, or dashboard.",
   );

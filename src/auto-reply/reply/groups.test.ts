@@ -36,6 +36,7 @@ describe("group runtime loading", () => {
     expect(groupChatContext).toContain("Use link previews thoughtfully");
     expect(groupChatContext).toContain("two or more links");
     expect(groupChatContext).toContain("suppress previews for all of them");
+    expect(groupChatContext).not.toContain("Discord: suppress multi-link previews");
     expect(groupChatContext).toContain("Prefer linked labels over pasted raw URLs");
     expect(groupChatContext).toContain("commit");
     expect(groupChatContext).toContain("dashboard");
@@ -55,6 +56,8 @@ describe("group runtime loading", () => {
     expect(toolOnlyContext).toContain("Be a good group participant");
     expect(toolOnlyContext).toContain("Use link previews thoughtfully");
     expect(toolOnlyContext).toContain("suppress previews for all of them");
+    expect(toolOnlyContext).toContain("Discord: suppress multi-link previews");
+    expect(toolOnlyContext).toContain("<https://example.com>");
     expect(toolOnlyContext).toContain("Prefer linked labels over pasted raw URLs");
     expect(toolOnlyContext).toContain("do not call message(action=send)");
     expect(toolOnlyContext).not.toContain('reply with exactly "NO_REPLY"');

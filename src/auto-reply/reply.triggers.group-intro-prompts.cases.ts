@@ -18,6 +18,8 @@ export function registerGroupIntroPromptCases(): void {
       "Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available. Write like a human in chat: concise by default, usually one compact paragraph, no walls of text, sparse bullets, no tables, and line breaks only when they clearly help.";
     const groupLinkPreviewNote =
       "Use link previews thoughtfully: one relevant link can preview; if your reply has two or more links, suppress previews for all of them where the chat app supports it.";
+    const discordLinkPreviewNote =
+      "Discord: suppress multi-link previews by wrapping each URL in angle brackets, for example <https://example.com>.";
     const groupLinkedReferenceNote =
       "Prefer linked labels over pasted raw URLs: link the human-readable identifier or title, such as a PR, issue, commit, release, doc, ticket, article, or dashboard.";
     const groupSilentNote =
@@ -40,6 +42,7 @@ export function registerGroupIntroPromptCases(): void {
           "You are in a Discord group chat.",
           groupParticipationNote,
           groupLinkPreviewNote,
+          discordLinkPreviewNote,
           groupLinkedReferenceNote,
           groupSilentNote,
           groupSilentProseGuard,
