@@ -4,8 +4,6 @@ import {
   clearPluginInteractiveHandlers,
   registerPluginInteractiveHandler,
 } from "openclaw/plugin-sdk/plugin-runtime";
-import type { MsgContext } from "openclaw/plugin-sdk/reply-runtime";
-import { loadSessionStore } from "openclaw/plugin-sdk/session-store-runtime";
 import { mockPinnedHostnameResolution } from "openclaw/plugin-sdk/test-env";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TelegramInteractiveHandlerContext } from "./interactive-dispatch.js";
@@ -18,6 +16,7 @@ const {
   getFileSpy,
   getChatSpy,
   getLoadConfigMock,
+  getSessionStoreEntriesForTest,
   getLoadWebMediaMock,
   getReadChannelAllowFromStoreMock,
   getOnHandler,
@@ -255,9 +254,7 @@ describe("createTelegramBot", () => {
             capabilities: { inlineButtons: "dm" },
           },
         },
-        session: {
-          store: storePath,
-        },
+        session: {},
       } satisfies NonNullable<Parameters<typeof createTelegramBot>[0]["config"]>;
 
       loadConfig.mockReturnValue(config);
@@ -291,7 +288,7 @@ describe("createTelegramBot", () => {
 
       expect(replySpy).not.toHaveBeenCalled();
       expect(editMessageTextSpy).not.toHaveBeenCalled();
-      expect(loadSessionStore(storePath)).toStrictEqual({});
+      expect(getSessionStoreEntriesForTest()).toStrictEqual({});
       expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-model-authz-bypass-1");
     } finally {
       await rm(storePath, { force: true });
@@ -330,9 +327,7 @@ describe("createTelegramBot", () => {
             groups: { "*": { requireMention: false } },
           },
         },
-        session: {
-          store: storePath,
-        },
+        session: {},
       } satisfies NonNullable<Parameters<typeof createTelegramBot>[0]["config"]>;
 
       loadConfig.mockReturnValue(config);
@@ -364,7 +359,7 @@ describe("createTelegramBot", () => {
 
       expect(replySpy).not.toHaveBeenCalled();
       expect(editMessageTextSpy).not.toHaveBeenCalled();
-      expect(loadSessionStore(storePath)).toStrictEqual({});
+      expect(getSessionStoreEntriesForTest()).toStrictEqual({});
       expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-group-model-authz-1");
     } finally {
       await rm(storePath, { force: true });
@@ -403,9 +398,7 @@ describe("createTelegramBot", () => {
             groups: { "*": { requireMention: false } },
           },
         },
-        session: {
-          store: storePath,
-        },
+        session: {},
       } satisfies NonNullable<Parameters<typeof createTelegramBot>[0]["config"]>;
 
       loadConfig.mockImplementation(() => currentConfig);
@@ -446,7 +439,7 @@ describe("createTelegramBot", () => {
 
       expect(replySpy).not.toHaveBeenCalled();
       expect(editMessageTextSpy).not.toHaveBeenCalled();
-      expect(loadSessionStore(storePath)).toStrictEqual({});
+      expect(getSessionStoreEntriesForTest()).toStrictEqual({});
       expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-group-model-authz-runtime-1");
     } finally {
       loadConfig.mockReset();
@@ -1118,9 +1111,7 @@ describe("createTelegramBot", () => {
           allowFrom: ["*"],
         },
       },
-      session: {
-        store: storePath,
-      },
+      session: {},
     } satisfies NonNullable<Parameters<typeof createTelegramBot>[0]["config"]>;
 
     await rm(storePath, { force: true });
@@ -1161,7 +1152,7 @@ describe("createTelegramBot", () => {
         "Session selection cleared. Runtime unchanged. New replies use the agent's configured default.",
       );
 
-      const entry = Object.values(loadSessionStore(storePath))[0];
+      const entry = Object.values(getSessionStoreEntriesForTest())[0];
       expect(entry?.providerOverride).toBeUndefined();
       expect(entry?.modelOverride).toBeUndefined();
       expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-model-compact-1");
@@ -1268,9 +1259,7 @@ describe("createTelegramBot", () => {
           allowFrom: ["*"],
         },
       },
-      session: {
-        store: storePath,
-      },
+      session: {},
     };
 
     await rm(storePath, { force: true });
@@ -1311,7 +1300,7 @@ describe("createTelegramBot", () => {
         "Session selection cleared. Runtime unchanged. New replies use the agent's configured default.",
       );
 
-      const entry = Object.values(loadSessionStore(storePath))[0];
+      const entry = Object.values(getSessionStoreEntriesForTest())[0];
       expect(entry?.providerOverride).toBeUndefined();
       expect(entry?.modelOverride).toBeUndefined();
       expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-model-default-1");
@@ -1345,9 +1334,7 @@ describe("createTelegramBot", () => {
             allowFrom: ["*"],
           },
         },
-        session: {
-          store: storePath,
-        },
+        session: {},
       } satisfies NonNullable<Parameters<typeof createTelegramBot>[0]["config"]>;
 
       loadConfig.mockReturnValue(config);
@@ -1387,7 +1374,7 @@ describe("createTelegramBot", () => {
       );
       expect(requireRecord(editCall?.[3], "edit params").parse_mode).toBe("HTML");
 
-      const entry = Object.values(loadSessionStore(storePath))[0];
+      const entry = Object.values(getSessionStoreEntriesForTest())[0];
       expect(entry?.providerOverride).toBe("openai");
       expect(entry?.modelOverride).toBe("gpt-5.4");
       expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-model-html-1");
@@ -1426,9 +1413,7 @@ describe("createTelegramBot", () => {
             allowFrom: ["*"],
           },
         },
-        session: {
-          store: storePath,
-        },
+        session: {},
       } satisfies NonNullable<Parameters<typeof createTelegramBot>[0]["config"]>;
 
       // Fresh config: default changed to anthropic/claude-opus-4-6
@@ -1477,7 +1462,7 @@ describe("createTelegramBot", () => {
 
       // Override must be persisted (not cleared) because openai/gpt-5.4 is
       // NOT the default in the fresh config.
-      const entry = Object.values(loadSessionStore(storePath))[0];
+      const entry = Object.values(getSessionStoreEntriesForTest())[0];
       expect(entry?.providerOverride).toBe("openai");
       expect(entry?.modelOverride).toBe("gpt-5.4");
     } finally {
