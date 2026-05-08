@@ -54,7 +54,7 @@ const sessionMocks = vi.hoisted(() => {
       Object.entries(sessionStore.value).map(([sessionKey, entry]) => ({ sessionKey, entry })),
     ),
     recordSessionMetaFromInbound: vi.fn(),
-    resolveAndPersistSessionFile: vi.fn(),
+    resolveAndPersistSessionTranscriptLocator: vi.fn(),
     sessionStore,
   };
 });
@@ -171,7 +171,8 @@ vi.mock("openclaw/plugin-sdk/session-store-runtime", async () => {
     ...actual,
     getSessionEntry: sessionMocks.getSessionEntry,
     listSessionEntries: sessionMocks.listSessionEntries,
-    resolveAndPersistSessionFile: sessionMocks.resolveAndPersistSessionFile,
+    resolveAndPersistSessionTranscriptLocator:
+      sessionMocks.resolveAndPersistSessionTranscriptLocator,
   };
 });
 vi.mock("openclaw/plugin-sdk/command-auth-native", async () => {
@@ -561,19 +562,21 @@ describe("registerTelegramNativeCommands — session metadata", () => {
       })),
     );
     sessionMocks.recordSessionMetaFromInbound.mockClear().mockResolvedValue(undefined);
-    sessionMocks.resolveAndPersistSessionFile.mockClear().mockImplementation(async (params) => {
-      const sessionFile =
-        params.fallbackSessionFile ?? `/tmp/openclaw-sessions/${params.sessionId}.jsonl`;
-      return {
-        sessionFile,
-        sessionEntry: {
-          ...params.sessionEntry,
-          sessionId: params.sessionId,
-          sessionFile,
-          updatedAt: Date.now(),
-        },
-      };
-    });
+    sessionMocks.resolveAndPersistSessionTranscriptLocator
+      .mockClear()
+      .mockImplementation(async (params) => {
+        const transcriptLocator =
+          params.fallbackTranscriptLocator ?? `/tmp/openclaw-sessions/${params.sessionId}.jsonl`;
+        return {
+          transcriptLocator,
+          sessionEntry: {
+            ...params.sessionEntry,
+            sessionId: params.sessionId,
+            sessionFile: transcriptLocator,
+            updatedAt: Date.now(),
+          },
+        };
+      });
     pluginRuntimeMocks.executePluginCommand.mockClear().mockResolvedValue({ text: "ok" });
     pluginRuntimeMocks.matchPluginCommand.mockClear().mockReturnValue(null);
     replyMocks.dispatchReplyWithBufferedBlockDispatcher
@@ -1316,14 +1319,12 @@ describe("registerTelegramNativeCommands — session metadata", () => {
       createTelegramTopicCommandContext({ match: "bind --cwd /tmp/work", threadId: 42 }),
     );
 
-    expectRecordFields(
-      sessionMocks.resolveAndPersistSessionFile.mock.calls[0]?.[0],
-      {
+    expect(sessionMocks.resolveAndPersistSessionTranscriptLocator).toHaveBeenCalledWith(
+      expect.objectContaining({
         sessionId: "sess-topic",
         sessionKey: "agent:main:telegram:group:-1001234567890:topic:42",
-        fallbackSessionFile: "sqlite-transcript://main/sess-topic-topic-42.jsonl",
-      },
-      "resolved session file params",
+        fallbackTranscriptLocator: "sqlite-transcript://main/sess-topic-topic-42.jsonl",
+      }),
     );
     expectRecordFields(
       (pluginRuntimeMocks.executePluginCommand.mock.calls as unknown as Array<[unknown]>)[0]?.[0],
