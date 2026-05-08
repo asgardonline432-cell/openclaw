@@ -742,6 +742,10 @@ export async function loadCompactHooksHarness(): Promise<{
       async (provider: string, modelId: string, agentDir?: string, cfg?: unknown) =>
         resolveModelMock(provider, modelId, agentDir, cfg),
     ),
+    resolvePreparedRuntimeModelAsync: vi.fn(
+      async (provider: string, modelId: string, agentDir?: string, cfg?: unknown) =>
+        resolveModelMock(provider, modelId, agentDir, cfg),
+    ),
   }));
 
   vi.doMock("./session-manager-cache.js", () => ({
