@@ -54,7 +54,6 @@ const hoisted = vi.hoisted(() => {
   const getAcpSessionManagerMock = vi.fn();
   const startAcpSpawnParentStreamRelayMock = vi.fn();
   const sessionRowsMock = vi.fn();
-  const readSqliteSessionDeliveryContextMock = vi.fn();
   const upsertSessionEntryMock = vi.fn();
   const areHeartbeatsEnabledMock = vi.fn();
   const getChannelPluginMock = vi.fn();
@@ -82,7 +81,6 @@ const hoisted = vi.hoisted(() => {
     getAcpSessionManagerMock,
     startAcpSpawnParentStreamRelayMock,
     sessionRowsMock,
-    readSqliteSessionDeliveryContextMock,
     upsertSessionEntryMock,
     areHeartbeatsEnabledMock,
     getChannelPluginMock,
@@ -129,10 +127,6 @@ vi.mock("../config/sessions.js", () => ({
       entry,
     })),
   upsertSessionEntry: hoisted.upsertSessionEntryMock,
-}));
-
-vi.mock("../config/sessions/session-entries.sqlite.js", () => ({
-  readSqliteSessionDeliveryContext: hoisted.readSqliteSessionDeliveryContextMock,
 }));
 
 vi.mock("../config/config.js", () => ({
@@ -711,7 +705,6 @@ describe("spawnAcpDirect", () => {
         },
       });
     });
-    hoisted.readSqliteSessionDeliveryContextMock.mockReset().mockReturnValue(undefined);
     hoisted.upsertSessionEntryMock.mockReset();
   });
 
@@ -770,6 +763,7 @@ describe("spawnAcpDirect", () => {
         sessionKey: accepted.childSessionKey,
         entry: expect.objectContaining({
           sessionId: "sess-123",
+          sessionFile: "sess-123",
         }),
       }),
     );
@@ -1577,6 +1571,7 @@ describe("spawnAcpDirect", () => {
         agentId: "codex",
         entry: expect.objectContaining({
           sessionId: "sess-123",
+          sessionFile: "sess-123",
         }),
       }),
     );
@@ -1940,6 +1935,7 @@ describe("spawnAcpDirect", () => {
           agentId: "codex",
           entry: expect.objectContaining({
             sessionId: "sess-123",
+            sessionFile: "sess-123",
           }),
         }),
       );
@@ -2184,10 +2180,18 @@ describe("spawnAcpDirect", () => {
       .mockReturnValueOnce(firstHandle)
       .mockReturnValueOnce(secondHandle);
     hoisted.sessionRowsMock.mockReset().mockImplementation(() => {
-      const store: Record<string, { sessionId: string; updatedAt: number }> = {
+      const store: Record<
+        string,
+        { sessionId: string; updatedAt: number; deliveryContext?: unknown }
+      > = {
         "agent:main:subagent:parent": {
           sessionId: "parent-sess-1",
           updatedAt: Date.now(),
+          deliveryContext: {
+            channel: "discord",
+            to: "channel:parent-channel",
+            accountId: "default",
+          },
         },
       };
       return new Proxy(store, {
@@ -2199,16 +2203,6 @@ describe("spawnAcpDirect", () => {
         },
       });
     });
-    hoisted.readSqliteSessionDeliveryContextMock.mockImplementation(
-      ({ sessionKey }: { sessionKey: string }) =>
-        sessionKey === "agent:main:subagent:parent"
-          ? {
-              channel: "discord",
-              to: "channel:parent-channel",
-              accountId: "default",
-            }
-          : undefined,
-    );
 
     const result = await spawnAcpDirect(
       {

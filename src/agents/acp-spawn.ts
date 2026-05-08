@@ -33,7 +33,6 @@ import {
   DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH,
 } from "../config/agent-limits.js";
 import { getRuntimeConfig } from "../config/config.js";
-import { readSqliteSessionDeliveryContext } from "../config/sessions/session-entries.sqlite.js";
 import {
   getSessionEntry,
   listSessionEntries,
@@ -63,6 +62,7 @@ import {
 import { createRunningTaskRun } from "../tasks/detached-task-runtime.js";
 import { listTasksForOwnerKey } from "../tasks/runtime-internal.js";
 import {
+  deliveryContextFromSession,
   formatConversationTarget,
   normalizeDeliveryContext,
   resolveConversationDeliveryTarget,
@@ -385,10 +385,11 @@ function hasSessionLocalHeartbeatRelayRoute(params: {
     return false;
   }
 
-  const parentDeliveryContext = readSqliteSessionDeliveryContext({
+  const parentEntry = getSessionEntry({
     agentId: params.requesterAgentId,
     sessionKey: params.parentSessionKey,
   });
+  const parentDeliveryContext = deliveryContextFromSession(parentEntry);
   return Boolean(parentDeliveryContext?.channel && parentDeliveryContext.to);
 }
 
@@ -1337,10 +1338,12 @@ export async function spawnAcpDirect(
   // correct thread/topic instead of falling back to the main DM.
   const parentDeliveryCtx =
     effectiveStreamToParent && parentSessionKey
-      ? readSqliteSessionDeliveryContext({
-          agentId: resolveAgentIdFromSessionKey(parentSessionKey),
-          sessionKey: parentSessionKey,
-        })
+      ? deliveryContextFromSession(
+          getSessionEntry({
+            agentId: resolveAgentIdFromSessionKey(parentSessionKey),
+            sessionKey: parentSessionKey,
+          }),
+        )
       : undefined;
 
   let parentRelay: AcpSpawnParentRelayHandle | undefined;
@@ -1351,9 +1354,6 @@ export async function spawnAcpDirect(
       parentSessionKey,
       childSessionKey: sessionKey,
       agentId: targetAgentId,
-      mainKey: cfg.session?.mainKey,
-      sessionScope: cfg.session?.scope,
-      logPath: streamLogPath,
       deliveryContext: parentDeliveryCtx,
       emitStartNotice: false,
     });
@@ -1405,9 +1405,6 @@ export async function spawnAcpDirect(
         parentSessionKey,
         childSessionKey: sessionKey,
         agentId: targetAgentId,
-        mainKey: cfg.session?.mainKey,
-        sessionScope: cfg.session?.scope,
-        logPath: streamLogPath,
         deliveryContext: parentDeliveryCtx,
         emitStartNotice: false,
       });

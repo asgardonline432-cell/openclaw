@@ -207,7 +207,12 @@ describe("handleTtsCommands status fallback reporting", () => {
   });
 
   it("treats bare /tts as status", async () => {
-    const result = await handleTtsCommands(buildTtsParams("/tts"), true);
+    const result = await handleTtsCommands(
+      buildTtsParams("/tts", {
+        messages: { tts: { prefsPath: "/tmp/tts.json" } },
+      } as OpenClawConfig),
+      true,
+    );
     const reply = expectReply(result);
     expect(reply.text).toContain("TTS status");
   });
@@ -272,9 +277,11 @@ describe("handleTtsCommands status fallback reporting", () => {
 
   it("reads the latest assistant transcript reply once", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-tts-latest-"));
+    const sessionFile = path.join(tempDir, "session.jsonl");
     replaceSqliteSessionTranscriptEvents({
       agentId: "main",
       sessionId: "s1",
+      transcriptPath: sessionFile,
       events: [
         { type: "session", id: "s1" },
         {
@@ -315,7 +322,7 @@ describe("handleTtsCommands status fallback reporting", () => {
       provider: PRIMARY_TTS_PROVIDER,
       voiceCompatible: true,
     });
-    const sessionEntry: SessionEntry = { sessionId: "s1", updatedAt: 1 };
+    const sessionEntry: SessionEntry = { sessionId: "s1", updatedAt: 1, sessionFile };
     const sessionStore = { "session-key": sessionEntry };
 
     const beforeTtsRead = Date.now();
@@ -335,9 +342,11 @@ describe("handleTtsCommands status fallback reporting", () => {
 
   it("does not resend /tts latest for the same assistant reply", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-tts-latest-"));
+    const sessionFile = path.join(tempDir, "session.jsonl");
     replaceSqliteSessionTranscriptEvents({
       agentId: "main",
       sessionId: "s1",
+      transcriptPath: sessionFile,
       events: [
         { type: "session", id: "s1" },
         {
@@ -352,7 +361,7 @@ describe("handleTtsCommands status fallback reporting", () => {
       provider: PRIMARY_TTS_PROVIDER,
       voiceCompatible: true,
     });
-    const sessionEntry: SessionEntry = { sessionId: "s1", updatedAt: 1 };
+    const sessionEntry: SessionEntry = { sessionId: "s1", updatedAt: 1, sessionFile };
     const sessionStore = { "session-key": sessionEntry };
     const params = buildTtsParams("/tts latest", {}, undefined, { sessionEntry, sessionStore });
 
