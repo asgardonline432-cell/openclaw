@@ -126,6 +126,16 @@ describe("normalizeTargetForProvider", () => {
     );
   });
 
+  it("does not resolve channel plugins when plugin fallback is disabled", () => {
+    expect(
+      normalizeTargetForProvider("alpha", "  raw-id  ", {
+        allowPluginFallback: false,
+      }),
+    ).toBe("raw-id");
+    expect(getLoadedChannelPluginMock).not.toHaveBeenCalled();
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
+  });
+
   it("returns undefined when the provider normalizer resolves to an empty value", () => {
     getActivePluginChannelRegistryVersionMock.mockReturnValueOnce(20);
     getLoadedChannelPluginMock.mockReturnValueOnce({
@@ -177,6 +187,25 @@ describe("looksLikeTargetId", () => {
       }),
     ).toBe(true);
     expect(pluginLooksLikeId).toHaveBeenCalledWith("room-1", "ROOM-1");
+  });
+
+  it("uses built-in id-like heuristics without plugin lookup when plugin fallback is disabled", () => {
+    expect(
+      looksLikeTargetId({
+        channel: "workspace",
+        raw: "room-1",
+        allowPluginFallback: false,
+      }),
+    ).toBe(false);
+    expect(
+      looksLikeTargetId({
+        channel: "workspace",
+        raw: "channel:C123",
+        allowPluginFallback: false,
+      }),
+    ).toBe(true);
+    expect(getLoadedChannelPluginMock).not.toHaveBeenCalled();
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
   });
 
   it.each(["channel:C123", "@alice", "#general", "+15551234567", "conversation:abc", "foo@thread"])(
@@ -273,6 +302,21 @@ describe("maybeResolvePluginMessagingTarget", () => {
       normalized: "CHANNEL:C123ABC",
       preferredKind: undefined,
     });
+  });
+
+  it("does not resolve channel plugins when fallback is disabled", async () => {
+    await expect(
+      maybeResolvePluginMessagingTarget({
+        cfg,
+        channel: "workspace",
+        input: "channel:C123",
+        requireIdLike: true,
+        allowPluginFallback: false,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(getLoadedChannelPluginMock).not.toHaveBeenCalled();
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
   });
 });
 

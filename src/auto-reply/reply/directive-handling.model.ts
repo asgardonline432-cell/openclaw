@@ -9,7 +9,6 @@ import {
   resolveModelRefFromString,
 } from "../../agents/model-selection.js";
 import { buildAgentRuntimeAuthPlan } from "../../agents/runtime-plan/auth.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelCommandAdapter } from "../../channels/plugins/types.public.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
@@ -374,11 +373,7 @@ export async function maybeHandleModelDirectiveInfo(params: {
     const activeRuntimeLine = modelRefs.activeDiffers
       ? `Active: ${modelRefs.active.label} (runtime)`
       : null;
-    const commandPlugin =
-      params.commands || !params.surface ? null : getChannelPlugin(params.surface);
-    const channelData = (
-      params.commands ?? commandPlugin?.commands
-    )?.buildModelBrowseChannelData?.();
+    const channelData = params.commands?.buildModelBrowseChannelData?.();
     if (channelData) {
       return {
         text: [

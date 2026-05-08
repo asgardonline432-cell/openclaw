@@ -87,6 +87,16 @@ const mattermostThreading: ChannelThreadingAdapter = {
   }),
 };
 
+const slackReplyRuntime = {
+  id: "slack",
+  resolveReplyTransport: slackThreading.resolveReplyTransport,
+};
+
+const mattermostReplyRuntime = {
+  id: "mattermost",
+  resolveReplyTransport: mattermostThreading.resolveReplyTransport,
+};
+
 function createChannelPlugin(
   id: ChannelPlugin["id"],
   options: {
@@ -387,14 +397,22 @@ describe("routeReply", () => {
   });
 
   it("does not bypass the empty-reply guard for invalid Slack blocks", async () => {
-    await expectSlackNoDelivery({
-      text: " ",
-      channelData: {
-        slack: {
-          blocks: " ",
+    await expectSlackNoDelivery(
+      {
+        text: " ",
+        channelData: {
+          slack: {
+            blocks: " ",
+          },
         },
       },
-    });
+      {
+        runtime: {
+          id: "slack",
+          hasStructuredReplyPayload: slackMessaging.hasStructuredReplyPayload,
+        },
+      },
+    );
   });
 
   it("does not derive responsePrefix from agent identity when routing", async () => {
@@ -426,6 +444,7 @@ describe("routeReply", () => {
       to: "channel:C123",
       threadId: "456.789",
       cfg: {} as never,
+      runtime: slackReplyRuntime,
     });
     expectLastDeliveryFields({
       channel: "slack",
@@ -455,6 +474,7 @@ describe("routeReply", () => {
       channel: "slack",
       to: "channel:C123",
       cfg: {} as never,
+      runtime: slackReplyRuntime,
     });
     expectLastDeliveryFields({
       channel: "slack",
@@ -527,6 +547,7 @@ describe("routeReply", () => {
       to: "channel:C123",
       threadId: "1710000000.9999",
       cfg: {} as never,
+      runtime: slackReplyRuntime,
     });
     expectLastDeliveryFields({
       channel: "slack",
@@ -542,6 +563,7 @@ describe("routeReply", () => {
       to: "channel:C123",
       threadId: "1710000000.9999",
       cfg: {} as never,
+      runtime: slackReplyRuntime,
     });
     expectLastDeliveryFields({
       channel: "slack",
@@ -565,6 +587,7 @@ describe("routeReply", () => {
           },
         },
       } as unknown as OpenClawConfig,
+      runtime: mattermostReplyRuntime,
     });
     expectLastDeliveryFields({
       channel: "mattermost",

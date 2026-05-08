@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { MsgContext } from "../templating.js";
 import { resolveElevatedPermissions } from "./reply-elevated.js";
+
+const channelPluginMocks = vi.hoisted(() => ({
+  getChannelPlugin: vi.fn(),
+}));
+
+vi.mock("../../channels/plugins/index.js", () => ({
+  getChannelPlugin: (...args: unknown[]) => channelPluginMocks.getChannelPlugin(...args),
+}));
 
 function buildConfig(allowFrom: string[]): OpenClawConfig {
   return {
@@ -87,5 +95,34 @@ describe("resolveElevatedPermissions", () => {
         SenderUsername: "owner_username",
       },
     });
+  });
+
+  it("uses prepared elevated runtime without loading the channel plugin", () => {
+    channelPluginMocks.getChannelPlugin.mockImplementation(() => {
+      throw new Error("unexpected channel plugin lookup");
+    });
+
+    const result = resolveElevatedPermissions({
+      cfg: {
+        tools: {
+          elevated: {},
+        },
+      } as OpenClawConfig,
+      agentId: "main",
+      provider: "whatsapp",
+      ctx: buildContext(),
+      runtime: {
+        allowFromFallback: () => ["whatsapp:+15550001111"],
+        formatAllowFrom: ({ allowFrom }) =>
+          allowFrom.map((entry) => String(entry).replace(/^wa:/u, "whatsapp:")),
+      },
+    });
+
+    expect(result).toEqual({
+      enabled: true,
+      allowed: true,
+      failures: [],
+    });
+    expect(channelPluginMocks.getChannelPlugin).not.toHaveBeenCalled();
   });
 });

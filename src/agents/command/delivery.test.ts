@@ -47,6 +47,12 @@ const slackOutboundForTest: ChannelOutboundAdapter = {
     messageId: `${to}:${text}`,
   }),
 };
+const slackOutboundRuntimeForTest = {
+  id: "slack",
+  label: "Slack",
+  chatTypes: ["direct"],
+  resolveTarget: ({ to }) => ({ ok: true, to: to ?? "#general" }),
+} satisfies OutboundChannelRuntime;
 
 const emptyRegistry = createTestRegistry([]);
 const slackRegistry = createTestRegistry([
@@ -168,6 +174,7 @@ async function deliverMediaReplyForTest(
       deliver: true,
       replyChannel: "slack",
       replyTo: "#general",
+      outboundChannelRuntime: slackOutboundRuntimeForTest,
       ...optsOverrides,
     } as AgentCommandOpts,
     outboundSession,

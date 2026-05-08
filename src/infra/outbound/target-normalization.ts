@@ -72,6 +72,7 @@ export function normalizeTargetForProvider(
   raw?: string,
   options?: {
     normalizeTarget?: TargetNormalizer;
+    allowPluginFallback?: boolean;
   },
 ): string | undefined {
   if (!raw) {
@@ -83,7 +84,10 @@ export function normalizeTargetForProvider(
   }
   const providerId = normalizeOptionalLowercaseString(provider);
   const normalizer =
-    options?.normalizeTarget ?? (providerId ? resolveTargetNormalizer(providerId) : undefined);
+    options?.normalizeTarget ??
+    (providerId && options?.allowPluginFallback !== false
+      ? resolveTargetNormalizer(providerId)
+      : undefined);
   return normalizeOptionalString(normalizer?.(raw) ?? fallback);
 }
 
@@ -101,6 +105,7 @@ export function resolveNormalizedTargetInput(
   raw?: string,
   options?: {
     normalizeTarget?: TargetNormalizer;
+    allowPluginFallback?: boolean;
   },
 ): { raw: string; normalized: string } | undefined {
   const trimmed = normalizeChannelTargetInput(raw ?? "");
@@ -109,7 +114,11 @@ export function resolveNormalizedTargetInput(
   }
   return {
     raw: trimmed,
-    normalized: normalizeTargetForProvider(provider, trimmed, options) ?? trimmed,
+    normalized:
+      normalizeTargetForProvider(provider, trimmed, {
+        normalizeTarget: options?.normalizeTarget,
+        allowPluginFallback: options?.allowPluginFallback,
+      }) ?? trimmed,
   };
 }
 
@@ -119,15 +128,19 @@ export function looksLikeTargetId(params: {
   normalized?: string;
   normalizeTarget?: TargetNormalizer;
   looksLikeTargetId?: TargetResolverLooksLikeId;
+  allowPluginFallback?: boolean;
 }): boolean {
   const normalizedInput =
     params.normalized ??
     normalizeTargetForProvider(params.channel, params.raw, {
       normalizeTarget: params.normalizeTarget,
+      allowPluginFallback: params.allowPluginFallback,
     });
   const lookup =
     params.looksLikeTargetId ??
-    resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver?.looksLikeId;
+    (params.allowPluginFallback === false
+      ? undefined
+      : resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver?.looksLikeId);
   if (lookup) {
     return lookup(params.raw, normalizedInput ?? params.raw);
   }
@@ -156,16 +169,21 @@ export async function maybeResolvePluginMessagingTarget(params: {
   normalizeTarget?: TargetNormalizer;
   looksLikeTargetId?: TargetResolverLooksLikeId;
   resolveMessagingTargetFallback?: TargetResolverFallback;
+  allowPluginFallback?: boolean;
 }): Promise<ResolvedPluginMessagingTarget | undefined> {
   const normalizedInput = resolveNormalizedTargetInput(params.channel, params.input, {
     normalizeTarget: params.normalizeTarget,
+    allowPluginFallback: params.allowPluginFallback,
   });
   if (!normalizedInput) {
     return undefined;
   }
   const resolveTarget =
     params.resolveMessagingTargetFallback ??
-    resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver?.resolveTarget;
+    (params.allowPluginFallback === false
+      ? undefined
+      : resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver
+          ?.resolveTarget);
   if (!resolveTarget) {
     return undefined;
   }
@@ -177,6 +195,7 @@ export async function maybeResolvePluginMessagingTarget(params: {
       normalized: normalizedInput.normalized,
       normalizeTarget: params.normalizeTarget,
       looksLikeTargetId: params.looksLikeTargetId,
+      allowPluginFallback: params.allowPluginFallback,
     })
   ) {
     return undefined;
@@ -209,10 +228,12 @@ export function buildTargetResolverSignatureForRuntime(params: {
   channel: ChannelId;
   targetResolverHint?: string;
   looksLikeTargetId?: TargetResolverLooksLikeId;
+  allowPluginFallback?: boolean;
 }): string {
-  const plugin = params.looksLikeTargetId
-    ? undefined
-    : resolveChannelPluginForTargetRead(params.channel);
+  const plugin =
+    params.looksLikeTargetId || params.allowPluginFallback === false
+      ? undefined
+      : resolveChannelPluginForTargetRead(params.channel);
   const resolver = plugin?.messaging?.targetResolver;
   const hint = params.targetResolverHint ?? resolver?.hint ?? "";
   const looksLike = params.looksLikeTargetId ?? resolver?.looksLikeId;

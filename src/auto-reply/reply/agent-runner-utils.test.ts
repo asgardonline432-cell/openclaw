@@ -217,22 +217,9 @@ describe("agent-runner-utils", () => {
     expect(resolved.embeddedContext.messageTo).toBe("268300329");
   });
 
-  it("uses telegram plugin threading context for native commands", () => {
-    hoisted.getChannelPluginMock.mockReturnValue({
-      threading: {
-        buildToolContext: ({
-          context,
-          hasRepliedRef,
-        }: {
-          context: { To?: string; MessageThreadId?: string | number };
-          hasRepliedRef?: { value: boolean };
-        }) => ({
-          currentChannelId: context.To?.trim() || undefined,
-          currentThreadTs:
-            context.MessageThreadId != null ? String(context.MessageThreadId) : undefined,
-          hasRepliedRef,
-        }),
-      },
+  it("does not load plugin threading context without prepared runtime", () => {
+    hoisted.getChannelPluginMock.mockImplementation(() => {
+      throw new Error("unexpected channel plugin lookup");
     });
 
     const context = buildThreadingToolContext({
@@ -250,9 +237,10 @@ describe("agent-runner-utils", () => {
 
     expect(context).toMatchObject({
       currentChannelId: "telegram:-1003841603622",
-      currentThreadTs: "928",
+      currentChannelProvider: "telegram",
       currentMessageId: "2284",
     });
+    expect(hoisted.getChannelPluginMock).not.toHaveBeenCalled();
   });
 
   it("uses prepared threading runtime without channel plugin lookup", () => {

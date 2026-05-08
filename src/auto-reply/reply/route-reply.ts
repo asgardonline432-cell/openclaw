@@ -9,8 +9,7 @@
 
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolveEffectiveMessagesConfig } from "../../agents/identity.js";
-import { getBundledChannelPlugin } from "../../channels/plugins/bundled.js";
-import { getLoadedChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import { normalizeChannelId } from "../../channels/plugins/index.js";
 import { normalizeChatChannelId } from "../../channels/registry.js";
 import { resolveSilentReplyPolicy } from "../../config/silent-reply.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
@@ -110,22 +109,9 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
     params.runtime && normalizeOptionalLowercaseString(params.runtime.id) === channelId
       ? params.runtime
       : undefined;
-  const loadedPlugin =
-    channelId && !preparedRuntime ? getLoadedChannelPlugin(channelId) : undefined;
-  const bundledPlugin =
-    channelId && !preparedRuntime && !loadedPlugin ? getBundledChannelPlugin(channelId) : undefined;
-  const transformReplyPayload =
-    preparedRuntime?.transformReplyPayload ??
-    loadedPlugin?.messaging?.transformReplyPayload ??
-    bundledPlugin?.messaging?.transformReplyPayload;
-  const hasStructuredReplyPayload =
-    preparedRuntime?.hasStructuredReplyPayload ??
-    loadedPlugin?.messaging?.hasStructuredReplyPayload ??
-    bundledPlugin?.messaging?.hasStructuredReplyPayload;
-  const resolveReplyTransport =
-    preparedRuntime?.resolveReplyTransport ??
-    loadedPlugin?.threading?.resolveReplyTransport ??
-    bundledPlugin?.threading?.resolveReplyTransport;
+  const transformReplyPayload = preparedRuntime?.transformReplyPayload;
+  const hasStructuredReplyPayload = preparedRuntime?.hasStructuredReplyPayload;
+  const resolveReplyTransport = preparedRuntime?.resolveReplyTransport;
   const resolvedAgentId = params.sessionKey
     ? resolveSessionAgentId({
         sessionKey: params.sessionKey,

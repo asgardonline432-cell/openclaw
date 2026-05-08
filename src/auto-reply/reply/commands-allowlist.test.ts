@@ -184,6 +184,31 @@ function setAllowlistPluginRegistry() {
   );
 }
 
+function resolveAllowlistRuntime(
+  provider: string,
+): HandleCommandsParams["replyChannelRuntime"] | undefined {
+  const plugin =
+    provider === "telegram"
+      ? telegramAllowlistTestPlugin
+      : provider === "whatsapp"
+        ? whatsappAllowlistTestPlugin
+        : provider === "discord"
+          ? createLegacyAllowlistPlugin("discord")
+          : provider === "slack"
+            ? createLegacyAllowlistPlugin("slack")
+            : undefined;
+  if (!plugin) {
+    return undefined;
+  }
+  return {
+    id: plugin.id,
+    defaultAccountId: plugin.config?.defaultAccountId,
+    formatAllowFrom: plugin.config?.formatAllowFrom,
+    pairing: plugin.pairing,
+    allowlist: plugin.allowlist,
+  } as HandleCommandsParams["replyChannelRuntime"];
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   setAllowlistPluginRegistry();
@@ -267,6 +292,7 @@ function buildAllowlistParams(
       channel: provider,
       channelId: provider,
     },
+    replyChannelRuntime: resolveAllowlistRuntime(provider),
   } as unknown as HandleCommandsParams;
 }
 

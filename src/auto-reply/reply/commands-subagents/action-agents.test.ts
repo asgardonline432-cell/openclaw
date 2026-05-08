@@ -87,6 +87,15 @@ function agentsActionInput(channel: string, runs: ReturnType<typeof subagentRun>
       command: {
         channel,
       },
+      replyChannelRuntime:
+        channel === THREAD_CHANNEL || channel === ROOM_CHANNEL
+          ? {
+              id: channel,
+              conversationBindings: {
+                supportsCurrentConversationBinding: true,
+              },
+            }
+          : undefined,
     },
     requesterKey: MAIN_SESSION_KEY,
     runs,
@@ -195,6 +204,7 @@ describe("handleSubagentsAgentsAction", () => {
 
     expect(result.reply?.text).toContain("room worker (unbound)");
     expect(result.reply?.text).not.toContain("bindings unavailable");
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
   });
 
   it("formats bindings generically", () => {
@@ -226,7 +236,6 @@ describe("handleSubagentsAgentsAction", () => {
   });
 
   it("shows bindings unavailable for channels without conversation binding support", () => {
-    getChannelPluginMock.mockReturnValueOnce(null);
     listBySessionMock.mockReturnValue([]);
 
     const result = handleSubagentsAgentsAction(

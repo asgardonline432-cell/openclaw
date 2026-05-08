@@ -17,7 +17,7 @@ signals, not just runner noise.
 - Treat channel/plugin lookups inside agent hot paths as suspect. If the code
   only needs target parsing, peer-kind inference, setup hints, or static
   descriptors, use a local pure helper or lightweight public artifact before
-  reaching for `getChannelPlugin()` / bundled runtime fallback.
+  reaching for channel-plugin resolver helpers / bundled runtime fallback.
 - In spawn/session/requester-origin logic, keep routing and delivery-context
   normalization deterministic and runtime-free. Add explicit parser coverage for
   channel-specific prefixes instead of loading a channel plugin just to classify

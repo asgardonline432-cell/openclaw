@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { createWarnLogCapture } from "../logging/test-helpers/warn-log-capture.js";
 import {
@@ -16,6 +16,17 @@ import {
 import { createStubTool } from "./test-helpers/pi-tool-stubs.js";
 import { providerAliasCases } from "./test-helpers/provider-alias-cases.js";
 
+const channelPluginMocks = vi.hoisted(() => ({
+  getChannelPlugin: vi.fn(),
+  getLoadedChannelPlugin: vi.fn(),
+}));
+
+vi.mock("../channels/plugins/index.js", () => ({
+  getChannelPlugin: (...args: unknown[]) => channelPluginMocks.getChannelPlugin(...args),
+  getLoadedChannelPlugin: (...args: unknown[]) =>
+    channelPluginMocks.getLoadedChannelPlugin(...args),
+}));
+
 vi.mock("../channels/plugins/session-conversation.js", () => ({
   resolveSessionConversation: ({ rawId }: { rawId: string }) => ({
     id: rawId,
@@ -24,6 +35,11 @@ vi.mock("../channels/plugins/session-conversation.js", () => ({
     parentConversationCandidates: [],
   }),
 }));
+
+beforeEach(() => {
+  channelPluginMocks.getChannelPlugin.mockReset();
+  channelPluginMocks.getLoadedChannelPlugin.mockReset();
+});
 
 describe("pi-tools.policy", () => {
   it("treats * in allow as allow-all", () => {
@@ -180,6 +196,46 @@ describe("resolveGroupToolPolicy group context validation", () => {
     });
 
     expect(policy).toEqual({ allow: ["read"] });
+  });
+
+  it("uses prepared group tool runtime without loading channel plugins", () => {
+    channelPluginMocks.getLoadedChannelPlugin.mockImplementation(() => {
+      throw new Error("getLoadedChannelPlugin should not run for prepared group tool policy");
+    });
+    channelPluginMocks.getChannelPlugin.mockImplementation(() => {
+      throw new Error("getChannelPlugin should not run for prepared group tool policy");
+    });
+    const resolveGroupToolPolicyFromRuntime = vi.fn(() => ({ allow: ["message"] }));
+
+    const policy = resolveGroupToolPolicy({
+      config: {} as OpenClawConfig,
+      sessionKey: "agent:main:whatsapp:group:runtime-room",
+      messageProvider: "whatsapp",
+      groupRuntime: {
+        id: "whatsapp",
+        resolveGroupToolPolicy: resolveGroupToolPolicyFromRuntime,
+      },
+      groupId: "runtime-room",
+      groupChannel: "general",
+      groupSpace: "workspace",
+      accountId: "acct",
+      senderId: "sender-1",
+    });
+
+    expect(policy).toEqual({ allow: ["message"] });
+    expect(resolveGroupToolPolicyFromRuntime).toHaveBeenCalledWith({
+      cfg: {},
+      groupId: "runtime-room",
+      groupChannel: "general",
+      groupSpace: "workspace",
+      accountId: "acct",
+      senderId: "sender-1",
+      senderName: undefined,
+      senderUsername: undefined,
+      senderE164: undefined,
+    });
+    expect(channelPluginMocks.getLoadedChannelPlugin).not.toHaveBeenCalled();
+    expect(channelPluginMocks.getChannelPlugin).not.toHaveBeenCalled();
   });
 });
 

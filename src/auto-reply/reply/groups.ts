@@ -1,20 +1,17 @@
 import { resolveChannelGroupRequireMention } from "../../config/group-policy.js";
 import type { GroupKeyResolution, SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { createLazyImportLoader } from "../../shared/lazy-promise.js";
 import type { SilentReplyPolicy } from "../../shared/silent-reply-policy.js";
 import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
 } from "../../shared/string-coerce.js";
-import { isInternalMessageChannel } from "../../utils/message-channel.js";
+import { isInternalMessageChannel, normalizeMessageChannel } from "../../utils/message-channel.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
 import { normalizeGroupActivation } from "../group-activation.js";
 import type { TemplateContext } from "../templating.js";
 import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import { extractExplicitGroupId } from "./group-id.js";
-
-const groupsRuntimeLoader = createLazyImportLoader(() => import("./groups.runtime.js"));
 
 type DiscordGroupConfig = {
   requireMention?: boolean;
@@ -27,28 +24,12 @@ type DiscordConfigWithGuilds = {
   guilds?: Record<string, DiscordGroupConfig>;
 };
 
-function loadGroupsRuntime() {
-  return groupsRuntimeLoader.load();
-}
-
-async function resolveRuntimeChannelId(raw?: string | null): Promise<string | null> {
+function resolveRuntimeChannelId(raw?: string | null): string | null {
   const normalized = normalizeOptionalLowercaseString(raw);
   if (!normalized) {
     return null;
   }
-  const { getChannelPlugin, normalizeChannelId } = await loadGroupsRuntime();
-  try {
-    if (getChannelPlugin(normalized)) {
-      return normalized;
-    }
-  } catch {
-    // Plugin registry may not be initialized in shared/test contexts.
-  }
-  try {
-    return normalizeChannelId(raw) ?? normalized;
-  } catch {
-    return normalized;
-  }
+  return normalizeMessageChannel(raw) ?? normalized;
 }
 
 function normalizeDiscordSlug(value?: string | null) {
@@ -156,7 +137,7 @@ export async function resolveGroupRequireMention(params: {
     params.runtime !== undefined
       ? (normalizeOptionalLowercaseString(params.runtime.id) ??
         normalizeOptionalLowercaseString(rawChannel))
-      : await resolveRuntimeChannelId(rawChannel);
+      : resolveRuntimeChannelId(rawChannel);
   if (!channel) {
     return true;
   }
@@ -167,28 +148,13 @@ export async function resolveGroupRequireMention(params: {
     normalizeOptionalString(ctx.GroupChannel) ?? normalizeOptionalString(ctx.GroupSubject);
   const groupSpace = normalizeOptionalString(ctx.GroupSpace);
   let requireMention: boolean | undefined;
-  if (params.runtime !== undefined) {
-    requireMention = params.runtime.resolveGroupRequireMention?.({
-      cfg,
-      groupId,
-      groupChannel,
-      groupSpace,
-      accountId: ctx.AccountId,
-    });
-  } else {
-    const runtime = await loadGroupsRuntime();
-    try {
-      requireMention = runtime.getChannelPlugin(channel)?.groups?.resolveRequireMention?.({
-        cfg,
-        groupId,
-        groupChannel,
-        groupSpace,
-        accountId: ctx.AccountId,
-      });
-    } catch {
-      requireMention = undefined;
-    }
-  }
+  requireMention = params.runtime?.resolveGroupRequireMention?.({
+    cfg,
+    groupId,
+    groupChannel,
+    groupSpace,
+    accountId: ctx.AccountId,
+  });
   if (typeof requireMention === "boolean") {
     return requireMention;
   }

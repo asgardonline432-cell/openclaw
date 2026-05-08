@@ -254,9 +254,7 @@ describe("discord native /think autocomplete", () => {
   }
 
   function requireThinkLevelCommand() {
-    const command = findCommandByNativeName("think", "discord", {
-      includeBundledChannelFallback: false,
-    });
+    const command = findCommandByNativeName("think", "discord");
     if (!command) {
       throw new Error("expected Discord /think command");
     }

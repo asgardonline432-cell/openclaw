@@ -110,7 +110,7 @@ describe("resolveReplyToMode", () => {
     ).toBe("first");
   });
 
-  it("uses registered channel threading adapters for runtime reply-mode resolution", () => {
+  it("does not load registered channel threading adapters without prepared runtime", () => {
     setActivePluginRegistry(
       createTestRegistry([
         {
@@ -131,15 +131,16 @@ describe("resolveReplyToMode", () => {
               resolveAccount: () => ({}),
             },
             threading: {
-              resolveReplyToMode: ({ accountId }: { accountId?: string | null }) =>
-                accountId === "work" ? "first" : "all",
+              resolveReplyToMode: () => {
+                throw new Error("threading adapter should not be loaded without prepared runtime");
+              },
             },
           },
         },
       ]),
     );
 
-    expect(resolveReplyToMode({} as OpenClawConfig, "whatsapp", "work", "group")).toBe("first");
+    expect(resolveReplyToMode({} as OpenClawConfig, "whatsapp", "work", "group")).toBe("all");
     expect(resolveReplyToMode({} as OpenClawConfig, "whatsapp", "default", "group")).toBe("all");
   });
 });

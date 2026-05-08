@@ -65,5 +65,7 @@ export type SubscribeEmbeddedPiSessionParams = {
   builtinToolNames?: ReadonlySet<string>;
   /** Prepared channel-action extractors keyed by normalized tool name. */
   actionExtractorsByToolName?: ReadonlyMap<string, ChannelActionExtractToolSend>;
+  /** Prepared target normalizers keyed by normalized provider/channel id. */
+  targetNormalizersByProvider?: ReadonlyMap<string, (target: string) => string | undefined>;
   internalEvents?: AgentInternalEvent[];
 };

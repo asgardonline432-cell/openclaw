@@ -177,4 +177,39 @@ describe("channel tools", () => {
       }),
     ).toEqual({ level: "minimal", channel: "Prepared Chat" });
   });
+
+  it("does not inspect plugin prompt metadata without prepared runtime", () => {
+    const plugin: ChannelPlugin = {
+      id: "telegram",
+      meta: {
+        id: "telegram",
+        label: "Telegram",
+        selectionLabel: "Telegram",
+        docsPath: "/channels/telegram",
+        blurb: "telegram plugin",
+      },
+      capabilities: { chatTypes: ["direct"] },
+      config: {
+        listAccountIds: () => [],
+        resolveAccount: () => ({}),
+      },
+      agentPrompt: {
+        messageToolHints: () => {
+          throw new Error("messageToolHints should not be read without prepared runtime");
+        },
+        messageToolCapabilities: () => {
+          throw new Error("messageToolCapabilities should not be read without prepared runtime");
+        },
+        reactionGuidance: () => {
+          throw new Error("reactionGuidance should not be read without prepared runtime");
+        },
+      },
+    };
+    setActivePluginRegistry(createTestRegistry([{ pluginId: "telegram", source: "test", plugin }]));
+    const cfg = {} as OpenClawConfig;
+
+    expect(resolveChannelMessageToolHints({ cfg, channel: "telegram" })).toEqual([]);
+    expect(resolveChannelPromptCapabilities({ cfg, channel: "telegram" })).toEqual([]);
+    expect(resolveChannelReactionGuidance({ cfg, channel: "telegram" })).toBeUndefined();
+  });
 });

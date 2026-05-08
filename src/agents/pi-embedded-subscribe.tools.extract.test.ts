@@ -10,6 +10,13 @@ function normalizeTelegramMessagingTargetForTest(raw: string): string | undefine
   return trimmed ? `telegram:${trimmed}` : undefined;
 }
 
+function createPreparedTargetNormalizers() {
+  return new Map<string, (target: string) => string | undefined>([
+    ["telegram", normalizeTelegramMessagingTargetForTest],
+    ["slack", (raw: string) => raw.trim().toLowerCase()],
+  ]);
+}
+
 describe("extractMessagingToolSend", () => {
   beforeEach(() => {
     setActivePluginRegistry(
@@ -40,11 +47,16 @@ describe("extractMessagingToolSend", () => {
   });
 
   it("uses channel as provider for message tool", () => {
-    const result = extractMessagingToolSend("message", {
-      action: "send",
-      channel: "telegram",
-      to: "123",
-    });
+    const result = extractMessagingToolSend(
+      "message",
+      {
+        action: "send",
+        channel: "telegram",
+        to: "123",
+      },
+      undefined,
+      createPreparedTargetNormalizers(),
+    );
 
     expect(result?.tool).toBe("message");
     expect(result?.provider).toBe("telegram");
@@ -52,12 +64,17 @@ describe("extractMessagingToolSend", () => {
   });
 
   it("prefers provider when both provider and channel are set", () => {
-    const result = extractMessagingToolSend("message", {
-      action: "send",
-      provider: "slack",
-      channel: "telegram",
-      to: "channel:C1",
-    });
+    const result = extractMessagingToolSend(
+      "message",
+      {
+        action: "send",
+        provider: "slack",
+        channel: "telegram",
+        to: "channel:C1",
+      },
+      undefined,
+      createPreparedTargetNormalizers(),
+    );
 
     expect(result?.tool).toBe("message");
     expect(result?.provider).toBe("slack");
@@ -65,15 +82,42 @@ describe("extractMessagingToolSend", () => {
   });
 
   it("accepts target alias when to is omitted", () => {
-    const result = extractMessagingToolSend("message", {
-      action: "send",
-      channel: "telegram",
-      target: "123",
-    });
+    const result = extractMessagingToolSend(
+      "message",
+      {
+        action: "send",
+        channel: "telegram",
+        target: "123",
+      },
+      undefined,
+      createPreparedTargetNormalizers(),
+    );
 
     expect(result?.tool).toBe("message");
     expect(result?.provider).toBe("telegram");
     expect(result?.to).toBe("telegram:123");
+  });
+
+  it("does not discover channel target normalizers for the message tool", () => {
+    const getChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected channel plugin lookup");
+      });
+
+    try {
+      const result = extractMessagingToolSend("message", {
+        action: "send",
+        channel: "telegram",
+        to: "123",
+      });
+
+      expect(result?.provider).toBe("telegram");
+      expect(result?.to).toBe("123");
+      expect(getChannelPluginSpy).not.toHaveBeenCalled();
+    } finally {
+      getChannelPluginSpy.mockRestore();
+    }
   });
 
   it("recognizes attachment-style message tool sends", () => {
@@ -153,6 +197,23 @@ describe("extractMessagingToolSend", () => {
         accountId: "acct-prepared",
         to: "C123",
       });
+      expect(getChannelPluginSpy).not.toHaveBeenCalled();
+    } finally {
+      getChannelPluginSpy.mockRestore();
+    }
+  });
+
+  it("does not discover plugin-owned messaging tools without prepared action extractors", () => {
+    const getChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected channel plugin lookup");
+      });
+
+    try {
+      expect(isMessagingTool("slack")).toBe(false);
+      expect(isMessagingToolSendAction("slack", { channelId: "C123" })).toBe(false);
+      expect(extractMessagingToolSend("slack", { channelId: "C123" })).toBeUndefined();
       expect(getChannelPluginSpy).not.toHaveBeenCalled();
     } finally {
       getChannelPluginSpy.mockRestore();

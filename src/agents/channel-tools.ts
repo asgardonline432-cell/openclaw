@@ -1,4 +1,4 @@
-import { getChannelPlugin, listChannelPlugins } from "../channels/plugins/index.js";
+import { listChannelPlugins } from "../channels/plugins/index.js";
 import {
   createMessageActionDiscoveryContext,
   resolveMessageActionDiscoveryForPlugin,
@@ -6,15 +6,11 @@ import {
   resolveCurrentChannelMessageToolDiscoveryAdapter,
   __testing as messageActionTesting,
 } from "../channels/plugins/message-action-discovery.js";
-import {
-  channelPluginHasNativeApprovalPromptUi,
-  NATIVE_APPROVAL_PROMPT_RUNTIME_CAPABILITY,
-} from "../channels/plugins/native-approval-prompt.js";
+import { NATIVE_APPROVAL_PROMPT_RUNTIME_CAPABILITY } from "../channels/plugins/native-approval-prompt.js";
 import type {
   ChannelAgentTool,
   ChannelMessageActionName,
 } from "../channels/plugins/types.public.js";
-import { normalizeAnyChannelId } from "../channels/registry.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { ChannelPromptRuntime } from "../infra/outbound/channel-resolution.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
@@ -123,17 +119,11 @@ export function resolveChannelMessageToolHints(params: {
   accountId?: string | null;
   promptRuntime?: ChannelPromptRuntime;
 }): string[] {
-  const channelId =
-    params.promptRuntime !== undefined
-      ? normalizeOptionalLowercaseString(params.channel)
-      : normalizeAnyChannelId(params.channel);
+  const channelId = normalizeOptionalLowercaseString(params.channel);
   if (!channelId) {
     return [];
   }
-  const resolve =
-    params.promptRuntime !== undefined
-      ? params.promptRuntime.messageToolHints
-      : getChannelPlugin(channelId)?.agentPrompt?.messageToolHints;
+  const resolve = params.promptRuntime?.messageToolHints;
   if (!resolve) {
     return [];
   }
@@ -149,30 +139,17 @@ export function resolveChannelPromptCapabilities(params: {
   accountId?: string | null;
   promptRuntime?: ChannelPromptRuntime;
 }): string[] {
-  const channelId =
-    params.promptRuntime !== undefined
-      ? normalizeOptionalLowercaseString(params.channel)
-      : normalizeAnyChannelId(params.channel);
+  const channelId = normalizeOptionalLowercaseString(params.channel);
   if (!channelId) {
     return [];
   }
   const cfg = params.cfg ?? ({} as OpenClawConfig);
-  const runtimeCapabilities =
-    params.promptRuntime !== undefined
-      ? params.promptRuntime.messageToolCapabilities?.({ cfg, accountId: params.accountId })
-      : undefined;
-  const capabilities = normalizePromptCapabilities(
-    params.promptRuntime !== undefined
-      ? runtimeCapabilities
-      : getChannelPlugin(channelId)?.agentPrompt?.messageToolCapabilities?.({
-          cfg,
-          accountId: params.accountId,
-        }),
-  );
-  if (
-    params.promptRuntime?.hasNativeApprovalPromptUi === true ||
-    (!params.promptRuntime && channelPluginHasNativeApprovalPromptUi(getChannelPlugin(channelId)))
-  ) {
+  const runtimeCapabilities = params.promptRuntime?.messageToolCapabilities?.({
+    cfg,
+    accountId: params.accountId,
+  });
+  const capabilities = normalizePromptCapabilities(runtimeCapabilities);
+  if (params.promptRuntime?.hasNativeApprovalPromptUi === true) {
     capabilities.push(NATIVE_APPROVAL_PROMPT_RUNTIME_CAPABILITY);
   }
   return capabilities;
@@ -188,17 +165,11 @@ export function resolveChannelReactionGuidance(params: {
   accountId?: string | null;
   promptRuntime?: ChannelPromptRuntime;
 }): { level: "minimal" | "extensive"; channel: string } | undefined {
-  const channelId =
-    params.promptRuntime !== undefined
-      ? normalizeOptionalLowercaseString(params.channel)
-      : normalizeAnyChannelId(params.channel);
+  const channelId = normalizeOptionalLowercaseString(params.channel);
   if (!channelId) {
     return undefined;
   }
-  const resolve =
-    params.promptRuntime !== undefined
-      ? params.promptRuntime.reactionGuidance
-      : getChannelPlugin(channelId)?.agentPrompt?.reactionGuidance;
+  const resolve = params.promptRuntime?.reactionGuidance;
   if (!resolve) {
     return undefined;
   }

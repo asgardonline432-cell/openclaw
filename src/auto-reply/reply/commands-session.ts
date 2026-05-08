@@ -4,7 +4,7 @@ import {
   setChannelConversationBindingIdleTimeoutBySessionKey,
   setChannelConversationBindingMaxAgeBySessionKey,
 } from "../../channels/plugins/conversation-bindings.js";
-import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import { normalizeChannelId } from "../../channels/plugins/index.js";
 import { formatThreadBindingDurationLabel } from "../../channels/thread-bindings-messages.js";
 import { parseDurationMs } from "../../cli/parse-duration.js";
 import { isRestartEnabled } from "../../config/commands.flags.js";
@@ -57,7 +57,7 @@ function resolveCommandConversationBindings(
   if (params.replyChannelRuntime && params.replyChannelRuntime.id === channelId) {
     return params.replyChannelRuntime.conversationBindings;
   }
-  return getChannelPlugin(channelId)?.conversationBindings;
+  return undefined;
 }
 
 function buildRestartCommandSentinel(params: HandleCommandsParams): RestartSentinelPayload | null {

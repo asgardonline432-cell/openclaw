@@ -8,6 +8,7 @@ import {
   createTestRegistry,
 } from "../../test-utils/channel-plugins.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
+import type { HandleCommandsParams } from "./commands-types.js";
 
 const hoisted = vi.hoisted(() => {
   const callGatewayMock = vi.fn();
@@ -217,6 +218,40 @@ function resolvePrefixedConversationIdForTest(
   return targets.map((target) => parsePrefixedConversationIdForTest(target, channel)).find(Boolean);
 }
 
+function buildTelegramBoundReplyPayloadForTest({
+  operation,
+  conversation,
+}: {
+  operation: "acp-spawn";
+  conversation: { conversationId: string };
+}) {
+  return operation === "acp-spawn" && conversation.conversationId.includes(":topic:")
+    ? { delivery: { pin: { enabled: true } } }
+    : null;
+}
+
+function resolveAcpReplyRuntimeForTest(
+  channel: string,
+): HandleCommandsParams["replyChannelRuntime"] | undefined {
+  if (channel === "telegram") {
+    return {
+      id: "telegram",
+      conversationBindings: {
+        buildBoundReplyPayload: buildTelegramBoundReplyPayloadForTest,
+      },
+    } as HandleCommandsParams["replyChannelRuntime"];
+  }
+  if (channel === "discord") {
+    return {
+      id: "discord",
+      conversationBindings: {
+        defaultTopLevelPlacement: "child",
+      },
+    } as HandleCommandsParams["replyChannelRuntime"];
+  }
+  return undefined;
+}
+
 function setMinimalAcpCommandRegistryForTests(): void {
   setActivePluginRegistry(
     createTestRegistry([
@@ -227,16 +262,7 @@ function setMinimalAcpCommandRegistryForTests(): void {
           ...createChannelTestPluginBase({ id: "telegram", label: "Telegram" }),
           conversationBindings: {
             defaultTopLevelPlacement: "current",
-            buildBoundReplyPayload: ({
-              operation,
-              conversation,
-            }: {
-              operation: "acp-spawn";
-              conversation: { conversationId: string };
-            }) =>
-              operation === "acp-spawn" && conversation.conversationId.includes(":topic:")
-                ? { delivery: { pin: { enabled: true } } }
-                : null,
+            buildBoundReplyPayload: buildTelegramBoundReplyPayloadForTest,
           },
           bindings: {
             resolveCommandConversation: ({
@@ -496,6 +522,7 @@ function createDiscordParams(commandBody: string, cfg: OpenClawConfig = baseCfg)
     AccountId: "default",
   });
   params.command.senderId = "user-1";
+  params.replyChannelRuntime = resolveAcpReplyRuntimeForTest("discord");
   return params;
 }
 
@@ -721,6 +748,7 @@ function createConversationParams(
     ...(fixture.threadParentId ? { ThreadParentId: fixture.threadParentId } : {}),
   });
   params.command.senderId = fixture.senderId ?? "user-1";
+  params.replyChannelRuntime = resolveAcpReplyRuntimeForTest(fixture.channel);
   return params;
 }
 

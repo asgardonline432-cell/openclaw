@@ -1,4 +1,3 @@
-import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
 import type { BlockStreamingCoalesceConfig } from "../../config/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { resolveChannelStreamingBlockCoalesce } from "../../plugin-sdk/channel-streaming.js";
@@ -24,19 +23,12 @@ function resolveProviderChunkContext(
         | TextChunkProvider
         | undefined)
     : undefined;
-  const providerId = providerKey ? normalizeChannelId(providerKey) : null;
   const providerChunkLimit =
-    providerKey && (providerId || runtime !== undefined)
-      ? runtime !== undefined
-        ? runtime.textChunkLimit
-        : providerId
-          ? getChannelPlugin(providerId)?.outbound?.textChunkLimit
-          : undefined
-      : undefined;
+    providerKey && runtime !== undefined ? runtime.textChunkLimit : undefined;
   const textLimit = resolveTextChunkLimit(cfg, providerKey, accountId, {
     fallbackLimit: providerChunkLimit,
   });
-  return { providerKey, providerId, textLimit };
+  return { providerKey, textLimit };
 }
 
 type ProviderBlockStreamingConfig = {
@@ -214,21 +206,10 @@ function resolveBlockStreamingCoalescing(
   },
   runtime?: Pick<ReplyChannelRuntime, "textChunkLimit" | "blockStreamingCoalesceDefaults">,
 ): BlockStreamingCoalescing | undefined {
-  const { providerKey, providerId, textLimit } = resolveProviderChunkContext(
-    cfg,
-    provider,
-    accountId,
-    runtime,
-  );
+  const { providerKey, textLimit } = resolveProviderChunkContext(cfg, provider, accountId, runtime);
 
   const providerDefaults =
-    providerKey && (providerId || runtime !== undefined)
-      ? runtime !== undefined
-        ? runtime.blockStreamingCoalesceDefaults
-        : providerId
-          ? getChannelPlugin(providerId)?.streaming?.blockStreamingCoalesceDefaults
-          : undefined
-      : undefined;
+    providerKey && runtime !== undefined ? runtime.blockStreamingCoalesceDefaults : undefined;
   const providerCfg = resolveProviderBlockStreamingCoalesce({
     cfg,
     providerKey,

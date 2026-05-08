@@ -16,7 +16,7 @@ import {
   resolveAcpThreadSessionDetailLines,
 } from "../../../acp/runtime/session-identifiers.js";
 import { resolveAcpSpawnRuntimePolicyError } from "../../../agents/acp-spawn.js";
-import { getChannelPlugin, normalizeChannelId } from "../../../channels/plugins/index.js";
+import { normalizeChannelId } from "../../../channels/plugins/index.js";
 import {
   resolveThreadBindingIntroText,
   resolveThreadBindingThreadName,
@@ -91,7 +91,7 @@ async function resolveBoundReplyPayload(params: {
     params.commandParams.replyChannelRuntime &&
     params.commandParams.replyChannelRuntime.id === channelId
       ? params.commandParams.replyChannelRuntime.conversationBindings?.buildBoundReplyPayload
-      : getChannelPlugin(channelId)?.conversationBindings?.buildBoundReplyPayload;
+      : undefined;
   if (!buildPayload) {
     return undefined;
   }

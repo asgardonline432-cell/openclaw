@@ -98,7 +98,10 @@ import {
   resolveBootstrapPromptTruncationWarningMode,
   resolveBootstrapTotalMaxChars,
 } from "../../pi-embedded-helpers.js";
-import { buildActionExtractorsByToolName } from "../../pi-embedded-messaging.js";
+import {
+  buildActionExtractorsByToolName,
+  buildTargetNormalizersByProvider,
+} from "../../pi-embedded-messaging.js";
 import { countActiveToolExecutions } from "../../pi-embedded-subscribe.handlers.tools.js";
 import { subscribeEmbeddedPiSession } from "../../pi-embedded-subscribe.js";
 import { createPreparedEmbeddedPiSettingsManager } from "../../pi-project-settings.js";
@@ -713,6 +716,7 @@ function collectAttemptExplicitToolAllowlistSources(params: {
   modelProvider?: string;
   modelId?: string;
   messageProvider?: string;
+  groupRuntime?: EmbeddedRunAttemptParams["outboundChannelRuntime"];
   agentAccountId?: string | null;
   groupId?: string | null;
   groupChannel?: string | null;
@@ -738,6 +742,7 @@ function collectAttemptExplicitToolAllowlistSources(params: {
     sessionKey: params.sessionKey,
     spawnedBy: params.spawnedBy,
     messageProvider: params.messageProvider,
+    groupRuntime: params.groupRuntime,
     groupId: params.groupId,
     groupChannel: params.groupChannel,
     groupSpace: params.groupSpace,
@@ -1244,6 +1249,7 @@ export async function runEmbeddedAttempt(
       modelProvider: params.provider,
       modelId: params.modelId,
       messageProvider: resolveAttemptToolPolicyMessageProvider(params),
+      groupRuntime: params.outboundChannelRuntime,
       agentAccountId: params.agentAccountId,
       groupId: params.groupId,
       groupChannel: params.groupChannel,
@@ -1300,6 +1306,7 @@ export async function runEmbeddedAttempt(
       modelProvider: params.provider,
       modelId: params.modelId,
       messageProvider: resolveAttemptToolPolicyMessageProvider(params),
+      groupRuntime: params.outboundChannelRuntime,
       agentAccountId: params.agentAccountId,
       groupId: params.groupId,
       groupChannel: params.groupChannel,
@@ -2670,6 +2677,9 @@ export async function runEmbeddedAttempt(
           agentId: sessionAgentId,
           builtinToolNames,
           actionExtractorsByToolName: buildActionExtractorsByToolName(
+            params.outboundChannelRuntime,
+          ),
+          targetNormalizersByProvider: buildTargetNormalizersByProvider(
             params.outboundChannelRuntime,
           ),
           internalEvents: params.internalEvents,

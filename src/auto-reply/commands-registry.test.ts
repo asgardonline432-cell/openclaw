@@ -120,8 +120,12 @@ function requireChatCommand(key: string): ChatCommandDefinition {
   return command;
 }
 
-function requireNativeCommand(name: string, provider?: string): ChatCommandDefinition {
-  const command = findCommandByNativeName(name, provider);
+function requireNativeCommand(
+  name: string,
+  provider?: string,
+  options?: Parameters<typeof findCommandByNativeName>[2],
+): ChatCommandDefinition {
+  const command = findCommandByNativeName(name, provider, options);
   if (!command) {
     throw new Error(`Expected native command "${name}"`);
   }
@@ -274,42 +278,36 @@ describe("commands registry", () => {
   });
 
   it("applies discord native command overrides", () => {
-    installDiscordNativeCommandOverrides();
+    const commands = {
+      resolveNativeCommandName: ({ commandKey, defaultName }) =>
+        commandKey === "tts" ? "voice" : defaultName,
+    } satisfies Parameters<typeof listNativeCommandSpecsForConfig>[1]["commands"];
     const native = listNativeCommandSpecsForConfig(
       { commands: { native: true } },
-      { provider: "discord" },
+      { provider: "discord", commands },
     );
     expect([...nativeNameSet(native)]).toContain("voice");
-    expect(requireNativeCommand("voice", "discord").key).toBe("tts");
-    expect(findCommandByNativeName("tts", "discord")).toBeUndefined();
+    expect(requireNativeCommand("voice", "discord", { commands }).key).toBe("tts");
+    expect(findCommandByNativeName("tts", "discord", { commands })).toBeUndefined();
   });
 
   it("applies slack native command overrides", () => {
-    installSlackNativeCommandOverrides();
+    const commands = {
+      resolveNativeCommandName: ({ commandKey, defaultName }) =>
+        commandKey === "status" ? "agentstatus" : defaultName,
+    } satisfies Parameters<typeof listNativeCommandSpecsForConfig>[1]["commands"];
     const native = listNativeCommandSpecsForConfig(
       { commands: { native: true } },
-      { provider: "slack" },
+      { provider: "slack", commands },
     );
     expect([...nativeNameSet(native)]).toContain("agentstatus");
-    expect(requireNativeCommand("agentstatus", "slack").key).toBe("status");
-    expect(findCommandByNativeName("status", "slack")).toBeUndefined();
-    expect(
-      findCommandByNativeName("agentstatus", "slack", {
-        includeBundledChannelFallback: false,
-      })?.key,
-    ).toBe("status");
-    expect(
-      findCommandByNativeName("status", "slack", {
-        includeBundledChannelFallback: false,
-      }),
-    ).toBeUndefined();
+    expect(requireNativeCommand("agentstatus", "slack", { commands }).key).toBe("status");
+    expect(findCommandByNativeName("status", "slack", { commands })).toBeUndefined();
   });
 
-  it("can resolve default native command names without loading bundled channel fallbacks", () => {
-    const command = findCommandByNativeName("status", "discord", {
-      includeBundledChannelFallback: false,
-    });
-    expect(command?.key).toBe("status");
+  it("can resolve default native command names without prepared command metadata", () => {
+    const command = findCommandByNativeName("status", "discord");
+    expect(command).toMatchObject({ key: "status" });
   });
 
   it("uses prepared command metadata without resolving channel plugins", () => {

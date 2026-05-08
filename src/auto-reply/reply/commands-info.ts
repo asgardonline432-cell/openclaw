@@ -1,6 +1,5 @@
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolveEffectiveToolInventory } from "../../agents/tools-effective-inventory.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import { logVerbose } from "../../globals.js";
 import { listSkillCommandsForAgents } from "../skill-commands.js";
 import {
@@ -67,19 +66,16 @@ export const handleCommandsListCommand: CommandHandler = async (params, allowTex
     params.replyChannelRuntime && params.replyChannelRuntime.id === surface
       ? params.replyChannelRuntime.commands
       : undefined;
-  const commandPlugin = preparedCommands || !surface ? null : getChannelPlugin(surface);
   const paginated = buildCommandsMessagePaginated(params.cfg, skillCommands, {
     page: 1,
     surface,
     commands: preparedCommands,
   });
-  const channelData = (preparedCommands ?? commandPlugin?.commands)?.buildCommandsListChannelData?.(
-    {
-      currentPage: paginated.currentPage,
-      totalPages: paginated.totalPages,
-      agentId,
-    },
-  );
+  const channelData = preparedCommands?.buildCommandsListChannelData?.({
+    currentPage: paginated.currentPage,
+    totalPages: paginated.totalPages,
+    agentId,
+  });
   if (channelData) {
     return {
       shouldContinue: false,

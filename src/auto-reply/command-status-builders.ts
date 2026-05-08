@@ -1,12 +1,10 @@
 import type { SkillCommandSpec } from "../agents/skills.js";
-import { getChannelPlugin } from "../channels/plugins/index.js";
 import type { ChannelCommandAdapter } from "../channels/plugins/types.public.js";
 import { isCommandFlagEnabled } from "../config/commands.flags.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { listPluginCommands } from "../plugins/commands.js";
 import {
   normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
   normalizeOptionalString,
 } from "../shared/string-coerce.js";
 import {
@@ -201,13 +199,9 @@ export function buildCommandsMessagePaginated(
   options?: CommandsMessageOptions,
 ): CommandsMessageResult {
   const page = Math.max(1, options?.page ?? 1);
-  const surface = normalizeOptionalLowercaseString(options?.surface);
   const prefersPaginatedList =
     options?.forcePaginatedList === true ||
-    Boolean(
-      options?.commands?.buildCommandsListChannelData ??
-      (surface && getChannelPlugin(surface)?.commands?.buildCommandsListChannelData),
-    );
+    Boolean(options?.commands?.buildCommandsListChannelData);
 
   const commands = cfg
     ? listChatCommandsForConfig(cfg, { skillCommands })

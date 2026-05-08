@@ -258,6 +258,35 @@ describe("resolveMessagingTarget (directory fallback)", () => {
     expect(result.target.display).toBeUndefined();
   });
 
+  it("uses prepared runtime target facts without resolving channel plugins", async () => {
+    mocks.getChannelPlugin.mockImplementation(() => {
+      throw new Error("unexpected channel plugin lookup");
+    });
+    mocks.getLoadedChannelPlugin.mockImplementation(() => {
+      throw new Error("unexpected loaded channel plugin lookup");
+    });
+
+    const result = await expectOkResolution({
+      cfg,
+      channel: "workspace",
+      input: "room-1",
+      runtime: {
+        label: "Workspace",
+        normalizeTarget: (raw: string) => raw.trim().toUpperCase(),
+        looksLikeTargetId: (_raw: string, normalized: string) => normalized === "ROOM-1",
+      },
+    });
+
+    expect(result.target).toEqual({
+      to: "ROOM-1",
+      kind: "group",
+      display: "ROOM-1",
+      source: "normalized",
+    });
+    expect(mocks.getChannelPlugin).not.toHaveBeenCalled();
+    expect(mocks.getLoadedChannelPlugin).not.toHaveBeenCalled();
+  });
+
   it("defers target display formatting to the plugin when available", () => {
     mocks.getChannelPlugin.mockReturnValue({
       messaging: {
@@ -266,5 +295,20 @@ describe("resolveMessagingTarget (directory fallback)", () => {
     });
 
     expect(formatTargetDisplay({ channel: "forum", target: "forum:12345" })).toBe("12345");
+  });
+
+  it("uses generic target display without plugin lookup when runtime is supplied", () => {
+    mocks.getChannelPlugin.mockImplementation(() => {
+      throw new Error("unexpected channel plugin lookup");
+    });
+
+    expect(
+      formatTargetDisplay({
+        channel: "forum",
+        target: "channel:support",
+        runtime: {},
+      }),
+    ).toBe("#support");
+    expect(mocks.getChannelPlugin).not.toHaveBeenCalled();
   });
 });

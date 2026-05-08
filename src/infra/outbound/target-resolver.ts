@@ -112,7 +112,7 @@ export function formatTargetDisplay(params: {
       kind: params.kind,
     });
   }
-  const plugin = getChannelPlugin(params.channel);
+  const plugin = params.runtime ? undefined : getChannelPlugin(params.channel);
   if (plugin?.messaging?.formatTargetDisplay) {
     return plugin.messaging.formatTargetDisplay({
       target: params.target,
@@ -205,6 +205,7 @@ function normalizeDirectoryEntryId(
 ): string {
   const normalized = normalizeTargetForProvider(channel, entry.id, {
     normalizeTarget: runtime?.normalizeTarget,
+    allowPluginFallback: !runtime,
   });
   return normalized ?? entry.id.trim();
 }
@@ -304,6 +305,7 @@ async function getDirectoryEntries(params: {
         channel: params.channel,
         targetResolverHint: params.runtime.targetResolverHint,
         looksLikeTargetId: params.runtime.looksLikeTargetId,
+        allowPluginFallback: false,
       })
     : buildTargetResolverSignature(params.channel);
   const listParams = {
@@ -414,6 +416,7 @@ export async function resolveMessagingTarget(params: {
   const kind = detectTargetKind(params.channel, raw, params.preferredKind, params.runtime);
   const normalizedInput = resolveNormalizedTargetInput(params.channel, raw, {
     normalizeTarget: params.runtime?.normalizeTarget,
+    allowPluginFallback: !params.runtime,
   });
   const normalized = normalizedInput?.normalized ?? raw;
   if (
@@ -424,6 +427,7 @@ export async function resolveMessagingTarget(params: {
       normalized,
       normalizeTarget: params.runtime?.normalizeTarget,
       looksLikeTargetId: params.runtime?.looksLikeTargetId,
+      allowPluginFallback: !params.runtime,
     })
   ) {
     const resolvedIdLikeTarget = await maybeResolveIdLikeTarget({
@@ -432,6 +436,7 @@ export async function resolveMessagingTarget(params: {
       input: raw,
       accountId: params.accountId,
       preferredKind: params.preferredKind,
+      runtime: params.runtime,
     });
     if (resolvedIdLikeTarget) {
       return {
@@ -500,6 +505,7 @@ export async function resolveMessagingTarget(params: {
       normalizeTarget: params.runtime?.normalizeTarget,
       looksLikeTargetId: params.runtime?.looksLikeTargetId,
       resolveMessagingTargetFallback: params.runtime?.resolveMessagingTargetFallback,
+      allowPluginFallback: !params.runtime,
     }),
   );
   if (resolvedFallbackTarget) {
@@ -529,6 +535,7 @@ export async function lookupDirectoryDisplay(params: {
   const normalized =
     normalizeTargetForProvider(params.channel, params.targetId, {
       normalizeTarget: params.runtime?.normalizeTarget,
+      allowPluginFallback: !params.runtime,
     }) ?? params.targetId;
 
   // Targets can resolve to either peers (DMs) or groups. Try both.

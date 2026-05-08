@@ -1,8 +1,4 @@
-import {
-  getLoadedChannelPlugin,
-  listChannelPlugins,
-  resolveChannelApprovalAdapter,
-} from "../../channels/plugins/index.js";
+import { listChannelPlugins, resolveChannelApprovalAdapter } from "../../channels/plugins/index.js";
 import type { ExecApprovalRequest } from "../../infra/exec-approvals.js";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -109,10 +105,7 @@ export function readCommandDeliveryTarget(params: HandleCommandsParams): string 
 }
 
 function listPrivateCommandRouteCandidateChannels(originChannel: string) {
-  const plugins = [getLoadedChannelPlugin(originChannel), ...listChannelPlugins()].filter(
-    (plugin): plugin is NonNullable<ReturnType<typeof getLoadedChannelPlugin>> =>
-      Boolean(plugin?.id),
-  );
+  const plugins = listChannelPlugins().filter((plugin) => Boolean(plugin?.id));
   const seen = new Set<string>();
   const candidates: Array<{ channel: string; plugin: (typeof plugins)[number] }> = [];
   for (const plugin of plugins) {

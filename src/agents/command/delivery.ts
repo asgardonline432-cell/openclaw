@@ -4,7 +4,7 @@ import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import { normalizeReplyPayload } from "../../auto-reply/reply/normalize-reply.js";
 import { createReplyMediaPathNormalizer } from "../../auto-reply/reply/reply-media-paths.runtime.js";
 import { sendDurableMessageBatch } from "../../channels/message/runtime.js";
-import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import { normalizeChannelId } from "../../channels/plugins/index.js";
 import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
 import { createOutboundSendDeps, type CliDeps } from "../../cli/outbound-send-deps.js";
 import type { SessionEntry } from "../../config/sessions.js";
@@ -288,8 +288,6 @@ export function normalizeAgentCommandReplyPayloads(params: {
     applyChannelTransforms && params.outboundChannelRuntime?.id === channel
       ? params.outboundChannelRuntime
       : undefined;
-  const deliveryPlugin =
-    applyChannelTransforms && !deliveryRuntime ? getChannelPlugin(channel) : undefined;
 
   const sessionKey = params.outboundSession?.key ?? params.opts.sessionKey;
   const agentId =
@@ -321,14 +319,7 @@ export function normalizeAgentCommandReplyPayloads(params: {
           cfg: params.cfg,
           accountId: params.accountId,
         }) ?? payload
-    : deliveryPlugin?.messaging?.transformReplyPayload
-      ? (payload: ReplyPayload) =>
-          deliveryPlugin.messaging?.transformReplyPayload?.({
-            payload,
-            cfg: params.cfg,
-            accountId: params.accountId,
-          }) ?? payload
-      : undefined;
+    : undefined;
 
   const normalizedPayloads: ReplyPayload[] = [];
   for (const payload of payloads) {
@@ -399,14 +390,8 @@ export async function deliverAgentCommandResult(params: {
           ...deliveryPlan,
           resolvedChannel: deliveryChannel,
         };
-  // Channel docking: delivery channels are resolved via plugin registry.
-  const deliveryPlugin =
-    deliver && !isInternalMessageChannel(deliveryChannel) && !deliveryRuntime
-      ? getChannelPlugin(normalizedDeliveryChannel)
-      : undefined;
-
   const isDeliveryChannelKnown =
-    isInternalMessageChannel(deliveryChannel) || Boolean(deliveryRuntime ?? deliveryPlugin);
+    isInternalMessageChannel(deliveryChannel) || Boolean(deliveryRuntime);
 
   const targetMode =
     opts.deliveryTargetMode ??
@@ -431,7 +416,7 @@ export async function deliverAgentCommandResult(params: {
   const deliveryTarget = resolved.resolvedTo;
   const resolvedThreadId = deliveryPlan.resolvedThreadId ?? opts.threadId;
   const replyTransport =
-    (deliveryRuntime?.resolveReplyTransport ?? deliveryPlugin?.threading?.resolveReplyTransport)?.({
+    deliveryRuntime?.resolveReplyTransport?.({
       cfg,
       accountId: resolvedAccountId,
       threadId: resolvedThreadId,

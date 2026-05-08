@@ -4,6 +4,7 @@ import {
   resolveEffectiveToolPolicy,
   resolveGroupToolPolicy,
   resolveTrustedGroupId,
+  type PreparedGroupToolPolicyRuntime,
   resolveSubagentToolPolicyForSession,
 } from "../pi-tools.policy.js";
 import {
@@ -46,6 +47,7 @@ type FinalEffectiveToolPolicyParams = {
   modelProvider?: string;
   modelId?: string;
   messageProvider?: string;
+  groupRuntime?: PreparedGroupToolPolicyRuntime;
   agentAccountId?: string | null;
   groupId?: string | null;
   groupChannel?: string | null;
@@ -97,6 +99,7 @@ export function applyFinalEffectiveToolPolicy(
     sessionKey: params.sessionKey,
     spawnedBy: params.spawnedBy,
     messageProvider: params.messageProvider,
+    groupRuntime: params.groupRuntime,
     groupId: trustedGroup.groupId,
     groupChannel: trustedGroup.dropped ? null : params.groupChannel,
     groupSpace: trustedGroup.dropped ? null : params.groupSpace,

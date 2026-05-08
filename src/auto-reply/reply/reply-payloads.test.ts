@@ -193,6 +193,9 @@ describe("shouldDedupeMessagingToolRepliesForRoute", () => {
         messagingToolSentTargets: [
           { tool: "message", provider: "telegram", to: "-100123", threadId: "77" },
         ],
+        runtime: {
+          targetsMatchForReplySuppression: targetsMatchTelegramReplySuppression,
+        },
       }),
     ).toBe(true);
   });
@@ -208,6 +211,9 @@ describe("shouldDedupeMessagingToolRepliesForRoute", () => {
         messagingToolSentTargets: [
           { tool: "message", provider: "telegram", to: "-100123", threadId: largeThreadId },
         ],
+        runtime: {
+          targetsMatchForReplySuppression: targetsMatchTelegramReplySuppression,
+        },
       }),
     ).toBe(true);
   });
@@ -241,11 +247,14 @@ describe("shouldDedupeMessagingToolRepliesForRoute", () => {
         messageProvider: "telegram",
         originatingTo: "telegram:group:-100123",
         messagingToolSentTargets: [{ tool: "message", provider: "telegram", to: "-100123" }],
+        runtime: {
+          targetsMatchForReplySuppression: targetsMatchTelegramReplySuppression,
+        },
       }),
     ).toBe(true);
   });
 
-  it("matches telegram replies even when the active plugin registry omits telegram", () => {
+  it("uses prepared runtime matching even when the active plugin registry omits telegram", () => {
     resetPluginRuntimeStateForTest();
     setActivePluginRegistry(createTestRegistry([]));
 
@@ -256,6 +265,22 @@ describe("shouldDedupeMessagingToolRepliesForRoute", () => {
         messagingToolSentTargets: [
           { tool: "message", provider: "telegram", to: "-100123", threadId: "77" },
         ],
+        runtime: {
+          targetsMatchForReplySuppression: targetsMatchTelegramReplySuppression,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("normalizes targets with prepared runtime before comparing", () => {
+    expect(
+      shouldDedupeMessagingToolRepliesForRoute({
+        messageProvider: "telegram",
+        originatingTo: "telegram:group:-100123",
+        messagingToolSentTargets: [{ tool: "message", provider: "telegram", to: "-100123" }],
+        runtime: {
+          normalizeTarget: (target) => target.replace(/^telegram:group:/u, ""),
+        },
       }),
     ).toBe(true);
   });

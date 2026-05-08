@@ -216,6 +216,27 @@ describe("resolveTranscriptPolicy", () => {
     vi.clearAllMocks();
   });
 
+  it("uses a prepared runtime handle without resolving provider runtime again", () => {
+    const policy = resolveTranscriptPolicy({
+      provider: "demo",
+      modelId: "demo-model",
+      runtimeHandle: {
+        provider: "demo",
+        plugin: {
+          id: "demo",
+          buildReplayPolicy: () => ({
+            sanitizeToolCallIds: true,
+            toolCallIdMode: "strict",
+          }),
+        } as never,
+      },
+    });
+
+    expect(policy.sanitizeToolCallIds).toBe(true);
+    expect(policy.toolCallIdMode).toBe("strict");
+    expect(mockResolveProviderRuntimePlugin).not.toHaveBeenCalled();
+  });
+
   function expectStrictOpenAiCompatibleReplayDefaults(provider: string): void {
     const policy = resolveTranscriptPolicy({
       provider,

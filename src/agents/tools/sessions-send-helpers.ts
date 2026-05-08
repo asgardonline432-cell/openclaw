@@ -1,11 +1,12 @@
-import {
-  getChannelPlugin,
-  normalizeChannelId as normalizeAnyChannelId,
-} from "../../channels/plugins/index.js";
+import { normalizeChannelId as normalizeAnyChannelId } from "../../channels/plugins/index.js";
 import { resolveSessionConversationRef } from "../../channels/plugins/session-conversation.js";
 import { normalizeChannelId as normalizeChatChannelId } from "../../channels/registry.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
+import {
+  parseRawSessionConversationRef,
+  parseThreadSessionSuffix,
+} from "../../sessions/session-key-utils.js";
 import { ANNOUNCE_SKIP_TOKEN, REPLY_SKIP_TOKEN } from "./sessions-send-tokens.js";
 export {
   isAnnounceSkip,
@@ -23,11 +24,35 @@ export type AnnounceTarget = {
   threadId?: string; // Forum topic/thread ID
 };
 
+function resolvePreparedAnnounceTargetKey(
+  sessionKey: string,
+  runtime: OutboundChannelRuntime | undefined,
+): { channel: string; kind: "group" | "channel"; id: string; threadId?: string } | null {
+  const raw = parseRawSessionConversationRef(sessionKey);
+  if (!raw) {
+    return null;
+  }
+  const normalizedChannel =
+    normalizeAnyChannelId(raw.channel) ?? normalizeChatChannelId(raw.channel);
+  const channel = normalizedChannel ?? raw.channel;
+  if (!runtime || runtime.id !== channel) {
+    return null;
+  }
+  const parsedThread = parseThreadSessionSuffix(raw.rawId);
+  return {
+    channel,
+    kind: raw.kind,
+    id: parsedThread.baseSessionKey ?? raw.rawId,
+    threadId: parsedThread.threadId,
+  };
+}
+
 export function resolveAnnounceTargetFromKey(
   sessionKey: string,
   runtime?: OutboundChannelRuntime,
 ): AnnounceTarget | null {
-  const parsed = resolveSessionConversationRef(sessionKey);
+  const prepared = resolvePreparedAnnounceTargetKey(sessionKey, runtime);
+  const parsed = prepared ?? resolveSessionConversationRef(sessionKey);
   if (!parsed) {
     return null;
   }
@@ -35,14 +60,13 @@ export function resolveAnnounceTargetFromKey(
     normalizeAnyChannelId(parsed.channel) ?? normalizeChatChannelId(parsed.channel);
   const channel = normalizedChannel ?? parsed.channel;
   const channelRuntime = runtime?.id === channel ? runtime : undefined;
-  const plugin = normalizedChannel && !channelRuntime ? getChannelPlugin(normalizedChannel) : null;
   const genericTarget = parsed.kind === "channel" ? `channel:${parsed.id}` : `group:${parsed.id}`;
   const normalized =
-    (channelRuntime?.resolveSessionTarget ?? plugin?.messaging?.resolveSessionTarget)?.({
+    channelRuntime?.resolveSessionTarget?.({
       kind: parsed.kind,
       id: parsed.id,
       threadId: parsed.threadId,
-    }) ?? (channelRuntime?.normalizeTarget ?? plugin?.messaging?.normalizeTarget)?.(genericTarget);
+    }) ?? channelRuntime?.normalizeTarget?.(genericTarget);
   return {
     channel,
     to: normalized ?? (normalizedChannel ? genericTarget : parsed.id),

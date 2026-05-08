@@ -303,6 +303,9 @@ function buildSessionCommandParams(
   } as HandleCommandsParams["ctx"];
   const channel = normalizeCommandContextText(ctx.Provider ?? ctx.Surface);
   const senderId = typeof ctx.SenderId === "string" ? ctx.SenderId : undefined;
+  const channelPlugin = hoisted.runtimeChannelRegistry.channels.find(
+    (entry) => entry.plugin.id === channel,
+  )?.plugin;
   return {
     ctx,
     cfg: baseCfg,
@@ -320,6 +323,12 @@ function buildSessionCommandParams(
       from: typeof ctx.From === "string" ? ctx.From : undefined,
       to: typeof ctx.To === "string" ? ctx.To : undefined,
     },
+    replyChannelRuntime: channelPlugin
+      ? ({
+          id: channelPlugin.id,
+          conversationBindings: channelPlugin.conversationBindings,
+        } as HandleCommandsParams["replyChannelRuntime"])
+      : undefined,
     directives: parseInlineDirectives(commandBody),
     elevated: { enabled: true, allowed: true, failures: [] },
     sessionKey: "agent:main:main",

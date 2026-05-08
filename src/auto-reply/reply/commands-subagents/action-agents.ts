@@ -1,7 +1,7 @@
 import { subagentRuns } from "../../../agents/subagent-registry-memory.js";
 import { countPendingDescendantRunsFromRuns } from "../../../agents/subagent-registry-queries.js";
 import { getSubagentRunsSnapshotForRead } from "../../../agents/subagent-registry-state.js";
-import { getChannelPlugin, normalizeChannelId } from "../../../channels/plugins/index.js";
+import { normalizeChannelId } from "../../../channels/plugins/index.js";
 import { getSessionBindingService } from "../../../infra/outbound/session-binding-service.js";
 import { normalizeOptionalString } from "../../../shared/string-coerce.js";
 import type { CommandHandlerResult } from "../commands-types.js";
@@ -29,9 +29,7 @@ function supportsConversationBindings(ctx: SubagentsCommandContext, channel: str
       true
     );
   }
-  return (
-    getChannelPlugin(channelId)?.conversationBindings?.supportsCurrentConversationBinding === true
-  );
+  return false;
 }
 
 export function handleSubagentsAgentsAction(ctx: SubagentsCommandContext): CommandHandlerResult {

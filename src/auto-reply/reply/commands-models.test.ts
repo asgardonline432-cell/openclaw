@@ -291,6 +291,10 @@ describe("handleModelsCommand", () => {
     params.ctx.Surface = "telegram";
     params.command.channel = "telegram";
     params.command.surface = "telegram";
+    params.replyChannelRuntime = {
+      id: "telegram",
+      commands: telegramModelsTestPlugin.commands,
+    } as HandleCommandsParams["replyChannelRuntime"];
 
     const result = await handleModelsCommand(params, true);
 
@@ -311,6 +315,10 @@ describe("handleModelsCommand", () => {
     params.ctx.Surface = "menuonly";
     params.command.channel = "menuonly";
     params.command.surface = "menuonly";
+    params.replyChannelRuntime = {
+      id: "menuonly",
+      commands: menuOnlyModelsTestPlugin.commands,
+    } as HandleCommandsParams["replyChannelRuntime"];
 
     const result = await handleModelsCommand(params, true);
 

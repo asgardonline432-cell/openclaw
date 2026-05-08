@@ -1,4 +1,3 @@
-import { getChannelPlugin, normalizeChannelId } from "../channels/plugins/index.js";
 import type { ChannelMessageActionAdapter } from "../channels/plugins/types.public.js";
 import type { OutboundChannelRuntime } from "../infra/outbound/channel-resolution.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
@@ -24,6 +23,10 @@ export type ChannelActionExtractToolSend = NonNullable<
 
 export type PreparedMessagingActionToolRuntime = {
   actionExtractorsByToolName?: ReadonlyMap<string, ChannelActionExtractToolSend>;
+  targetNormalizersByProvider?: ReadonlyMap<
+    string,
+    NonNullable<OutboundChannelRuntime["normalizeTarget"]>
+  >;
 };
 
 export function buildActionExtractorsByToolName(
@@ -35,6 +38,17 @@ export function buildActionExtractorsByToolName(
     return undefined;
   }
   return new Map([[toolName, extractToolSend]]);
+}
+
+export function buildTargetNormalizersByProvider(
+  runtime?: Pick<OutboundChannelRuntime, "id" | "normalizeTarget">,
+): ReadonlyMap<string, NonNullable<OutboundChannelRuntime["normalizeTarget"]>> | undefined {
+  const normalizeTarget = runtime?.normalizeTarget;
+  const providerId = runtime?.id ? normalizeToolName(runtime.id) : undefined;
+  if (!normalizeTarget || !providerId) {
+    return undefined;
+  }
+  return new Map([[providerId, normalizeTarget]]);
 }
 
 // Provider docking: any plugin with `actions` opts into messaging tool handling.
@@ -49,11 +63,7 @@ export function isMessagingTool(
   if (normalizedToolName && runtime?.actionExtractorsByToolName?.has(normalizedToolName)) {
     return true;
   }
-  if (runtime) {
-    return false;
-  }
-  const providerId = normalizeChannelId(toolName);
-  return Boolean(providerId && getChannelPlugin(providerId)?.actions);
+  return false;
 }
 
 export function isMessagingToolSendAction(
@@ -75,16 +85,5 @@ export function isMessagingToolSendAction(
   if (extractToolSend) {
     return Boolean(extractToolSend({ args })?.to);
   }
-  if (runtime) {
-    return false;
-  }
-  const providerId = normalizeChannelId(toolName);
-  if (!providerId) {
-    return false;
-  }
-  const plugin = getChannelPlugin(providerId);
-  if (!plugin?.actions?.extractToolSend) {
-    return false;
-  }
-  return Boolean(plugin.actions.extractToolSend({ args })?.to);
+  return false;
 }

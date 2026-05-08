@@ -1,5 +1,5 @@
-import { getLoadedChannelPlugin } from "../channels/plugins/index.js";
 import { resolveSessionConversation } from "../channels/plugins/session-conversation.js";
+import type { ChannelGroupAdapter } from "../channels/plugins/types.public.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
 import { resolveChannelGroupToolsPolicy } from "../config/group-policy.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -284,6 +284,11 @@ function resolveGroupContextFromSessionKey(sessionKey?: string | null): {
 
 type GroupToolPolicyContext = ReturnType<typeof resolveGroupContextFromSessionKey>;
 
+export type PreparedGroupToolPolicyRuntime = {
+  id?: string;
+  resolveGroupToolPolicy?: ChannelGroupAdapter["resolveToolPolicy"];
+};
+
 function resolveTrustedGroupIdFromContexts(params: {
   groupId?: string | null;
   sessionContext: GroupToolPolicyContext;
@@ -501,6 +506,7 @@ export function resolveGroupToolPolicy(params: {
   sessionKey?: string;
   spawnedBy?: string | null;
   messageProvider?: string;
+  groupRuntime?: PreparedGroupToolPolicyRuntime;
   groupId?: string | null;
   groupChannel?: string | null;
   groupSpace?: string | null;
@@ -535,14 +541,13 @@ export function resolveGroupToolPolicy(params: {
   if (!channel) {
     return undefined;
   }
-  let plugin;
-  try {
-    plugin = getLoadedChannelPlugin(channel);
-  } catch {
-    plugin = undefined;
-  }
+  const groupRuntime =
+    params.groupRuntime &&
+    (!params.groupRuntime.id || normalizeMessageChannel(params.groupRuntime.id) === channel)
+      ? params.groupRuntime
+      : undefined;
   for (const groupId of groupIds) {
-    const toolsConfig = plugin?.groups?.resolveToolPolicy?.({
+    const toolsConfig = groupRuntime?.resolveGroupToolPolicy?.({
       cfg: params.config,
       groupId,
       groupChannel: trustedGroup.dropped ? null : params.groupChannel,

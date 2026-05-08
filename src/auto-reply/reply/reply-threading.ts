@@ -1,4 +1,3 @@
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelThreadingAdapter } from "../../channels/plugins/types.core.js";
 import { normalizeAnyChannelId } from "../../channels/registry.js";
 import type { ReplyToMode } from "../../config/types.js";
@@ -81,14 +80,7 @@ export function resolveReplyToMode(
   if (!normalizedAccountId) {
     return resolveConfiguredReplyToMode(cfg, channel, chatType);
   }
-  const provider = normalizeAnyChannelId(channel) ?? normalizeOptionalLowercaseString(channel);
-  const resolvedThreading =
-    threading !== undefined
-      ? threading
-      : provider
-        ? getChannelPlugin(provider)?.threading
-        : undefined;
-  return resolveReplyToModeWithThreading(cfg, resolvedThreading, {
+  return resolveReplyToModeWithThreading(cfg, threading, {
     channel,
     accountId: normalizedAccountId,
     chatType,

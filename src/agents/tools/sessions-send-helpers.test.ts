@@ -10,15 +10,15 @@ describe("resolveAnnounceTargetFromKey", () => {
     setActivePluginRegistry(createSessionConversationTestRegistry());
   });
 
-  it("lets plugins own session-derived target shapes", () => {
+  it("uses generic session-derived target shapes without prepared runtime", () => {
     expect(resolveAnnounceTargetFromKey("agent:main:discord:group:dev")).toEqual({
       channel: "discord",
-      to: "channel:dev",
+      to: "group:dev",
       threadId: undefined,
     });
     expect(resolveAnnounceTargetFromKey("agent:main:slack:group:C123")).toEqual({
       channel: "slack",
-      to: "channel:C123",
+      to: "group:C123",
       threadId: undefined,
     });
   });
@@ -28,6 +28,11 @@ describe("resolveAnnounceTargetFromKey", () => {
       .spyOn(channelPlugins, "getChannelPlugin")
       .mockImplementation(() => {
         throw new Error("unexpected channel plugin lookup");
+      });
+    const getLoadedChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getLoadedChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected loaded channel plugin lookup");
       });
     const runtime = {
       id: "slack",
@@ -43,15 +48,32 @@ describe("resolveAnnounceTargetFromKey", () => {
         threadId: undefined,
       });
       expect(getChannelPluginSpy).not.toHaveBeenCalled();
+      expect(getLoadedChannelPluginSpy).not.toHaveBeenCalled();
     } finally {
       getChannelPluginSpy.mockRestore();
+      getLoadedChannelPluginSpy.mockRestore();
     }
   });
 
-  it("keeps generic topic extraction and plugin normalization for other channels", () => {
+  it("uses prepared target normalization when no session-target resolver is present", () => {
+    const runtime = {
+      id: "slack",
+      label: "Slack",
+      chatTypes: ["group"],
+      normalizeTarget: (target) => `normalized:${target}`,
+    } satisfies OutboundChannelRuntime;
+
+    expect(resolveAnnounceTargetFromKey("agent:main:slack:group:C123", runtime)).toEqual({
+      channel: "slack",
+      to: "normalized:group:C123",
+      threadId: undefined,
+    });
+  });
+
+  it("keeps generic topic extraction and compatibility normalization for other channels", () => {
     expect(resolveAnnounceTargetFromKey("agent:main:telegram:group:-100123:topic:99")).toEqual({
       channel: "telegram",
-      to: "-100123",
+      to: "group:-100123",
       threadId: "99",
     });
   });
@@ -85,7 +107,7 @@ describe("resolveAnnounceTargetFromKey", () => {
       ),
     ).toEqual({
       channel: "feishu",
-      to: "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+      to: "group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
       threadId: undefined,
     });
   });

@@ -404,6 +404,7 @@ export async function resolveReplyDirectives(params: {
     agentId,
     ctx,
     provider: messageProviderKey,
+    runtime: replyChannelRuntime,
   });
   const elevatedEnabled = elevated.enabled;
   const elevatedAllowed = elevated.allowed;

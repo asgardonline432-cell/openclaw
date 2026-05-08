@@ -1,9 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveBlockStreamingChunking,
   resolveEffectiveBlockStreamingConfig,
 } from "./block-streaming.js";
+
+vi.mock("../../channels/plugins/index.js", () => ({
+  getChannelPlugin: () => {
+    throw new Error("getChannelPlugin should not run for block streaming config");
+  },
+  normalizeChannelId: (value?: string | null) => value?.trim().toLowerCase() || null,
+}));
 
 describe("resolveEffectiveBlockStreamingConfig", () => {
   it("applies ACP-style overrides while preserving chunk/coalescer bounds", () => {

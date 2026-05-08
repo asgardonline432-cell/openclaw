@@ -1,9 +1,9 @@
 import { resolveAgentConfig } from "../../agents/agent-scope.js";
-import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
 import type { AgentElevatedAllowFromConfig, OpenClawConfig } from "../../config/config.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { normalizeStringEntries } from "../../shared/string-normalization.js";
 import type { MsgContext } from "../templating.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import {
   type AllowFromFormatter,
   type ExplicitElevatedAllowField,
@@ -15,6 +15,8 @@ import {
   stripSenderPrefix,
 } from "./elevated-allowlist-matcher.js";
 export { formatElevatedUnavailableMessage } from "./elevated-unavailable.js";
+
+type ReplyElevatedRuntime = Pick<ReplyChannelRuntime, "allowFromFallback" | "formatAllowFrom">;
 
 function resolveElevatedAllowList(
   allowFrom: AgentElevatedAllowFromConfig | undefined,
@@ -30,13 +32,10 @@ function resolveElevatedAllowList(
 
 function resolveAllowFromFormatter(params: {
   cfg: OpenClawConfig;
-  provider: string;
   accountId?: string;
+  runtime?: ReplyElevatedRuntime;
 }): AllowFromFormatter {
-  const normalizedProvider = normalizeChannelId(params.provider);
-  const formatAllowFrom = normalizedProvider
-    ? getChannelPlugin(normalizedProvider)?.config?.formatAllowFrom
-    : undefined;
+  const formatAllowFrom = params.runtime?.formatAllowFrom;
   if (!formatAllowFrom) {
     return (values) => normalizeStringEntries(values);
   }
@@ -171,6 +170,7 @@ export function resolveElevatedPermissions(params: {
   agentId: string;
   ctx: MsgContext;
   provider: string;
+  runtime?: ReplyElevatedRuntime;
 }): {
   enabled: boolean;
   allowed: boolean;
@@ -199,17 +199,15 @@ export function resolveElevatedPermissions(params: {
     return { enabled, allowed: false, failures };
   }
 
-  const normalizedProvider = normalizeChannelId(params.provider);
-  const fallbackAllowFrom = normalizedProvider
-    ? getChannelPlugin(normalizedProvider)?.elevated?.allowFromFallback?.({
-        cfg: params.cfg,
-        accountId: params.ctx.AccountId,
-      })
-    : undefined;
+  const fallbackAllowFrom =
+    params.runtime?.allowFromFallback?.({
+      cfg: params.cfg,
+      accountId: params.ctx.AccountId,
+    }) ?? undefined;
   const formatAllowFrom = resolveAllowFromFormatter({
     cfg: params.cfg,
-    provider: params.provider,
     accountId: params.ctx.AccountId,
+    runtime: params.runtime,
   });
   const globalAllowed = isApprovedElevatedSender({
     provider: params.provider,

@@ -318,6 +318,7 @@ function normalizeTargetForAccountBinding(
   try {
     return normalizeTargetForProvider(channel, target, {
       normalizeTarget: outboundRuntime?.normalizeTarget,
+      allowPluginFallback: !outboundRuntime,
     });
   } catch {
     return undefined;

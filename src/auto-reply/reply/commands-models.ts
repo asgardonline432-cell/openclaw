@@ -18,7 +18,6 @@ import {
 } from "../../agents/model-selection.js";
 import { createModelVisibilityPolicy } from "../../agents/model-visibility-policy.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../agents/workspace.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelCommandAdapter } from "../../channels/plugins/types.public.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
@@ -383,8 +382,6 @@ export async function resolveModelsCommandReply(params: {
       workspaceDir: params.workspaceDir,
     },
   );
-  const commandPlugin =
-    params.commands || !params.surface ? null : getChannelPlugin(params.surface);
   const providerInfos = buildProviderInfos({ providers, byProvider });
 
   if (parsed.action === "providers") {
@@ -392,13 +389,7 @@ export async function resolveModelsCommandReply(params: {
       params.commands?.buildModelsMenuChannelData?.({
         providers: providerInfos,
       }) ??
-      commandPlugin?.commands?.buildModelsMenuChannelData?.({
-        providers: providerInfos,
-      }) ??
       params.commands?.buildModelsProviderChannelData?.({
-        providers: providerInfos,
-      }) ??
-      commandPlugin?.commands?.buildModelsProviderChannelData?.({
         providers: providerInfos,
       });
     if (channelData) {
@@ -419,9 +410,7 @@ export async function resolveModelsCommandReply(params: {
   const { provider, page, pageSize, all } = parsed;
 
   if (!provider) {
-    const channelData = (
-      params.commands ?? commandPlugin?.commands
-    )?.buildModelsProviderChannelData?.({
+    const channelData = params.commands?.buildModelsProviderChannelData?.({
       providers: providerInfos,
     });
     if (channelData) {
@@ -472,9 +461,7 @@ export async function resolveModelsCommandReply(params: {
   const interactivePageSize = 8;
   const interactiveTotalPages = Math.max(1, Math.ceil(total / interactivePageSize));
   const interactivePage = Math.max(1, Math.min(page, interactiveTotalPages));
-  const interactiveChannelData = (
-    params.commands ?? commandPlugin?.commands
-  )?.buildModelsListChannelData?.({
+  const interactiveChannelData = params.commands?.buildModelsListChannelData?.({
     provider,
     models,
     currentModel: params.currentModel,

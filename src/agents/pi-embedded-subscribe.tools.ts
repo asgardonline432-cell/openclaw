@@ -1,4 +1,4 @@
-import { getChannelPlugin, normalizeChannelId } from "../channels/plugins/index.js";
+import { normalizeChannelId } from "../channels/plugins/index.js";
 import { normalizeTargetForProvider } from "../infra/outbound/target-normalization.js";
 import { redactSensitiveFieldValue, redactToolPayloadText } from "../logging/redact.js";
 import { splitMediaFromOutput } from "../media/parse.js";
@@ -541,8 +541,10 @@ export function extractMessagingToolSend(
   toolName: string,
   args: Record<string, unknown>,
   actionExtractorsByToolName?: ReadonlyMap<string, ChannelActionExtractToolSend>,
+  targetNormalizersByProvider?: ReadonlyMap<string, (target: string) => string | undefined>,
 ): MessagingToolSend | undefined {
-  // Provider docking: new provider tools must implement plugin.actions.extractToolSend.
+  // Provider docking: plugin-owned messaging tools must be represented by
+  // prepared action extractors before the embedded subscription starts.
   const action = normalizeOptionalString(args.action) ?? "";
   const accountId = normalizeOptionalString(args.accountId);
   if (toolName === "message") {
@@ -558,7 +560,13 @@ export function extractMessagingToolSend(
     const providerHint = providerRaw || channelRaw;
     const providerId = providerHint ? normalizeChannelId(providerHint) : null;
     const provider = providerId ?? normalizeOptionalLowercaseString(providerHint) ?? "message";
-    const to = normalizeTargetForProvider(provider, toRaw);
+    const normalizedProvider = normalizeToolName(provider);
+    const to = normalizeTargetForProvider(provider, toRaw, {
+      normalizeTarget: normalizedProvider
+        ? targetNormalizersByProvider?.get(normalizedProvider)
+        : undefined,
+      allowPluginFallback: false,
+    });
     const threadId = normalizeOptionalString(args.threadId);
     return to
       ? { tool: toolName, provider, accountId, to, ...(threadId ? { threadId } : {}) }
@@ -572,17 +580,14 @@ export function extractMessagingToolSend(
   const extractor = normalizedToolName
     ? actionExtractorsByToolName?.get(normalizedToolName)
     : undefined;
-  if (actionExtractorsByToolName && !extractor) {
+  if (!extractor) {
     return undefined;
   }
-  const plugin = extractor ? undefined : getChannelPlugin(providerId);
-  const extracted = (extractor ?? plugin?.actions?.extractToolSend)?.({ args });
+  const extracted = extractor({ args });
   if (!extracted?.to) {
     return undefined;
   }
-  const to = extractor
-    ? normalizeOptionalString(extracted.to)
-    : normalizeTargetForProvider(providerId, extracted.to);
+  const to = normalizeOptionalString(extracted.to);
   return to
     ? {
         tool: toolName,

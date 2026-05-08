@@ -1,4 +1,3 @@
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelId } from "../../channels/plugins/types.public.js";
 import { normalizeChannelId } from "../../channels/registry.js";
 import {
@@ -71,8 +70,7 @@ function resolveAllowlistAccountId(params: {
     return explicitAccountId;
   }
   const configuredDefaultAccountId = normalizeOptionalString(
-    params.runtime?.defaultAccountId?.(params.cfg) ??
-      getChannelPlugin(params.channelId)?.config.defaultAccountId?.(params.cfg),
+    params.runtime?.defaultAccountId?.(params.cfg),
   );
   const ctxAccountId = normalizeOptionalAccountId(params.ctxAccountId);
   return configuredDefaultAccountId || ctxAccountId || DEFAULT_ACCOUNT_ID;
@@ -178,8 +176,7 @@ function normalizeAllowFrom(params: {
   values: Array<string | number>;
   runtime?: Pick<AllowlistCommandRuntime, "formatAllowFrom">;
 }): string[] {
-  const formatAllowFrom =
-    params.runtime?.formatAllowFrom ?? getChannelPlugin(params.channelId)?.config.formatAllowFrom;
+  const formatAllowFrom = params.runtime?.formatAllowFrom;
   if (formatAllowFrom) {
     return formatAllowFrom({
       cfg: params.cfg,
@@ -245,7 +242,7 @@ async function resolveAllowlistNames(params: {
   entries: string[];
   runtime?: Pick<AllowlistCommandRuntime, "allowlist">;
 }) {
-  const allowlist = params.runtime?.allowlist ?? getChannelPlugin(params.channelId)?.allowlist;
+  const allowlist = params.runtime?.allowlist;
   const resolved = await allowlist?.resolveNames?.({
     cfg: params.cfg,
     accountId: params.accountId,
@@ -261,7 +258,7 @@ async function readAllowlistConfig(params: {
   accountId?: string | null;
   runtime?: Pick<AllowlistCommandRuntime, "allowlist">;
 }) {
-  const allowlist = params.runtime?.allowlist ?? getChannelPlugin(params.channelId)?.allowlist;
+  const allowlist = params.runtime?.allowlist;
   return (
     (await allowlist?.readConfig?.({
       cfg: params.cfg,
@@ -321,9 +318,8 @@ export const handleAllowlistCommand: CommandHandler = async (params, allowTextCo
     ctxAccountId: params.ctx.AccountId,
     runtime,
   });
-  const plugin = runtime ? undefined : getChannelPlugin(channelId);
-  const allowlist = runtime?.allowlist ?? plugin?.allowlist;
-  const pairing = runtime?.pairing ?? plugin?.pairing;
+  const allowlist = runtime?.allowlist;
+  const pairing = runtime?.pairing;
 
   if (parsed.action === "list") {
     const supportsStore = Boolean(pairing);

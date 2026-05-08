@@ -83,6 +83,11 @@ function createCoordinator(onReplyStart?: (...args: unknown[]) => Promise<void>)
     dispatcher: createDispatcher(),
     inboundAudio: false,
     shouldRouteToOriginating: false,
+    replyChannelRuntime: {
+      id: "visiblechat",
+      shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      shouldTreatRoutedTextAsVisible: channelPluginMocks.shouldTreatRoutedTextAsVisible,
+    },
     ...(onReplyStart ? { onReplyStart } : {}),
   });
 }
@@ -120,6 +125,11 @@ function createVisibleChatAcpCoordinator(cfg: OpenClawConfig) {
     shouldRouteToOriginating: true,
     originatingChannel: "visiblechat",
     originatingTo: "channel:thread-1",
+    replyChannelRuntime: {
+      id: "visiblechat",
+      shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      shouldTreatRoutedTextAsVisible: channelPluginMocks.shouldTreatRoutedTextAsVisible,
+    },
   });
 }
 
@@ -169,6 +179,10 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
       dispatcher,
       inboundAudio: false,
       shouldRouteToOriginating: false,
+      replyChannelRuntime: {
+        id: "visiblechat",
+        shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      },
     });
 
     await coordinator.deliver("final", { text: "hello" }, { skipTts: true });
@@ -205,6 +219,10 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
       dispatcher: createDispatcher(),
       inboundAudio: false,
       shouldRouteToOriginating: false,
+      replyChannelRuntime: {
+        id: "visiblechat",
+        shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      },
     });
 
     await coordinator.deliver("block", { text: "hello" }, { skipTts: true });
@@ -230,6 +248,10 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
       dispatcher,
       inboundAudio: false,
       shouldRouteToOriginating: false,
+      replyChannelRuntime: {
+        id: "visiblechat",
+        shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      },
     });
 
     await coordinator.deliver("block", { text: "Intro [[tts:te" }, { skipTts: true });
@@ -258,6 +280,10 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
       dispatcher: createDispatcher(),
       inboundAudio: false,
       shouldRouteToOriginating: false,
+      replyChannelRuntime: {
+        id: "visiblechat",
+        shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      },
     });
 
     await coordinator.deliver("block", { text: "hello" }, { skipTts: true });
@@ -289,7 +315,7 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
     expect(coordinator.getRoutedCounts().block).toBe(0);
   });
 
-  it("treats direct plugin-owned block text as visible", async () => {
+  it("treats direct prepared-runtime block text as visible", async () => {
     const coordinator = createCoordinator();
 
     await coordinator.deliver("block", { text: "hello" }, { skipTts: true });
@@ -299,7 +325,7 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
     expect(coordinator.hasFailedVisibleTextDelivery()).toBe(false);
   });
 
-  it("honors the legacy routed visibility hook name for plugin compatibility", async () => {
+  it("honors the prepared routed visibility hook name for compatibility", async () => {
     channelPluginMocks.shouldTreatDeliveredTextAsVisible = undefined;
     channelPluginMocks.shouldTreatRoutedTextAsVisible = ({
       kind,
@@ -337,6 +363,10 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
       dispatcher,
       inboundAudio: false,
       shouldRouteToOriginating: false,
+      replyChannelRuntime: {
+        id: "visiblechat",
+        shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      },
     });
 
     await coordinator.deliver("block", { text: "hello" }, { skipTts: true });
@@ -521,7 +551,7 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
     await expectVisibleChatBlockRoutesToAccount({} as OpenClawConfig, undefined);
   });
 
-  it("treats routed plugin-owned block text as visible", async () => {
+  it("treats routed prepared-runtime block text as visible", async () => {
     const coordinator = createAcpDispatchDeliveryCoordinator({
       cfg: createAcpTestConfig(),
       ctx: buildTestCtx({
@@ -534,6 +564,10 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
       shouldRouteToOriginating: true,
       originatingChannel: "visiblechat",
       originatingTo: "channel:thread-1",
+      replyChannelRuntime: {
+        id: "visiblechat",
+        shouldTreatDeliveredTextAsVisible: channelPluginMocks.shouldTreatDeliveredTextAsVisible,
+      },
     });
 
     await coordinator.deliver("block", { text: "hello" }, { skipTts: true });

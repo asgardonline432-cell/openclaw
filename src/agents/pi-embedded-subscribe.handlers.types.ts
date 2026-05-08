@@ -192,6 +192,7 @@ type ToolHandlerParams = Pick<
   | "toolResultFormat"
   | "toolProgressDetail"
   | "actionExtractorsByToolName"
+  | "targetNormalizersByProvider"
 >;
 
 type ToolHandlerState = Pick<

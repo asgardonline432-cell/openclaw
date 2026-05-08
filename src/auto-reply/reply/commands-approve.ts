@@ -1,7 +1,3 @@
-import {
-  getChannelPlugin,
-  resolveChannelApprovalCapability,
-} from "../../channels/plugins/index.js";
 import { callGateway } from "../../gateway/call.js";
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../gateway/protocol/client-info.js";
 import { logVerbose } from "../../globals.js";
@@ -145,7 +141,7 @@ export const handleApproveCommand: CommandHandler = async (params, allowTextComm
   const approvalCapability =
     params.replyChannelRuntime && params.replyChannelRuntime.id === params.command.channel
       ? params.replyChannelRuntime.approvalCapability
-      : resolveChannelApprovalCapability(getChannelPlugin(params.command.channel));
+      : undefined;
   const approveCommandBehavior = approvalCapability?.resolveApproveCommandBehavior?.({
     cfg: params.cfg,
     accountId: effectiveAccountId,

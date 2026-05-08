@@ -1,4 +1,3 @@
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type {
   ChannelId,
   ChannelThreadingToolContext,
@@ -130,13 +129,7 @@ export function buildThreadingToolContext(params: {
     };
   }
   const provider = normalizeChannelId(rawProvider) ?? normalizeAnyChannelId(rawProvider);
-  // Fallback for unrecognized/plugin channels (e.g., iMessage before plugin registry init)
-  const buildToolContext =
-    params.runtime !== undefined
-      ? params.runtime.buildThreadingToolContext
-      : provider
-        ? getChannelPlugin(provider)?.threading?.buildToolContext
-        : undefined;
+  const buildToolContext = params.runtime?.buildThreadingToolContext;
   if (!buildToolContext) {
     return {
       currentChannelId: normalizeOptionalString(originTo),

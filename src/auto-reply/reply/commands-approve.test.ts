@@ -398,6 +398,31 @@ function setApprovePluginRegistry(): void {
   );
 }
 
+function resolveApproveRuntime(
+  provider: string,
+): HandleCommandsParams["replyChannelRuntime"] | undefined {
+  const plugin =
+    provider === "discord"
+      ? discordApproveTestPlugin
+      : provider === "slack"
+        ? slackApproveTestPlugin
+        : provider === "whatsapp"
+          ? whatsappApproveTestPlugin
+          : provider === "signal"
+            ? signalApproveTestPlugin
+            : provider === "telegram"
+              ? telegramApproveTestPlugin
+              : undefined;
+  if (!plugin) {
+    return undefined;
+  }
+  return {
+    id: plugin.id,
+    approvalCapability: plugin.approvalCapability,
+    defaultAccountId: plugin.config?.defaultAccountId,
+  } as HandleCommandsParams["replyChannelRuntime"];
+}
+
 function buildApproveParams(
   commandBodyNormalized: string,
   cfg: OpenClawConfig,
@@ -427,6 +452,7 @@ function buildApproveParams(
       channel: provider,
       channelId: provider,
     },
+    replyChannelRuntime: resolveApproveRuntime(provider),
   } as unknown as HandleCommandsParams;
 }
 
@@ -862,21 +888,22 @@ describe("handleApproveCommand", () => {
   });
 
   it("returns the underlying not-found error for plugin-only approval routing", async () => {
+    const approvalCapability = {
+      authorizeActorAction: ({ approvalKind }: { approvalKind: "exec" | "plugin" }) =>
+        approvalKind === "plugin"
+          ? { authorized: true }
+          : {
+              authorized: false,
+              reason: "❌ You are not authorized to approve exec requests on Matrix.",
+            },
+    };
     setActivePluginRegistry(
       createTestRegistry([
         {
           pluginId: "matrix",
           plugin: {
             ...createChannelTestPluginBase({ id: "matrix", label: "Matrix" }),
-            approvalCapability: {
-              authorizeActorAction: ({ approvalKind }: { approvalKind: "exec" | "plugin" }) =>
-                approvalKind === "plugin"
-                  ? { authorized: true }
-                  : {
-                      authorized: false,
-                      reason: "❌ You are not authorized to approve exec requests on Matrix.",
-                    },
-            },
+            approvalCapability,
           },
           source: "test",
         },
@@ -884,21 +911,24 @@ describe("handleApproveCommand", () => {
     );
     callGatewayMock.mockRejectedValueOnce(new Error("unknown or expired approval id"));
 
-    const result = await handleApproveCommand(
-      buildApproveParams(
-        "/approve abc123 allow-once",
-        {
-          commands: { text: true },
-          channels: { matrix: { allowFrom: ["*"] } },
-        } as OpenClawConfig,
-        {
-          Provider: "matrix",
-          Surface: "matrix",
-          SenderId: "123",
-        },
-      ),
-      true,
+    const params = buildApproveParams(
+      "/approve abc123 allow-once",
+      {
+        commands: { text: true },
+        channels: { matrix: { allowFrom: ["*"] } },
+      } as OpenClawConfig,
+      {
+        Provider: "matrix",
+        Surface: "matrix",
+        SenderId: "123",
+      },
     );
+    params.replyChannelRuntime = {
+      id: "matrix",
+      approvalCapability,
+    } as HandleCommandsParams["replyChannelRuntime"];
+
+    const result = await handleApproveCommand(params, true);
 
     expect(result?.shouldContinue).toBe(false);
     expect(result?.reply?.text).toContain("Failed to submit approval");

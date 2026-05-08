@@ -4,7 +4,6 @@ import {
   resolveConfiguredModelRef,
 } from "../agents/model-selection.js";
 import type { SkillCommandSpec } from "../agents/skills.js";
-import { getChannelPlugin, getLoadedChannelPlugin } from "../channels/plugins/index.js";
 import type { ChannelCommandAdapter } from "../channels/plugins/types.public.js";
 import type { OpenClawConfig } from "../config/types.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
@@ -51,7 +50,6 @@ export type {
 } from "./commands-registry.types.js";
 
 type NativeCommandProviderLookupOptions = {
-  includeBundledChannelFallback?: boolean;
   commands?: Pick<ChannelCommandAdapter, "resolveNativeCommandName">;
 };
 
@@ -67,15 +65,8 @@ function resolveNativeName(
   if (!provider && !preparedCommands) {
     return command.nativeName;
   }
-  const channelPlugin = preparedCommands
-    ? undefined
-    : provider
-      ? options?.includeBundledChannelFallback === false
-        ? getLoadedChannelPlugin(provider)
-        : getChannelPlugin(provider)
-      : undefined;
   return (
-    (preparedCommands ?? channelPlugin?.commands)?.resolveNativeCommandName?.({
+    preparedCommands?.resolveNativeCommandName?.({
       commandKey: command.key,
       defaultName: command.nativeName,
     }) ?? command.nativeName

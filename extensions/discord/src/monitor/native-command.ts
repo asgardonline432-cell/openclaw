@@ -138,9 +138,7 @@ export function createDiscordNativeCommand(params: {
   const commandDefinition =
     nativeCommandRuntime.matchPluginCommand(`/${command.name}`) !== null
       ? fallbackCommandDefinition
-      : (findCommandByNativeName(command.name, "discord", {
-          includeBundledChannelFallback: false,
-        }) ?? fallbackCommandDefinition);
+      : (findCommandByNativeName(command.name, "discord") ?? fallbackCommandDefinition);
   const argDefinitions = commandDefinition.args ?? command.args;
   const commandOptions = buildDiscordCommandOptions({
     command: commandDefinition,

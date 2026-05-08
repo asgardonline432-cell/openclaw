@@ -73,8 +73,10 @@ function normalizeTarget(
   runtime?: Pick<OutboundChannelRuntime, "normalizeTarget">,
 ): string | undefined {
   return (
-    normalizeTargetForProvider(channel, raw, { normalizeTarget: runtime?.normalizeTarget }) ??
-    raw.trim()
+    normalizeTargetForProvider(channel, raw, {
+      normalizeTarget: runtime?.normalizeTarget,
+      allowPluginFallback: !runtime,
+    }) ?? raw.trim()
   );
 }
 

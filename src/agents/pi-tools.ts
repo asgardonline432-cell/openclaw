@@ -476,6 +476,7 @@ export function createOpenClawCodingTools(options?: {
     sessionKey: options?.sessionKey,
     spawnedBy: options?.spawnedBy,
     messageProvider: options?.messageProvider,
+    groupRuntime: options?.outboundChannelRuntime,
     groupId: options?.groupId,
     groupChannel: options?.groupChannel,
     groupSpace: options?.groupSpace,

@@ -487,6 +487,7 @@ export const sendHandlers: GatewayRequestHandlers = {
           channel,
           input: resolvedTarget.to,
           accountId,
+          runtime: outboundRuntime,
         });
         const deliveryTarget = idLikeTarget?.to ?? resolvedTarget.to;
         const outboundDeps = context.deps ? createOutboundSendDeps(context.deps) : undefined;

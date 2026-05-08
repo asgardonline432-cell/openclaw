@@ -1,4 +1,4 @@
-import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
+import { normalizeChannelId } from "../../channels/plugins/index.js";
 import type { CallGatewayOptions } from "../../gateway/call.js";
 import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { parseThreadSessionSuffix } from "../../sessions/session-key-utils.js";
@@ -28,14 +28,9 @@ export async function resolveAnnounceTarget(params: {
 
   if (fallback) {
     const normalized = normalizeChannelId(fallback.channel);
-    const runtime = params.runtime?.id === fallback.channel ? params.runtime : undefined;
-    const plugin = normalized && !runtime ? getChannelPlugin(normalized) : null;
-    if (
-      !(
-        runtime?.preferSessionLookupForAnnounceTarget ??
-        plugin?.meta?.preferSessionLookupForAnnounceTarget
-      )
-    ) {
+    const runtime =
+      params.runtime?.id === (normalized ?? fallback.channel) ? params.runtime : undefined;
+    if (!runtime?.preferSessionLookupForAnnounceTarget) {
       return fallback;
     }
   }

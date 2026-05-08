@@ -20,9 +20,6 @@ const routeReplyRuntimeLoader = createLazyImportLoader(() => import("./route-rep
 const dispatchAcpTtsRuntimeLoader = createLazyImportLoader(
   () => import("./dispatch-acp-tts.runtime.js"),
 );
-const channelPluginRuntimeLoader = createLazyImportLoader(
-  () => import("../../channels/plugins/index.js"),
-);
 const messageActionRuntimeLoader = createLazyImportLoader(
   () => import("../../infra/outbound/message-action-runner.js"),
 );
@@ -33,10 +30,6 @@ function loadRouteReplyRuntime() {
 
 function loadDispatchAcpTtsRuntime() {
   return dispatchAcpTtsRuntimeLoader.load();
-}
-
-function loadChannelPluginRuntime() {
-  return channelPluginRuntimeLoader.load();
 }
 
 function loadMessageActionRuntime() {
@@ -57,7 +50,7 @@ type ToolMessageHandle = {
   messageId: string;
 };
 
-async function shouldTreatDeliveredTextAsVisible(params: {
+function shouldTreatDeliveredTextAsVisible(params: {
   channel: string | undefined;
   runtime?: Pick<
     ReplyChannelRuntime,
@@ -66,7 +59,7 @@ async function shouldTreatDeliveredTextAsVisible(params: {
   kind: ReplyDispatchKind;
   text: string | undefined;
   routed: boolean;
-}): Promise<boolean> {
+}): boolean {
   if (!normalizeOptionalString(params.text)) {
     return false;
   }
@@ -87,16 +80,6 @@ async function shouldTreatDeliveredTextAsVisible(params: {
           text: params.text,
         })
       : false;
-  }
-  const { getChannelPlugin } = await loadChannelPluginRuntime();
-  const outbound = getChannelPlugin(channelId)?.outbound;
-  const pluginVisibilityOverride =
-    outbound?.shouldTreatDeliveredTextAsVisible ?? outbound?.shouldTreatRoutedTextAsVisible;
-  if (pluginVisibilityOverride) {
-    return pluginVisibilityOverride({
-      kind: params.kind,
-      text: params.text,
-    });
   }
   return false;
 }
@@ -401,7 +384,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
         }
       }
 
-      const tracksVisibleText = await shouldTreatDeliveredTextAsVisible({
+      const tracksVisibleText = shouldTreatDeliveredTextAsVisible({
         channel: routedChannel,
         runtime: runtimeForChannel(routedChannel),
         kind,
@@ -455,7 +438,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
       return true;
     }
 
-    const tracksVisibleText = await shouldTreatDeliveredTextAsVisible({
+    const tracksVisibleText = shouldTreatDeliveredTextAsVisible({
       channel: directChannel,
       runtime: runtimeForChannel(directChannel),
       kind,

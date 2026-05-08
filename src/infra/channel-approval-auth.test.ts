@@ -32,19 +32,17 @@ describe("resolveApprovalCommandAuthorization", () => {
   });
 
   it("delegates to the channel approval override when present", () => {
-    getChannelPluginMock.mockReturnValue({
-      approvalCapability: {
-        authorizeActorAction: ({
-          approvalKind,
-        }: {
-          action: "approve";
-          approvalKind: "exec" | "plugin";
-        }) =>
-          approvalKind === "plugin"
-            ? { authorized: false, reason: "plugin denied" }
-            : { authorized: true },
-      },
-    });
+    const approvalCapability = {
+      authorizeActorAction: ({
+        approvalKind,
+      }: {
+        action: "approve";
+        approvalKind: "exec" | "plugin";
+      }) =>
+        approvalKind === "plugin"
+          ? { authorized: false, reason: "plugin denied" }
+          : { authorized: true },
+    };
 
     expect(
       resolveApprovalCommandAuthorization({
@@ -53,6 +51,7 @@ describe("resolveApprovalCommandAuthorization", () => {
         accountId: "work",
         senderId: "123",
         kind: "exec",
+        approvalCapability,
       }),
     ).toEqual({ authorized: true, explicit: true });
 
@@ -63,18 +62,18 @@ describe("resolveApprovalCommandAuthorization", () => {
         accountId: "work",
         senderId: "123",
         kind: "plugin",
+        approvalCapability,
       }),
     ).toEqual({ authorized: false, reason: "plugin denied", explicit: true });
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
   });
 
   it("uses approvalCapability as the canonical approval auth contract", () => {
     const getActionAvailabilityState = vi.fn(() => ({ kind: "enabled" as const }));
-    getChannelPluginMock.mockReturnValue({
-      approvalCapability: {
-        authorizeActorAction: () => ({ authorized: true }),
-        getActionAvailabilityState,
-      },
-    });
+    const approvalCapability = {
+      authorizeActorAction: () => ({ authorized: true }),
+      getActionAvailabilityState,
+    };
 
     expect(
       resolveApprovalCommandAuthorization({
@@ -82,6 +81,7 @@ describe("resolveApprovalCommandAuthorization", () => {
         channel: "matrix",
         senderId: "123",
         kind: "exec",
+        approvalCapability,
       }),
     ).toEqual({ authorized: true, explicit: true });
     expect(getActionAvailabilityState).toHaveBeenCalledWith({
@@ -94,12 +94,10 @@ describe("resolveApprovalCommandAuthorization", () => {
 
   it("keeps disabled approval availability implicit even when same-chat auth returns allow", () => {
     const getActionAvailabilityState = vi.fn(() => ({ kind: "disabled" as const }));
-    getChannelPluginMock.mockReturnValue({
-      approvalCapability: {
-        authorizeActorAction: () => ({ authorized: true }),
-        getActionAvailabilityState,
-      },
-    });
+    const approvalCapability = {
+      authorizeActorAction: () => ({ authorized: true }),
+      getActionAvailabilityState,
+    };
 
     expect(
       resolveApprovalCommandAuthorization({
@@ -108,6 +106,7 @@ describe("resolveApprovalCommandAuthorization", () => {
         accountId: "work",
         senderId: "U123",
         kind: "exec",
+        approvalCapability,
       }),
     ).toEqual({ authorized: true, explicit: false });
     expect(getActionAvailabilityState).toHaveBeenCalledWith({
@@ -119,11 +118,9 @@ describe("resolveApprovalCommandAuthorization", () => {
   });
 
   it("keeps empty approver fallback implicit without bypassing channel sender auth", () => {
-    getChannelPluginMock.mockReturnValue({
-      approvalCapability: createResolvedApproverActionAuthAdapter({
-        channelLabel: "QuietChat",
-        resolveApprovers: () => [],
-      }),
+    const approvalCapability = createResolvedApproverActionAuthAdapter({
+      channelLabel: "QuietChat",
+      resolveApprovers: () => [],
     });
 
     expect(
@@ -133,16 +130,15 @@ describe("resolveApprovalCommandAuthorization", () => {
         accountId: "work",
         senderId: "uuid:attacker",
         kind: "exec",
+        approvalCapability,
       }),
     ).toEqual({ authorized: true, explicit: false });
   });
 
   it("keeps configured approvers explicit when sender matches", () => {
-    getChannelPluginMock.mockReturnValue({
-      approvalCapability: createResolvedApproverActionAuthAdapter({
-        channelLabel: "QuietChat",
-        resolveApprovers: () => ["uuid:owner"],
-      }),
+    const approvalCapability = createResolvedApproverActionAuthAdapter({
+      channelLabel: "QuietChat",
+      resolveApprovers: () => ["uuid:owner"],
     });
 
     expect(
@@ -152,6 +148,7 @@ describe("resolveApprovalCommandAuthorization", () => {
         accountId: "work",
         senderId: "uuid:owner",
         kind: "exec",
+        approvalCapability,
       }),
     ).toEqual({ authorized: true, explicit: true });
   });

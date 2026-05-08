@@ -98,8 +98,11 @@ const toolStartData = new Map<string, ToolStartRecord>();
 function resolvePreparedMessagingActionRuntime(
   ctx: Pick<ToolHandlerContext, "params">,
 ): PreparedMessagingActionToolRuntime | undefined {
-  return ctx.params.actionExtractorsByToolName
-    ? { actionExtractorsByToolName: ctx.params.actionExtractorsByToolName }
+  return ctx.params.actionExtractorsByToolName || ctx.params.targetNormalizersByProvider
+    ? {
+        actionExtractorsByToolName: ctx.params.actionExtractorsByToolName,
+        targetNormalizersByProvider: ctx.params.targetNormalizersByProvider,
+      }
     : undefined;
 }
 
@@ -788,6 +791,7 @@ export function handleToolExecutionStart(
           toolName,
           argsRecord,
           ctx.params.actionExtractorsByToolName,
+          ctx.params.targetNormalizersByProvider,
         );
         if (sendTarget) {
           ctx.state.pendingMessagingTargets.set(toolCallId, sendTarget);

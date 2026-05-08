@@ -1,7 +1,9 @@
 import os from "node:os";
 import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import * as channelPlugins from "../../channels/plugins/index.js";
 import type { ChannelMessagingAdapter } from "../../channels/plugins/types.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { createTestRegistry } from "../../test-utils/channel-plugins.js";
 import { extractAssistantText, sanitizeTextContent } from "./sessions-helpers.js";
 
@@ -51,6 +53,19 @@ const resolveSessionTargetStub: NonNullable<ChannelMessagingAdapter["resolveSess
   id,
   threadId,
 }) => (threadId ? `${kind}:${id}:thread:${threadId}` : `${kind}:${id}`);
+const whatsappAnnounceRuntime = {
+  id: "whatsapp",
+  label: "WhatsApp",
+  chatTypes: ["group"],
+  preferSessionLookupForAnnounceTarget: true,
+} satisfies OutboundChannelRuntime;
+const slackAnnounceRuntime = {
+  id: "slack",
+  label: "Slack",
+  chatTypes: ["channel"],
+  preferSessionLookupForAnnounceTarget: true,
+  resolveSessionTarget: resolveSessionTargetStub,
+} satisfies OutboundChannelRuntime;
 
 type SessionsListResult = Awaited<
   ReturnType<ReturnType<typeof import("./sessions-list-tool.js").createSessionsListTool>["execute"]>
@@ -343,6 +358,7 @@ describe("resolveAnnounceTarget", () => {
     const target = await resolveAnnounceTarget({
       sessionKey: "agent:main:whatsapp:group:123@g.us",
       displayKey: "agent:main:whatsapp:group:123@g.us",
+      runtime: whatsappAnnounceRuntime,
     });
     expect(target).toEqual({
       channel: "whatsapp",
@@ -372,6 +388,7 @@ describe("resolveAnnounceTarget", () => {
     const target = await resolveAnnounceTarget({
       sessionKey: "agent:main:whatsapp:group:123@g.us",
       displayKey: "agent:main:whatsapp:group:123@g.us",
+      runtime: whatsappAnnounceRuntime,
     });
     expect(target).toEqual({
       channel: "whatsapp",
@@ -399,6 +416,7 @@ describe("resolveAnnounceTarget", () => {
     const target = await resolveAnnounceTarget({
       sessionKey: "agent:main:whatsapp:group:123@g.us",
       displayKey: "agent:main:whatsapp:group:123@g.us",
+      runtime: whatsappAnnounceRuntime,
     });
     expect(target).toEqual({
       channel: "whatsapp",
@@ -425,6 +443,7 @@ describe("resolveAnnounceTarget", () => {
     const target = await resolveAnnounceTarget({
       sessionKey: "agent:main:slack:channel:C123:thread:1710000000.000100",
       displayKey: "agent:main:slack:channel:C123:thread:1710000000.000100",
+      runtime: slackAnnounceRuntime,
     });
     expect(target).toEqual({
       channel: "slack",
@@ -432,6 +451,44 @@ describe("resolveAnnounceTarget", () => {
       accountId: "workspace",
       threadId: "1710000000.000100",
     });
+  });
+
+  it("uses prepared announce preference without resolving loaded channel plugins", async () => {
+    const getLoadedChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getLoadedChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected loaded channel plugin lookup");
+      });
+    callGatewayMock.mockResolvedValueOnce({
+      sessions: [
+        {
+          key: "agent:main:slack:channel:C123",
+          deliveryContext: {
+            channel: "slack",
+            to: "channel:C123",
+            accountId: "workspace",
+          },
+        },
+      ],
+    });
+
+    try {
+      const target = await resolveAnnounceTarget({
+        sessionKey: "agent:main:slack:channel:C123",
+        displayKey: "agent:main:slack:channel:C123",
+        runtime: slackAnnounceRuntime,
+      });
+
+      expect(target).toEqual({
+        channel: "slack",
+        to: "channel:C123",
+        accountId: "workspace",
+        threadId: undefined,
+      });
+      expect(getLoadedChannelPluginSpy).not.toHaveBeenCalled();
+    } finally {
+      getLoadedChannelPluginSpy.mockRestore();
+    }
   });
 });
 
