@@ -234,7 +234,7 @@ describe("exec approvals CLI", () => {
     expect(defaultRuntime.writeJson).toHaveBeenCalledWith(writtenJson(), 0);
     const policy = effectivePolicy();
     expect(policy.note).toBe(
-      "Effective exec policy is the host approvals file intersected with requested tools.exec policy.",
+      "Effective exec policy is the host approvals state intersected with requested tools.exec policy.",
     );
     const scope = scopeByLabel("tools.exec");
     expectFields(requireRecord(scope.security, "tools.exec security"), "tools.exec security", {
@@ -328,7 +328,7 @@ describe("exec approvals CLI", () => {
     expect(defaultRuntime.writeJson).toHaveBeenCalledWith(writtenJson(), 0);
     const policy = effectivePolicy();
     expect(policy.note).toBe(
-      "Effective exec policy is the node host approvals file intersected with gateway tools.exec policy.",
+      "Effective exec policy is the node host approvals state intersected with gateway tools.exec policy.",
     );
     const scope = scopeByLabel("tools.exec");
     expectFields(requireRecord(scope.security, "tools.exec security"), "tools.exec security", {
