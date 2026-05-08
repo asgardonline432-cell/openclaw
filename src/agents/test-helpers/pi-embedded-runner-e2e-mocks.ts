@@ -41,7 +41,6 @@ export function installEmbeddedRunnerBaseE2eMocks(options?: {
     resolveContextEngine: vi.fn(async () => ({
       dispose: async () => undefined,
     })),
-    resolveContextEngineOwnerPluginId: vi.fn(() => undefined),
   }));
   vi.doMock("../runtime-plugins.js", () => ({
     ensureRuntimePluginsLoaded: vi.fn(),
@@ -64,7 +63,6 @@ export function installEmbeddedRunnerFastRunE2eMocks(
       supports: vi.fn(() => ({ supported: false })),
       runAttempt: vi.fn(),
     })),
-    resolveAgentHarnessPolicy: vi.fn(() => ({ runtime: "pi" })),
     runAgentHarnessAttempt: (params: unknown) => options.runEmbeddedAttempt(params),
   }));
   vi.doMock("../runtime-plan/build.js", () => ({
