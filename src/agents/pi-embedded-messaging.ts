@@ -49,6 +49,9 @@ export function isMessagingTool(
   if (normalizedToolName && runtime?.actionExtractorsByToolName?.has(normalizedToolName)) {
     return true;
   }
+  if (runtime) {
+    return false;
+  }
   const providerId = normalizeChannelId(toolName);
   return Boolean(providerId && getChannelPlugin(providerId)?.actions);
 }
@@ -71,6 +74,9 @@ export function isMessagingToolSendAction(
     : undefined;
   if (extractToolSend) {
     return Boolean(extractToolSend({ args })?.to);
+  }
+  if (runtime) {
+    return false;
   }
   const providerId = normalizeChannelId(toolName);
   if (!providerId) {

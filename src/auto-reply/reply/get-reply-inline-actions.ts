@@ -2,7 +2,6 @@ import { collectTextContentBlocks } from "../../agents/content-blocks.js";
 import type { BlockReplyChunking } from "../../agents/pi-embedded-block-chunker.js";
 import type { SkillCommandSpec } from "../../agents/skills.js";
 import { applyOwnerOnlyToolPolicy } from "../../agents/tool-policy.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
@@ -511,16 +510,7 @@ export async function handleInlineActions(params: {
   }
 
   const isEmptyConfig = Object.keys(cfg).length === 0;
-  const preparedCommands =
-    params.replyChannelRuntime && params.replyChannelRuntime.id === command.channelId
-      ? params.replyChannelRuntime.commands
-      : undefined;
-  const skipWhenConfigEmpty = command.channelId
-    ? Boolean(
-        preparedCommands?.skipWhenConfigEmpty ??
-        getChannelPlugin(command.channelId)?.commands?.skipWhenConfigEmpty,
-      )
-    : false;
+  const skipWhenConfigEmpty = command.skipWhenConfigEmpty === true;
   if (
     skipWhenConfigEmpty &&
     isEmptyConfig &&

@@ -572,6 +572,9 @@ export function extractMessagingToolSend(
   const extractor = normalizedToolName
     ? actionExtractorsByToolName?.get(normalizedToolName)
     : undefined;
+  if (actionExtractorsByToolName && !extractor) {
+    return undefined;
+  }
   const plugin = extractor ? undefined : getChannelPlugin(providerId);
   const extracted = (extractor ?? plugin?.actions?.extractToolSend)?.({ args });
   if (!extracted?.to) {

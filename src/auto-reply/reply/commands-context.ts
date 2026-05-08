@@ -7,6 +7,7 @@ import {
 import { resolveCommandAuthorization } from "../command-auth.js";
 import { normalizeCommandBody } from "../commands-registry-normalize.js";
 import type { MsgContext } from "../templating.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import type { CommandContext } from "./commands-types.js";
 import { stripMentions } from "./mentions.js";
 
@@ -18,6 +19,7 @@ export function buildCommandContext(params: {
   isGroup: boolean;
   triggerBodyNormalized: string;
   commandAuthorized: boolean;
+  replyChannelRuntime?: Pick<ReplyChannelRuntime, "id" | "commands">;
 }): CommandContext {
   const { ctx, cfg, agentId, sessionKey, isGroup, triggerBodyNormalized } = params;
   const auth = resolveCommandAuthorization({
@@ -40,6 +42,10 @@ export function buildCommandContext(params: {
     isGroup ? stripMentions(rawBodyNormalized, ctx, cfg, agentId) : rawBodyNormalized,
     { botUsername: ctx.BotUsername },
   );
+  const commandRuntime =
+    params.replyChannelRuntime && params.replyChannelRuntime.id === channelId
+      ? params.replyChannelRuntime.commands
+      : undefined;
 
   return {
     surface,
@@ -52,6 +58,7 @@ export function buildCommandContext(params: {
     abortKey,
     rawBodyNormalized,
     commandBodyNormalized,
+    skipWhenConfigEmpty: commandRuntime?.skipWhenConfigEmpty === true,
     from,
     to,
   };

@@ -29,6 +29,8 @@ export type CommandContext = {
   softResetTriggered?: boolean;
   /** Optional tail to append after a soft reset startup prompt. */
   softResetTail?: string;
+  /** Prepared channel command metadata for this parsed command. */
+  skipWhenConfigEmpty?: boolean;
 };
 
 export type HandleCommandsParams = {

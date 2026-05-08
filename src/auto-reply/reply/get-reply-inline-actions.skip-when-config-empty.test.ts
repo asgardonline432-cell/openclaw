@@ -200,7 +200,7 @@ describe("handleInlineActions", () => {
       ctx,
       typing,
       cleanedBody: "hi",
-      command: { to: "whatsapp:+123" },
+      command: { skipWhenConfigEmpty: true, to: "whatsapp:+123" },
     });
   });
 
@@ -220,15 +220,7 @@ describe("handleInlineActions", () => {
       ctx,
       typing,
       cleanedBody: "hi",
-      command: { to: "whatsapp:+123" },
-      overrides: {
-        replyChannelRuntime: {
-          id: "whatsapp",
-          label: "WhatsApp",
-          chatTypes: ["direct"],
-          commands: { skipWhenConfigEmpty: true },
-        },
-      },
+      command: { skipWhenConfigEmpty: true, to: "whatsapp:+123" },
     });
     expect(getChannelPluginMock).not.toHaveBeenCalled();
   });

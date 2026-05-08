@@ -229,6 +229,7 @@ export async function resolveReplyDirectives(params: {
     isGroup,
     triggerBodyNormalized,
     commandAuthorized,
+    replyChannelRuntime,
   });
   const allowTextCommands = shouldHandleTextCommands({
     cfg,
@@ -496,7 +497,12 @@ export async function resolveReplyDirectives(params: {
   const blockStreamingEnabled =
     resolvedBlockStreaming === "on" && opts?.disableBlockStreaming !== true;
   const blockReplyChunking = blockStreamingEnabled
-    ? resolveBlockStreamingChunking(cfg, sessionCtx.Provider, sessionCtx.AccountId)
+    ? resolveBlockStreamingChunking(
+        cfg,
+        sessionCtx.Provider,
+        sessionCtx.AccountId,
+        replyChannelRuntime,
+      )
     : undefined;
   const useFastReplyRuntime = shouldUseReplyFastTestRuntime({
     cfg,
