@@ -291,7 +291,7 @@ async function resolveAutoImageModelId(params: {
 export function buildProviderRegistry(
   overrides?: Record<string, MediaUnderstandingProvider>,
   cfg?: OpenClawConfig,
-  options?: { providerIds?: readonly string[] },
+  options?: { providerIds?: readonly string[]; includeConfiguredProviderRefs?: boolean },
 ): ProviderRegistry {
   return buildMediaUnderstandingRegistry(overrides, cfg, options);
 }
@@ -706,6 +706,7 @@ export async function resolveAutoImageModel(params: {
 }): Promise<ActiveMediaModel | null> {
   const providerRegistry = buildProviderRegistry(undefined, params.cfg, {
     providerIds: params.activeModel?.provider ? [params.activeModel.provider] : [],
+    includeConfiguredProviderRefs: false,
   });
   const toActive = (entry: MediaUnderstandingModelConfig | null): ActiveMediaModel | null => {
     if (!entry || entry.type === "cli") {

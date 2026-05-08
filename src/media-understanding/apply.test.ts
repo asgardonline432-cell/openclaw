@@ -1041,6 +1041,16 @@ describe("applyMediaUnderstanding", () => {
 
     expect(result.appliedAudio).toBe(true);
     expect(ctx.Transcript).toBe("fallback transcript");
+    expect(mockedBuildMediaUnderstandingRegistry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groq: expect.objectContaining({ id: "groq" }),
+      }),
+      cfg,
+      {
+        providerIds: ["groq"],
+        includeConfiguredProviderRefs: false,
+      },
+    );
   });
 
   it("skips audio STT for attachments marked transcribed by channel preflight", async () => {

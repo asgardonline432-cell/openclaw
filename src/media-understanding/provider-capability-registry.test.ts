@@ -31,6 +31,28 @@ describe("media-understanding capability registry", () => {
     expect(registry.get("textOnly")).toBeUndefined();
   });
 
+  it("passes active-provider capability scope options to the capability runtime", () => {
+    const cfg = {
+      tools: {
+        media: {
+          audio: { models: [{ provider: "deepgram", model: "nova-3" }] },
+        },
+      },
+    } as never;
+
+    buildMediaUnderstandingCapabilityRegistry(cfg, {
+      providerIds: ["openai"],
+      includeConfiguredProviderRefs: false,
+    });
+
+    expect(resolveProviders).toHaveBeenCalledWith({
+      key: "mediaUnderstandingProviders",
+      cfg,
+      providerIds: ["openai"],
+      includeConfiguredProviderRefs: false,
+    });
+  });
+
   it("keeps plugin-owned capabilities ahead of config auto-registration", () => {
     resolveProviders.mockReturnValue([{ id: "google", capabilities: ["audio"] } as never]);
 

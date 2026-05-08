@@ -154,6 +154,45 @@ describe("media-understanding runtime", () => {
     expect(mocks.cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it("scopes active-model file runs to the active provider", async () => {
+    const output: MediaUnderstandingOutput = {
+      kind: "audio.transcription",
+      attachmentIndex: 0,
+      provider: "groq",
+      model: "whisper-large-v3",
+      text: "audio ok",
+    };
+    mocks.normalizeMediaAttachments.mockReturnValue([
+      { index: 0, path: "/tmp/sample.ogg", mime: "audio/ogg" },
+    ]);
+    mocks.runCapability.mockResolvedValue({
+      outputs: [output],
+    });
+    const cfg = {
+      tools: {
+        media: {
+          audio: {
+            models: [{ provider: "deepgram", model: "nova-3" }],
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    await runMediaUnderstandingFile({
+      capability: "audio",
+      filePath: "/tmp/sample.ogg",
+      mime: "audio/ogg",
+      cfg,
+      agentDir: "/tmp/agent",
+      activeModel: { provider: "groq", model: "whisper-large-v3" },
+    });
+
+    expect(mocks.buildProviderRegistry).toHaveBeenCalledWith(undefined, cfg, {
+      providerIds: ["groq"],
+      includeConfiguredProviderRefs: false,
+    });
+  });
+
   it("passes per-request image prompts into media understanding config", async () => {
     const media = [{ index: 0, path: "/tmp/sample.jpg", mime: "image/jpeg" }];
     const providerRegistry = new Map();

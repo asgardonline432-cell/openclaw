@@ -17,7 +17,7 @@ function mergeProviderCapabilities(
 
 export function buildMediaUnderstandingCapabilityRegistry(
   cfg?: OpenClawConfig,
-  options?: { providerIds?: readonly string[] },
+  options?: { providerIds?: readonly string[]; includeConfiguredProviderRefs?: boolean },
 ): MediaUnderstandingCapabilityRegistry {
   const registry: MediaUnderstandingCapabilityRegistry = new Map();
 
@@ -25,6 +25,9 @@ export function buildMediaUnderstandingCapabilityRegistry(
     key: "mediaUnderstandingProviders",
     cfg,
     ...(options?.providerIds ? { providerIds: options.providerIds } : {}),
+    ...(options?.includeConfiguredProviderRefs === undefined
+      ? {}
+      : { includeConfiguredProviderRefs: options.includeConfiguredProviderRefs }),
   })) {
     mergeProviderCapabilities(registry, provider);
   }

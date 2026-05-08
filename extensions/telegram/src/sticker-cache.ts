@@ -44,10 +44,6 @@ export async function describeStickerImage(params: DescribeStickerParams): Promi
   const { imagePath, cfg, agentDir, agentId } = params;
 
   const defaultModel = resolveDefaultModelForAgent({ cfg, agentId });
-  const autoProviders = resolveAutoMediaKeyProviders({
-    cfg,
-    capability: "image",
-  });
   let activeModel = undefined as { provider: string; model: string } | undefined;
   let catalog: ModelCatalogEntry[] = [];
   try {
@@ -58,7 +54,7 @@ export async function describeStickerImage(params: DescribeStickerParams): Promi
     });
     catalog = await loadModelCatalog({
       config: cfg,
-      providerRefs: [...new Set([...defaultModelScope.providerRefs, ...autoProviders])],
+      providerRefs: defaultModelScope.providerRefs,
       modelRefs: defaultModelScope.modelRefs,
     });
     const entry = findModelInCatalog(catalog, defaultModel.provider, defaultModel.model);
@@ -98,15 +94,24 @@ export async function describeStickerImage(params: DescribeStickerParams): Promi
   };
 
   let resolved = null as { provider: string; model?: string } | null;
-  if (
-    activeModel &&
-    autoProviders.includes(activeModel.provider) &&
-    (await hasProviderKey(activeModel.provider))
-  ) {
+  if (activeModel && (await hasProviderKey(activeModel.provider))) {
     resolved = activeModel;
   }
 
   if (!resolved) {
+    const autoProviders = resolveAutoMediaKeyProviders({
+      cfg,
+      capability: "image",
+    });
+    try {
+      const fallbackCatalog = await loadModelCatalog({
+        config: cfg,
+        providerRefs: autoProviders,
+      });
+      catalog = [...catalog, ...fallbackCatalog];
+    } catch {
+      // Ignore catalog failures; fall back to auto selection.
+    }
     for (const provider of autoProviders) {
       if (!(await hasProviderKey(provider))) {
         continue;

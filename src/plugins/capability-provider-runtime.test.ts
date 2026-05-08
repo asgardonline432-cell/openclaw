@@ -1446,6 +1446,105 @@ describe("resolvePluginCapabilityProviders", () => {
     expectActiveRegistryLookup(["openai"]);
   });
 
+  it("keeps configured media refs by default when active model provider is supplied", () => {
+    const cfg = {
+      tools: {
+        media: {
+          image: { models: [{ provider: "google", model: "gemini-2.5-flash" }] },
+          audio: { models: [{ provider: "deepgram", model: "nova-3" }] },
+        },
+      },
+      agents: {
+        defaults: {
+          pdfModel: "anthropic/claude-sonnet-4.6",
+        },
+      },
+    } as OpenClawConfig;
+    const loaded = createEmptyPluginRegistry();
+    for (const providerId of ["anthropic", "deepgram", "google", "openai"]) {
+      loaded.mediaUnderstandingProviders.push({
+        pluginId: providerId,
+        pluginName: providerId,
+        source: "test",
+        provider: {
+          id: providerId,
+          capabilities: ["image"],
+        },
+      } as never);
+    }
+    mocks.loadPluginManifestRegistry.mockReturnValue({
+      plugins: ["anthropic", "deepgram", "google", "openai"].map((id) => ({
+        id,
+        origin: "bundled",
+        contracts: { mediaUnderstandingProviders: [id] },
+      })) as never,
+      diagnostics: [],
+    });
+    mocks.resolveRuntimePluginRegistry.mockImplementation((params?: unknown) =>
+      params === undefined ? undefined : loaded,
+    );
+
+    const providers = resolvePluginCapabilityProviders({
+      key: "mediaUnderstandingProviders",
+      cfg,
+      providerIds: ["openai"],
+    });
+
+    expectResolvedCapabilityProviderIds(providers, ["anthropic", "deepgram", "google", "openai"]);
+    expectActiveRegistryLookup(["anthropic", "deepgram", "google", "openai"]);
+  });
+
+  it("can suppress configured media refs for active-provider capability checks", () => {
+    const cfg = {
+      tools: {
+        media: {
+          models: [{ provider: "google", model: "gemini-2.5-flash" }],
+          audio: { models: [{ provider: "deepgram", model: "nova-3" }] },
+        },
+      },
+      agents: {
+        defaults: {
+          imageModel: {
+            primary: "anthropic/claude-sonnet-4.6",
+            fallbacks: ["google/gemini-2.5-flash"],
+          },
+          pdfModel: "mistral/mistral-pdf-latest",
+        },
+      },
+    } as OpenClawConfig;
+    const loaded = createEmptyPluginRegistry();
+    loaded.mediaUnderstandingProviders.push({
+      pluginId: "openai",
+      pluginName: "openai",
+      source: "test",
+      provider: {
+        id: "openai",
+        capabilities: ["image"],
+      },
+    } as never);
+    mocks.loadPluginManifestRegistry.mockReturnValue({
+      plugins: ["anthropic", "deepgram", "google", "mistral", "openai"].map((id) => ({
+        id,
+        origin: "bundled",
+        contracts: { mediaUnderstandingProviders: [id] },
+      })) as never,
+      diagnostics: [],
+    });
+    mocks.resolveRuntimePluginRegistry.mockImplementation((params?: unknown) =>
+      params === undefined ? undefined : loaded,
+    );
+
+    const providers = resolvePluginCapabilityProviders({
+      key: "mediaUnderstandingProviders",
+      cfg,
+      providerIds: ["openai"],
+      includeConfiguredProviderRefs: false,
+    });
+
+    expectResolvedCapabilityProviderIds(providers, ["openai"]);
+    expectActiveRegistryLookup(["openai"]);
+  });
+
   it("narrows image-generation capability loading to configured model providers", () => {
     const cfg = {
       agents: {

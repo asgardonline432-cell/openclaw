@@ -25,6 +25,7 @@ export async function runAudioTranscription(params: {
 
   const providerRegistry = buildProviderRegistry(params.providers, params.cfg, {
     providerIds: params.activeModel?.provider ? [params.activeModel.provider] : [],
+    includeConfiguredProviderRefs: false,
   });
   const cache = createMediaAttachmentCache(attachments, {
     ...(params.localPathRoots ? { localPathRoots: params.localPathRoots } : {}),

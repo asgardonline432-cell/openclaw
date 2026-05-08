@@ -328,10 +328,14 @@ function addMediaModelProviders(target: Set<string>, value: unknown): void {
 function collectRequestedMediaUnderstandingProviderIds(
   cfg: OpenClawConfig | undefined,
   providerIds?: readonly string[],
+  includeConfiguredProviderRefs = true,
 ): Set<string> {
   const requested = new Set<string>();
   for (const providerId of providerIds ?? []) {
     addStringValue(requested, providerId);
+  }
+  if (!includeConfiguredProviderRefs) {
+    return requested;
   }
   const media = cfg?.tools?.media;
   addMediaModelProviders(requested, media?.models);
@@ -390,12 +394,17 @@ function collectRequestedCapabilityProviderIds(params: {
   key: CapabilityProviderRegistryKey;
   cfg?: OpenClawConfig;
   providerIds?: readonly string[];
+  includeConfiguredProviderRefs?: boolean;
 }): Set<string> | undefined {
   switch (params.key) {
     case "speechProviders":
       return collectRequestedSpeechProviderIds(params.cfg);
     case "mediaUnderstandingProviders":
-      return collectRequestedMediaUnderstandingProviderIds(params.cfg, params.providerIds);
+      return collectRequestedMediaUnderstandingProviderIds(
+        params.cfg,
+        params.providerIds,
+        params.includeConfiguredProviderRefs,
+      );
     case "imageGenerationProviders":
       return collectRequestedImageGenerationProviderIds(params.cfg);
     case "videoGenerationProviders":
@@ -622,6 +631,7 @@ export function resolvePluginCapabilityProviders<K extends CapabilityProviderReg
   key: K;
   cfg?: OpenClawConfig;
   providerIds?: readonly string[];
+  includeConfiguredProviderRefs?: boolean;
 }): CapabilityProviderForKey<K>[] {
   if (shouldSkipCapabilityResolution(params)) {
     return [];

@@ -552,6 +552,7 @@ export async function applyMediaUnderstanding(params: {
   const getProviderRegistry = () => {
     providerRegistry ??= buildProviderRegistry(params.providers, cfg, {
       providerIds: params.activeModel?.provider ? [params.activeModel.provider] : [],
+      includeConfiguredProviderRefs: false,
     });
     return providerRegistry;
   };
