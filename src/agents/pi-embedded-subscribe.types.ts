@@ -5,6 +5,7 @@ import type { ReasoningLevel, ThinkLevel, VerboseLevel } from "../auto-reply/thi
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { HookRunner } from "../plugins/hooks.js";
 import type { AgentInternalEvent } from "./internal-events.js";
+import type { ChannelActionExtractToolSend } from "./pi-embedded-messaging.js";
 import type { BlockReplyPayload } from "./pi-embedded-payloads.js";
 import type { EmbeddedRunReplayState } from "./pi-embedded-runner/replay-state.js";
 import type {
@@ -62,5 +63,7 @@ export type SubscribeEmbeddedPiSessionParams = {
    * a normalized-name collision with a trusted built-in.
    */
   builtinToolNames?: ReadonlySet<string>;
+  /** Prepared channel-action extractors keyed by normalized tool name. */
+  actionExtractorsByToolName?: ReadonlyMap<string, ChannelActionExtractToolSend>;
   internalEvents?: AgentInternalEvent[];
 };

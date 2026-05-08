@@ -4,6 +4,7 @@ import {
   clearActiveEmbeddedRun,
   setActiveEmbeddedRun,
 } from "../../agents/pi-embedded-runner/runs.js";
+import * as channelPlugins from "../../channels/plugins/index.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import { createReplyOperation } from "./reply-run-registry.js";
 
@@ -300,6 +301,61 @@ describe("runPreparedReply media-only handling", () => {
     await loadFreshGetReplyRunModuleForTest();
 
     expect(storeRuntimeLoads).not.toHaveBeenCalled();
+  });
+
+  it("uses prepared reply channel runtime without channel plugin resolver calls", async () => {
+    const getChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected getChannelPlugin");
+      });
+    const getLoadedChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getLoadedChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected getLoadedChannelPlugin");
+      });
+
+    try {
+      await runPreparedReply(
+        baseParams({
+          replyChannelRuntime: {
+            id: "slack",
+            label: "Slack",
+            chatTypes: ["direct"],
+            promptRuntime: {
+              messageToolHints: () => ["Use the prepared message tool hint."],
+              messageToolCapabilities: () => ["prepared-capability"],
+            },
+            buildThreadingToolContext: ({ context }) => ({
+              currentChannelId: context.To,
+              currentThreadTs:
+                context.MessageThreadId != null ? String(context.MessageThreadId) : undefined,
+            }),
+            resolveReplyToMode: () => "first",
+            queueDebounceMs: 0,
+            textChunkLimit: 4096,
+          },
+        }),
+      );
+
+      expect(getChannelPluginSpy).not.toHaveBeenCalled();
+      expect(getLoadedChannelPluginSpy).not.toHaveBeenCalled();
+      expect(runReplyAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          followupRun: expect.objectContaining({
+            run: expect.objectContaining({
+              replyChannelRuntime: expect.objectContaining({ id: "slack" }),
+              channelPromptRuntime: expect.objectContaining({
+                messageToolHints: expect.any(Function),
+              }),
+            }),
+          }),
+        }),
+      );
+    } finally {
+      getChannelPluginSpy.mockRestore();
+      getLoadedChannelPluginSpy.mockRestore();
+    }
   });
 
   it("passes approved elevated defaults to the runner", async () => {

@@ -93,6 +93,7 @@ export async function applyInlineDirectivesFastLane(
     currentElevatedLevel,
     ctx,
     surface: ctx.Surface,
+    replyChannelRuntime: params.replyChannelRuntime,
     gatewayClientScopes: ctx.GatewayClientScopes,
     senderIsOwner: params.senderIsOwner,
     workspaceDir: params.workspaceDir,

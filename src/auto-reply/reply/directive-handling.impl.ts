@@ -106,6 +106,10 @@ export async function handleDirectiveOnly(
     resetModelOverride,
     workspaceDir: params.workspaceDir,
     surface: params.surface,
+    commands:
+      params.replyChannelRuntime && params.replyChannelRuntime.id === params.surface
+        ? params.replyChannelRuntime.commands
+        : undefined,
     sessionEntry,
   });
   if (modelInfo) {

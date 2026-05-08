@@ -4,6 +4,7 @@ import {
 } from "../channels/thread-bindings-policy.js";
 import { resolveChannelCapabilities } from "../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { ChannelPromptRuntime } from "../infra/outbound/channel-resolution.js";
 import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { resolveChannelPromptCapabilities } from "./channel-tools.js";
 
@@ -35,6 +36,7 @@ export function collectRuntimeChannelCapabilities(params: {
   cfg?: OpenClawConfig;
   channel?: string | null;
   accountId?: string | null;
+  promptRuntime?: ChannelPromptRuntime;
 }): string[] | undefined {
   if (!params.channel) {
     return undefined;

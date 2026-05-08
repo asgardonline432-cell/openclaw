@@ -122,6 +122,11 @@ function buildContextPruningFactory(params: {
     modelApi: params.model?.api,
     provider: params.provider,
     modelId: params.modelId,
+    config: params.cfg,
+    workspaceDir: params.workspaceDir,
+    env: params.env,
+    model: params.model,
+    runtimeHandle: params.providerRuntimeHandle,
   });
 
   setContextPruningRuntime(params.sessionManager, {

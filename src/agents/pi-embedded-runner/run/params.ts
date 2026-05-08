@@ -8,6 +8,10 @@ import type { ReplyPayload } from "../../../auto-reply/reply-payload.js";
 import type { ReplyOperation } from "../../../auto-reply/reply/reply-run-registry.js";
 import type { ReasoningLevel, ThinkLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
+import type {
+  ChannelPromptRuntime,
+  OutboundChannelRuntime,
+} from "../../../infra/outbound/channel-resolution.js";
 import type { PromptImageOrderEntry } from "../../../media/prompt-image-order.js";
 import type { CommandQueueEnqueueFn } from "../../../process/command-queue.types.js";
 import type { InputProvenance } from "../../../sessions/input-provenance.js";
@@ -41,6 +45,10 @@ export type RunEmbeddedPiAgentParams = {
   agentId?: string;
   messageChannel?: string;
   messageProvider?: string;
+  /** Prepared prompt-facing channel runtime for the known message provider. */
+  channelPromptRuntime?: ChannelPromptRuntime;
+  /** Prepared outbound/channel runtime for the known message provider. */
+  outboundChannelRuntime?: OutboundChannelRuntime;
   agentAccountId?: string;
   /** What initiated this agent run: "user", "heartbeat", "cron", "memory", "overflow", or "manual". */
   trigger?: EmbeddedRunTrigger;

@@ -25,6 +25,7 @@ import {
   resolveProviderScopedAuthProfile,
   resolveRunAuthProfile,
 } from "./agent-runner-auth-profile.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 export { resolveProviderScopedAuthProfile, resolveRunAuthProfile };
 import {
   buildEmbeddedRunBaseParams,
@@ -105,6 +106,7 @@ export function buildThreadingToolContext(params: {
   sessionCtx: TemplateContext;
   config: OpenClawConfig | undefined;
   hasRepliedRef: { value: boolean } | undefined;
+  runtime?: Pick<ReplyChannelRuntime, "buildThreadingToolContext">;
 }): ChannelThreadingToolContext {
   const { sessionCtx, config, hasRepliedRef } = params;
   const currentMessageId = sessionCtx.MessageSidFull ?? sessionCtx.MessageSid;
@@ -129,8 +131,13 @@ export function buildThreadingToolContext(params: {
   }
   const provider = normalizeChannelId(rawProvider) ?? normalizeAnyChannelId(rawProvider);
   // Fallback for unrecognized/plugin channels (e.g., iMessage before plugin registry init)
-  const threading = provider ? getChannelPlugin(provider)?.threading : undefined;
-  if (!threading?.buildToolContext) {
+  const buildToolContext =
+    params.runtime !== undefined
+      ? params.runtime.buildThreadingToolContext
+      : provider
+        ? getChannelPlugin(provider)?.threading?.buildToolContext
+        : undefined;
+  if (!buildToolContext) {
     return {
       currentChannelId: normalizeOptionalString(originTo),
       currentChannelProvider: provider ?? (rawProvider as ChannelId),
@@ -139,7 +146,7 @@ export function buildThreadingToolContext(params: {
     };
   }
   const context =
-    threading.buildToolContext({
+    buildToolContext({
       cfg: config,
       accountId: sessionCtx.AccountId,
       context: {
@@ -202,6 +209,7 @@ function buildEmbeddedContextFromTemplate(params: {
       sessionCtx: params.sessionCtx,
       config,
       hasRepliedRef: params.hasRepliedRef,
+      runtime: params.run.replyChannelRuntime,
     }),
   };
 }

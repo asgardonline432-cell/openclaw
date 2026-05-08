@@ -676,6 +676,7 @@ export async function sanitizeSessionHistory(params: {
       workspaceDir: params.workspaceDir,
       env: params.env,
       model: params.model,
+      runtimeHandle: params.runtimeHandle,
     });
   const withInterSessionMarkers = annotateInterSessionUserMessages(params.messages);
   const allowProviderOwnedThinkingReplay = shouldAllowProviderOwnedThinkingReplay({
@@ -832,6 +833,7 @@ export async function validateReplayTurns(params: {
       workspaceDir: params.workspaceDir,
       env: params.env,
       model: params.model,
+      runtimeHandle: params.runtimeHandle,
     });
   const provider = params.provider?.trim();
   if (provider) {

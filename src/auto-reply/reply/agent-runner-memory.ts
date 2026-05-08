@@ -608,6 +608,7 @@ export async function runPreflightCompactionIfNeeded(params: {
     sandboxSessionKey: params.runtimePolicySessionKey,
     allowGatewaySubagentBinding: true,
     messageChannel: params.followupRun.run.messageProvider,
+    channelPromptRuntime: params.followupRun.run.channelPromptRuntime,
     groupId: entry.groupId ?? params.followupRun.run.groupId,
     groupChannel: entry.groupChannel ?? params.followupRun.run.groupChannel,
     groupSpace: entry.space ?? params.followupRun.run.groupSpace,

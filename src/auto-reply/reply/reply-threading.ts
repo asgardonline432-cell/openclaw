@@ -75,14 +75,20 @@ export function resolveReplyToMode(
   channel?: OriginatingChannelType,
   accountId?: string | null,
   chatType?: string | null,
+  threading?: ChannelThreadingAdapter,
 ): ReplyToMode {
   const normalizedAccountId = normalizeOptionalLowercaseString(accountId);
   if (!normalizedAccountId) {
     return resolveConfiguredReplyToMode(cfg, channel, chatType);
   }
   const provider = normalizeAnyChannelId(channel) ?? normalizeOptionalLowercaseString(channel);
-  const threading = provider ? getChannelPlugin(provider)?.threading : undefined;
-  return resolveReplyToModeWithThreading(cfg, threading, {
+  const resolvedThreading =
+    threading !== undefined
+      ? threading
+      : provider
+        ? getChannelPlugin(provider)?.threading
+        : undefined;
+  return resolveReplyToModeWithThreading(cfg, resolvedThreading, {
     channel,
     accountId: normalizedAccountId,
     chatType,

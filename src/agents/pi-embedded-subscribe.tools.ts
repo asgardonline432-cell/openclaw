@@ -10,7 +10,10 @@ import {
 } from "../shared/string-coerce.js";
 import { truncateUtf16Safe } from "../utils.js";
 import { collectTextContentBlocks } from "./content-blocks.js";
-import { isMessageToolSendActionName } from "./pi-embedded-messaging.js";
+import {
+  isMessageToolSendActionName,
+  type ChannelActionExtractToolSend,
+} from "./pi-embedded-messaging.js";
 import type { MessagingToolSend } from "./pi-embedded-messaging.types.js";
 import { normalizeToolName } from "./tool-policy.js";
 
@@ -537,6 +540,7 @@ function resolveMessageToolTarget(args: Record<string, unknown>): string | undef
 export function extractMessagingToolSend(
   toolName: string,
   args: Record<string, unknown>,
+  actionExtractorsByToolName?: ReadonlyMap<string, ChannelActionExtractToolSend>,
 ): MessagingToolSend | undefined {
   // Provider docking: new provider tools must implement plugin.actions.extractToolSend.
   const action = normalizeOptionalString(args.action) ?? "";
@@ -564,12 +568,18 @@ export function extractMessagingToolSend(
   if (!providerId) {
     return undefined;
   }
-  const plugin = getChannelPlugin(providerId);
-  const extracted = plugin?.actions?.extractToolSend?.({ args });
+  const normalizedToolName = normalizeToolName(toolName);
+  const extractor = normalizedToolName
+    ? actionExtractorsByToolName?.get(normalizedToolName)
+    : undefined;
+  const plugin = extractor ? undefined : getChannelPlugin(providerId);
+  const extracted = (extractor ?? plugin?.actions?.extractToolSend)?.({ args });
   if (!extracted?.to) {
     return undefined;
   }
-  const to = normalizeTargetForProvider(providerId, extracted.to);
+  const to = extractor
+    ? normalizeOptionalString(extracted.to)
+    : normalizeTargetForProvider(providerId, extracted.to);
   return to
     ? {
         tool: toolName,

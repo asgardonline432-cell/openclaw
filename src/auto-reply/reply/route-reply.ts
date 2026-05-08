@@ -24,6 +24,7 @@ import { INTERNAL_MESSAGE_CHANNEL, normalizeMessageChannel } from "../../utils/m
 import type { OriginatingChannelType } from "../templating.js";
 import { isSilentReplyPayloadText, SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import { normalizeReplyPayload } from "./normalize-reply.js";
 import {
   formatBtwTextForExternalDelivery,
@@ -73,6 +74,11 @@ export type RouteReplyParams = {
   isGroup?: boolean;
   /** Group or channel identifier for correlation with received events */
   groupId?: string;
+  /** Prepared reply-channel facts for hot reply routing paths. */
+  runtime?: Pick<
+    ReplyChannelRuntime,
+    "id" | "transformReplyPayload" | "hasStructuredReplyPayload" | "resolveReplyTransport"
+  >;
 };
 
 export type RouteReplyResult = {
@@ -100,10 +106,26 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
   const normalizedChannel = normalizeMessageChannel(channel);
   const channelId =
     normalizeChannelId(channel) ?? normalizeOptionalLowercaseString(channel) ?? null;
-  const loadedPlugin = channelId ? getLoadedChannelPlugin(channelId) : undefined;
-  const bundledPlugin = channelId && !loadedPlugin ? getBundledChannelPlugin(channelId) : undefined;
-  const messaging = loadedPlugin?.messaging ?? bundledPlugin?.messaging;
-  const threading = loadedPlugin?.threading ?? bundledPlugin?.threading;
+  const preparedRuntime =
+    params.runtime && normalizeOptionalLowercaseString(params.runtime.id) === channelId
+      ? params.runtime
+      : undefined;
+  const loadedPlugin =
+    channelId && !preparedRuntime ? getLoadedChannelPlugin(channelId) : undefined;
+  const bundledPlugin =
+    channelId && !preparedRuntime && !loadedPlugin ? getBundledChannelPlugin(channelId) : undefined;
+  const transformReplyPayload =
+    preparedRuntime?.transformReplyPayload ??
+    loadedPlugin?.messaging?.transformReplyPayload ??
+    bundledPlugin?.messaging?.transformReplyPayload;
+  const hasStructuredReplyPayload =
+    preparedRuntime?.hasStructuredReplyPayload ??
+    loadedPlugin?.messaging?.hasStructuredReplyPayload ??
+    bundledPlugin?.messaging?.hasStructuredReplyPayload;
+  const resolveReplyTransport =
+    preparedRuntime?.resolveReplyTransport ??
+    loadedPlugin?.threading?.resolveReplyTransport ??
+    bundledPlugin?.threading?.resolveReplyTransport;
   const resolvedAgentId = params.sessionKey
     ? resolveSessionAgentId({
         sessionKey: params.sessionKey,
@@ -137,9 +159,9 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
       }
     : normalizeReplyPayload(payload, {
         responsePrefix,
-        transformReplyPayload: messaging?.transformReplyPayload
+        transformReplyPayload: transformReplyPayload
           ? (nextPayload) =>
-              messaging.transformReplyPayload?.({
+              transformReplyPayload({
                 payload: nextPayload,
                 cfg,
                 accountId,
@@ -165,7 +187,7 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
     mediaUrls = [externalPayload.mediaUrl];
   }
   const replyToId = externalPayload.replyToId;
-  const hasChannelData = messaging?.hasStructuredReplyPayload?.({
+  const hasChannelData = hasStructuredReplyPayload?.({
     payload: externalPayload,
   });
 
@@ -200,7 +222,7 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
   }
 
   const replyTransport =
-    threading?.resolveReplyTransport?.({
+    resolveReplyTransport?.({
       cfg,
       accountId,
       threadId,

@@ -25,7 +25,11 @@ import type { ApplyPatchSummary } from "./apply-patch.js";
 import type { ExecToolDetails } from "./bash-tools.exec-types.js";
 import { parseExecApprovalResultText } from "./exec-approval-result.js";
 import { normalizeTextForComparison } from "./pi-embedded-helpers.js";
-import { isMessagingTool, isMessagingToolSendAction } from "./pi-embedded-messaging.js";
+import {
+  isMessagingTool,
+  isMessagingToolSendAction,
+  type PreparedMessagingActionToolRuntime,
+} from "./pi-embedded-messaging.js";
 import { mergeEmbeddedRunReplayState } from "./pi-embedded-runner/replay-state.js";
 import type {
   ToolCallSummary,
@@ -90,6 +94,14 @@ type ToolStartRecord = {
 
 /** Track tool execution start data for after_tool_call hook. */
 const toolStartData = new Map<string, ToolStartRecord>();
+
+function resolvePreparedMessagingActionRuntime(
+  ctx: Pick<ToolHandlerContext, "params">,
+): PreparedMessagingActionToolRuntime | undefined {
+  return ctx.params.actionExtractorsByToolName
+    ? { actionExtractorsByToolName: ctx.params.actionExtractorsByToolName }
+    : undefined;
+}
 
 function buildToolStartKey(runId: string, toolCallId: string): string {
   return `${runId}:${toolCallId}`;
@@ -763,11 +775,20 @@ export function handleToolExecutionStart(
     }
 
     // Track messaging tool sends (pending until confirmed in tool_execution_end).
-    if (isMessagingTool(toolName)) {
+    const messagingActionRuntime = resolvePreparedMessagingActionRuntime(ctx);
+    if (isMessagingTool(toolName, messagingActionRuntime)) {
       const argsRecord = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
-      const isMessagingSend = isMessagingToolSendAction(toolName, argsRecord);
+      const isMessagingSend = isMessagingToolSendAction(
+        toolName,
+        argsRecord,
+        messagingActionRuntime,
+      );
       if (isMessagingSend) {
-        const sendTarget = extractMessagingToolSend(toolName, argsRecord);
+        const sendTarget = extractMessagingToolSend(
+          toolName,
+          argsRecord,
+          ctx.params.actionExtractorsByToolName,
+        );
         if (sendTarget) {
           ctx.state.pendingMessagingTargets.set(toolCallId, sendTarget);
         }
@@ -952,7 +973,13 @@ export async function handleToolExecutionEnd(
       : {};
   const isMessagingSend =
     pendingMediaUrls.length > 0 ||
-    (isMessagingTool(toolName) && isMessagingToolSendAction(toolName, startArgs));
+    (() => {
+      const messagingActionRuntime = resolvePreparedMessagingActionRuntime(ctx);
+      return (
+        isMessagingTool(toolName, messagingActionRuntime) &&
+        isMessagingToolSendAction(toolName, startArgs, messagingActionRuntime)
+      );
+    })();
   const committedMediaUrls =
     !isToolError && isMessagingSend
       ? [...pendingMediaUrls, ...collectMessagingMediaUrlsFromToolResult(result)]

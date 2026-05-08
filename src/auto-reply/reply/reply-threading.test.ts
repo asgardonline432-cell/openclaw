@@ -102,6 +102,14 @@ describe("resolveReplyToMode", () => {
     ).toBe("first");
   });
 
+  it("uses prepared threading runtime without registered channel plugins", () => {
+    expect(
+      resolveReplyToMode({} as OpenClawConfig, "whatsapp", "work", "group", {
+        resolveReplyToMode: () => "first",
+      }),
+    ).toBe("first");
+  });
+
   it("uses registered channel threading adapters for runtime reply-mode resolution", () => {
     setActivePluginRegistry(
       createTestRegistry([

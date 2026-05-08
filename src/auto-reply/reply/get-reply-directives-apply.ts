@@ -5,6 +5,7 @@ import { createLazyImportLoader } from "../../shared/lazy-promise.js";
 import type { MsgContext } from "../templating.js";
 import type { ElevatedLevel } from "../thinking.js";
 import type { ReplyPayload } from "../types.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import type { CommandContext } from "./commands-types.js";
 import { isDirectiveOnly } from "./directive-handling.directive-only.js";
 import { resolveModelSelectionFromDirective } from "./directive-handling.model-selection.js";
@@ -125,6 +126,7 @@ export async function applyInlineDirectiveOverrides(params: {
   contextTokens: number;
   effectiveModelDirective?: string;
   typing: TypingController;
+  replyChannelRuntime?: Pick<ReplyChannelRuntime, "id" | "commands">;
 }): Promise<ApplyDirectiveResult> {
   const {
     ctx,
@@ -343,6 +345,7 @@ export async function applyInlineDirectiveOverrides(params: {
       ctx,
       messageProvider: ctx.Provider,
       surface: ctx.Surface,
+      replyChannelRuntime: params.replyChannelRuntime,
       gatewayClientScopes: ctx.GatewayClientScopes,
       senderIsOwner: command.senderIsOwner,
       workspaceDir,

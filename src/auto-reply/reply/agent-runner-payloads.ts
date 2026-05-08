@@ -11,6 +11,7 @@ import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload, ReplyThreadingPolicy } from "../types.js";
 import { formatBunFetchSocketError, isBunFetchSocketError } from "./agent-runner-utils.js";
 import { createBlockReplyContentKey, type BlockReplyPipeline } from "./block-reply-pipeline.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import {
   resolveOriginAccountId,
   resolveOriginMessageProvider,
@@ -127,6 +128,7 @@ export async function buildReplyPayloads(params: {
   originatingChannel?: OriginatingChannelType;
   originatingTo?: string;
   accountId?: string;
+  runtime?: Pick<ReplyChannelRuntime, "targetsMatchForReplySuppression">;
   extractMarkdownImages?: boolean;
   normalizeMediaPaths?: (payload: ReplyPayload) => Promise<ReplyPayload>;
 }): Promise<{ replyPayloads: ReplyPayload[]; didLogHeartbeatStrip: boolean }> {
@@ -232,6 +234,7 @@ export async function buildReplyPayloads(params: {
     accountId: resolveOriginAccountId({
       originatingAccountId: params.accountId,
     }),
+    runtime: params.runtime,
   }) ?? {
     shouldDedupePayloads: shouldCheckMessagingToolDedupe && messagingToolSentTargets.length === 0,
     matchingRoute: false,

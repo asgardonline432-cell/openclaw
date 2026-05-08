@@ -2,6 +2,10 @@ import type { SourceReplyDeliveryMode } from "../../auto-reply/get-reply-options
 import type { ReasoningLevel, ThinkLevel } from "../../auto-reply/thinking.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { ContextEngine, ContextEngineRuntimeContext } from "../../context-engine/types.js";
+import type {
+  ChannelPromptRuntime,
+  OutboundChannelRuntime,
+} from "../../infra/outbound/channel-resolution.js";
 import type { CommandQueueEnqueueFn } from "../../process/command-queue.types.js";
 import type { ExecElevatedDefaults } from "../bash-tools.exec-types.js";
 import type { AgentRuntimePlan } from "../runtime-plan/types.js";
@@ -15,6 +19,10 @@ export type CompactEmbeddedPiSessionParams = {
   sandboxSessionKey?: string;
   messageChannel?: string;
   messageProvider?: string;
+  /** Prepared prompt-facing channel runtime for the known message provider. */
+  channelPromptRuntime?: ChannelPromptRuntime;
+  /** Prepared outbound/channel runtime for the known message provider. */
+  outboundChannelRuntime?: OutboundChannelRuntime;
   agentAccountId?: string;
   currentChannelId?: string;
   currentThreadTs?: string;

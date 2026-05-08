@@ -72,6 +72,10 @@ function isPluginGroupAllowlistName(normalized: string): boolean {
   return normalized === "group:plugins";
 }
 
+function isBundleLspAllowlistName(normalized: string): boolean {
+  return normalized === "bundle-lsp" || normalized.startsWith("lsp_");
+}
+
 function hasWildcardToolAllowlist(toolsAllow: string[]): boolean {
   return toolsAllow.some((entry) => normalizeToolName(entry) === "*");
 }
@@ -227,6 +231,6 @@ export function shouldCreateBundleLspRuntimeForAttempt(params: {
   }
   return params.toolsAllow.some((toolName) => {
     const normalized = normalizeToolName(toolName);
-    return normalized.startsWith("lsp_");
+    return isBundleLspAllowlistName(normalized);
   });
 }

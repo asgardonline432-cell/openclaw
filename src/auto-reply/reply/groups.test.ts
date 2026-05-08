@@ -212,6 +212,43 @@ describe("group runtime loading", () => {
     vi.doUnmock("./groups.runtime.js");
   });
 
+  it("uses prepared group runtime without loading the group plugin runtime", async () => {
+    const groupsRuntimeLoads = vi.fn();
+    vi.doMock("./groups.runtime.js", () => {
+      groupsRuntimeLoads();
+      return {
+        getChannelPlugin: () => {
+          throw new Error("unexpected group runtime load");
+        },
+        normalizeChannelId: (channelId?: string) => channelId?.trim().toLowerCase(),
+      };
+    });
+    const groups = await import("./groups.js");
+
+    await expect(
+      groups.resolveGroupRequireMention({
+        cfg: {} as OpenClawConfig,
+        ctx: {
+          Provider: "slack",
+          From: "slack:channel:C123",
+          GroupSubject: "#general",
+        },
+        groupResolution: {
+          key: "slack:group:C123",
+          channel: "slack",
+          id: "C123",
+          chatType: "group",
+        },
+        runtime: {
+          id: "slack",
+          resolveGroupRequireMention: () => false,
+        },
+      }),
+    ).resolves.toBe(false);
+    expect(groupsRuntimeLoads).not.toHaveBeenCalled();
+    vi.doUnmock("./groups.runtime.js");
+  });
+
   it("honors Discord guild channel requireMention fallback when runtime plugin is unavailable", async () => {
     vi.resetModules();
     vi.doMock("./groups.runtime.js", () => ({

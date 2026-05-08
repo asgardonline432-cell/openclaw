@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
 import type { OriginatingChannelType } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import {
   resolveOriginAccountId,
   resolveOriginMessageProvider,
@@ -31,6 +32,7 @@ export function resolveFollowupDeliveryPayloads(params: {
   originatingChannel?: string;
   originatingChatType?: string | null;
   originatingTo?: string;
+  runtime?: Pick<ReplyChannelRuntime, "resolveReplyToMode" | "targetsMatchForReplySuppression">;
   sentMediaUrls?: string[];
   sentTargets?: MessagingToolSend[];
   sentTexts?: string[];
@@ -45,6 +47,7 @@ export function resolveFollowupDeliveryPayloads(params: {
     replyToChannel,
     params.originatingAccountId,
     params.originatingChatType,
+    params.runtime,
   );
   const sanitizedPayloads: ReplyPayload[] = [];
   for (const payload of params.payloads) {
@@ -74,6 +77,7 @@ export function resolveFollowupDeliveryPayloads(params: {
     accountId: resolveOriginAccountId({
       originatingAccountId: params.originatingAccountId,
     }),
+    runtime: params.runtime,
   });
   const sentMediaUrlFallback = params.sentMediaUrls ?? [];
   const sentTextFallback = params.sentTexts ?? [];

@@ -10,6 +10,7 @@ import {
 } from "../../agents/model-selection.js";
 import { buildAgentRuntimeAuthPlan } from "../../agents/runtime-plan/auth.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
+import type { ChannelCommandAdapter } from "../../channels/plugins/types.public.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
@@ -318,6 +319,8 @@ export async function maybeHandleModelDirectiveInfo(params: {
   resetModelOverride: boolean;
   workspaceDir?: string;
   surface?: string;
+  commands?: Pick<ChannelCommandAdapter, "buildModelBrowseChannelData"> &
+    Parameters<typeof resolveModelsCommandReply>[0]["commands"];
   sessionEntry?: Pick<SessionEntry, "modelProvider" | "model"> &
     Partial<Pick<SessionEntry, "agentHarnessId" | "agentRuntimeOverride">>;
 }): Promise<ReplyPayload | undefined> {
@@ -356,6 +359,7 @@ export async function maybeHandleModelDirectiveInfo(params: {
       agentDir: params.agentDir,
       workspaceDir: params.workspaceDir,
       sessionEntry: isCompleteSessionEntry(params.sessionEntry) ? params.sessionEntry : undefined,
+      commands: params.commands,
     });
     return reply ?? { text: "No models available." };
   }
@@ -370,8 +374,11 @@ export async function maybeHandleModelDirectiveInfo(params: {
     const activeRuntimeLine = modelRefs.activeDiffers
       ? `Active: ${modelRefs.active.label} (runtime)`
       : null;
-    const commandPlugin = params.surface ? getChannelPlugin(params.surface) : null;
-    const channelData = commandPlugin?.commands?.buildModelBrowseChannelData?.();
+    const commandPlugin =
+      params.commands || !params.surface ? null : getChannelPlugin(params.surface);
+    const channelData = (
+      params.commands ?? commandPlugin?.commands
+    )?.buildModelBrowseChannelData?.();
     if (channelData) {
       return {
         text: [

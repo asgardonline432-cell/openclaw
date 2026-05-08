@@ -5,10 +5,12 @@ import type { SkillSnapshot } from "../../../agents/skills.js";
 import type { SilentReplyPromptMode } from "../../../agents/system-prompt.types.js";
 import type { SessionEntry } from "../../../config/sessions.js";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
+import type { ChannelPromptRuntime } from "../../../infra/outbound/channel-resolution.js";
 import type { PromptImageOrderEntry } from "../../../media/prompt-image-order.js";
 import type { InputProvenance } from "../../../sessions/input-provenance.js";
 import type { SourceReplyDeliveryMode } from "../../get-reply-options.types.js";
 import type { OriginatingChannelType } from "../../templating.js";
+import type { ReplyChannelRuntime } from "../channel-runtime.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "../directives.js";
 
 export type QueueMode = "steer" | "followup" | "collect" | "steer-backlog" | "interrupt" | "queue";
@@ -60,6 +62,8 @@ export type FollowupRun = {
     sessionKey?: string;
     runtimePolicySessionKey?: string;
     messageProvider?: string;
+    channelPromptRuntime?: ChannelPromptRuntime;
+    replyChannelRuntime?: ReplyChannelRuntime;
     agentAccountId?: string;
     groupId?: string;
     groupChannel?: string;
@@ -110,6 +114,7 @@ export type FollowupRun = {
 export type ResolveQueueSettingsParams = {
   cfg: OpenClawConfig;
   channel?: string;
+  runtime?: Pick<ReplyChannelRuntime, "queueDebounceMs">;
   sessionEntry?: SessionEntry;
   inlineMode?: QueueMode;
   inlineOptions?: Partial<QueueSettings>;

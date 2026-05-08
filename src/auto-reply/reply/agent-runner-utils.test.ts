@@ -255,6 +255,39 @@ describe("agent-runner-utils", () => {
     });
   });
 
+  it("uses prepared threading runtime without channel plugin lookup", () => {
+    hoisted.getChannelPluginMock.mockImplementation(() => {
+      throw new Error("unexpected channel plugin lookup");
+    });
+
+    const context = buildThreadingToolContext({
+      sessionCtx: {
+        Provider: "telegram",
+        To: "slash:8460800771",
+        OriginatingChannel: "telegram",
+        OriginatingTo: "telegram:-1003841603622",
+        MessageThreadId: 928,
+        MessageSid: "2284",
+      },
+      config: { channels: { telegram: { allowFrom: ["*"] } } },
+      hasRepliedRef: undefined,
+      runtime: {
+        buildThreadingToolContext: ({ context }) => ({
+          currentChannelId: context.To?.trim() || undefined,
+          currentThreadTs:
+            context.MessageThreadId != null ? String(context.MessageThreadId) : undefined,
+        }),
+      },
+    });
+
+    expect(context).toMatchObject({
+      currentChannelId: "telegram:-1003841603622",
+      currentThreadTs: "928",
+      currentMessageId: "2284",
+    });
+    expect(hoisted.getChannelPluginMock).not.toHaveBeenCalled();
+  });
+
   it("uses OriginatingTo for threading tool context on discord native commands", () => {
     const context = buildThreadingToolContext({
       sessionCtx: {

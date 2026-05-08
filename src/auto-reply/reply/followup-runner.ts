@@ -147,6 +147,7 @@ export function createFollowupRunner(params: {
           requesterSenderE164: queued.run.senderE164,
           threadId: queued.originatingThreadId,
           cfg: runtimeConfig,
+          runtime: queued.run.replyChannelRuntime,
         });
         if (!result.ok) {
           const errorMsg = result.error ?? "unknown error";

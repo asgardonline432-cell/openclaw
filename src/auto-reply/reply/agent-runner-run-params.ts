@@ -48,6 +48,8 @@ export function buildEmbeddedRunBaseParams(params: {
     agentDir: params.run.agentDir,
     config,
     skillsSnapshot: params.run.skillsSnapshot,
+    channelPromptRuntime: params.run.channelPromptRuntime,
+    outboundChannelRuntime: params.run.replyChannelRuntime,
     ownerNumbers: params.run.ownerNumbers,
     inputProvenance: params.run.inputProvenance,
     senderIsOwner: params.run.senderIsOwner,

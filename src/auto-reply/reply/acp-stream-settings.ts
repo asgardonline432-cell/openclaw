@@ -1,6 +1,7 @@
 import type { AcpSessionUpdateTag } from "../../acp/runtime/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { clampPositiveInteger, resolveEffectiveBlockStreamingConfig } from "./block-streaming.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 
 const DEFAULT_ACP_STREAM_COALESCE_IDLE_MS = 350;
 const DEFAULT_ACP_STREAM_MAX_CHUNK_CHARS = 1800;
@@ -109,12 +110,14 @@ export function resolveAcpStreamingConfig(params: {
   cfg: OpenClawConfig;
   provider?: string;
   accountId?: string;
+  runtime?: Pick<ReplyChannelRuntime, "textChunkLimit" | "blockStreamingCoalesceDefaults">;
   deliveryMode?: AcpDeliveryMode;
 }) {
   const resolved = resolveEffectiveBlockStreamingConfig({
     cfg: params.cfg,
     provider: params.provider,
     accountId: params.accountId,
+    runtime: params.runtime,
     maxChunkChars: resolveAcpStreamMaxChunkChars(params.cfg),
     coalesceIdleMs: resolveAcpStreamCoalesceIdleMs(params.cfg),
   });

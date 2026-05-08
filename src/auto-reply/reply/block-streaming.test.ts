@@ -93,4 +93,27 @@ describe("resolveEffectiveBlockStreamingConfig", () => {
     expect(resolved.chunking.maxChars).toBe(1800);
     expect(resolved.chunking.minChars).toBeLessThanOrEqual(resolved.chunking.maxChars);
   });
+
+  it("uses prepared channel streaming facts before plugin lookup", () => {
+    const resolved = resolveEffectiveBlockStreamingConfig({
+      cfg: {} as OpenClawConfig,
+      provider: "discord",
+      runtime: {
+        textChunkLimit: 96,
+        blockStreamingCoalesceDefaults: {
+          minChars: 12,
+          maxChars: 48,
+          idleMs: 123,
+        },
+      },
+    });
+
+    expect(resolved.chunking.maxChars).toBe(96);
+    expect(resolved.coalescing).toEqual({
+      minChars: 12,
+      maxChars: 96,
+      idleMs: 123,
+      joiner: "\n\n",
+    });
+  });
 });

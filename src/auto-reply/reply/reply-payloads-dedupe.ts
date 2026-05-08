@@ -14,6 +14,7 @@ import {
   normalizeOptionalString,
 } from "../../shared/string-coerce.js";
 import type { ReplyPayload } from "../types.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 
 export function filterMessagingToolDuplicates(params: {
   payloads: ReplyPayload[];
@@ -182,8 +183,12 @@ function targetsMatchForDedupe(params: {
   originTarget: string;
   targetKey: string;
   targetThreadId?: string;
+  runtime?: Pick<ReplyChannelRuntime, "targetsMatchForReplySuppression">;
 }): boolean {
-  const pluginMatch = getChannelPlugin(params.provider)?.outbound?.targetsMatchForReplySuppression;
+  const pluginMatch =
+    params.runtime !== undefined
+      ? params.runtime.targetsMatchForReplySuppression
+      : getChannelPlugin(params.provider)?.outbound?.targetsMatchForReplySuppression;
   if (pluginMatch) {
     return pluginMatch({
       originTarget: params.originTarget,
@@ -199,6 +204,7 @@ export function shouldDedupeMessagingToolRepliesForRoute(params: {
   messagingToolSentTargets?: MessagingToolSend[];
   originatingTo?: string;
   accountId?: string;
+  runtime?: Pick<ReplyChannelRuntime, "targetsMatchForReplySuppression">;
 }): boolean {
   return getMatchingMessagingToolReplyTargets(params).length > 0;
 }
@@ -208,6 +214,7 @@ export function getMatchingMessagingToolReplyTargets(params: {
   messagingToolSentTargets?: MessagingToolSend[];
   originatingTo?: string;
   accountId?: string;
+  runtime?: Pick<ReplyChannelRuntime, "targetsMatchForReplySuppression">;
 }): MessagingToolSend[] {
   const provider = normalizeProviderForComparison(params.messageProvider);
   if (!provider) {
@@ -258,6 +265,7 @@ export function getMatchingMessagingToolReplyTargets(params: {
       originTarget: originRoute.to,
       targetKey: targetRoute.to,
       targetThreadId: target.threadId,
+      runtime: params.runtime,
     });
   });
 }
@@ -276,6 +284,7 @@ export function resolveMessagingToolPayloadDedupe(params: {
   messagingToolSentTargets?: MessagingToolSend[];
   originatingTo?: string;
   accountId?: string;
+  runtime?: Pick<ReplyChannelRuntime, "targetsMatchForReplySuppression">;
 }): MessagingToolPayloadDedupeDecision {
   const sentTargets = params.messagingToolSentTargets ?? [];
   const matchingTargets = getMatchingMessagingToolReplyTargets({
@@ -283,6 +292,7 @@ export function resolveMessagingToolPayloadDedupe(params: {
     messagingToolSentTargets: sentTargets,
     originatingTo: params.originatingTo,
     accountId: params.accountId,
+    runtime: params.runtime,
   });
   const matchingRoute = matchingTargets.length > 0;
   const routeSentTexts = matchingTargets.flatMap((target) =>

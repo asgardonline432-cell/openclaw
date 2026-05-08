@@ -13,6 +13,7 @@ import { resolveStatusTtsSnapshot } from "../../tts/status-config.js";
 import { resolveConfiguredTtsMode, shouldCleanTtsDirectiveText } from "../../tts/tts-config.js";
 import type { FinalizedMsgContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import type { ReplyDispatchKind, ReplyDispatcher } from "./reply-dispatcher.types.js";
 
 const routeReplyRuntimeLoader = createLazyImportLoader(() => import("./route-reply.runtime.js"));
@@ -58,6 +59,10 @@ type ToolMessageHandle = {
 
 async function shouldTreatDeliveredTextAsVisible(params: {
   channel: string | undefined;
+  runtime?: Pick<
+    ReplyChannelRuntime,
+    "shouldTreatDeliveredTextAsVisible" | "shouldTreatRoutedTextAsVisible"
+  >;
   kind: ReplyDispatchKind;
   text: string | undefined;
   routed: boolean;
@@ -72,12 +77,23 @@ async function shouldTreatDeliveredTextAsVisible(params: {
   if (!channelId) {
     return false;
   }
+  if (params.runtime !== undefined) {
+    const visibilityOverride =
+      params.runtime.shouldTreatDeliveredTextAsVisible ??
+      params.runtime.shouldTreatRoutedTextAsVisible;
+    return visibilityOverride
+      ? visibilityOverride({
+          kind: params.kind,
+          text: params.text,
+        })
+      : false;
+  }
   const { getChannelPlugin } = await loadChannelPluginRuntime();
   const outbound = getChannelPlugin(channelId)?.outbound;
-  const visibilityOverride =
+  const pluginVisibilityOverride =
     outbound?.shouldTreatDeliveredTextAsVisible ?? outbound?.shouldTreatRoutedTextAsVisible;
-  if (visibilityOverride) {
-    return visibilityOverride({
+  if (pluginVisibilityOverride) {
+    return pluginVisibilityOverride({
       kind: params.kind,
       text: params.text,
     });
@@ -185,11 +201,24 @@ export function createAcpDispatchDeliveryCoordinator(params: {
   suppressReplyLifecycle?: boolean;
   shouldRouteToOriginating: boolean;
   originatingChannel?: string;
+  replyChannelRuntime?: Pick<
+    ReplyChannelRuntime,
+    | "id"
+    | "shouldTreatDeliveredTextAsVisible"
+    | "shouldTreatRoutedTextAsVisible"
+    | "transformReplyPayload"
+    | "hasStructuredReplyPayload"
+    | "resolveReplyTransport"
+  >;
   originatingTo?: string;
   onReplyStart?: () => Promise<void> | void;
 }): AcpDispatchDeliveryCoordinator {
   const directChannel = normalizeOptionalLowercaseString(params.ctx.Provider ?? params.ctx.Surface);
   const routedChannel = normalizeOptionalLowercaseString(params.originatingChannel);
+  const runtimeForChannel = (channel: string | undefined) =>
+    params.replyChannelRuntime && channel === directChannel
+      ? params.replyChannelRuntime
+      : undefined;
   const deliverySessionKey = normalizeOptionalString(params.sessionKey) ?? params.ctx.SessionKey;
   const explicitAccountId = normalizeOptionalString(params.ctx.AccountId);
   const resolvedAccountId =
@@ -374,6 +403,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
 
       const tracksVisibleText = await shouldTreatDeliveredTextAsVisible({
         channel: routedChannel,
+        runtime: runtimeForChannel(routedChannel),
         kind,
         text: ttsPayload.text,
         routed: true,
@@ -395,6 +425,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
         threadId: params.ctx.MessageThreadId,
         cfg: params.cfg,
         mirror: false,
+        runtime: params.replyChannelRuntime,
       });
       if (!result.ok) {
         if (tracksVisibleText) {
@@ -426,6 +457,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
 
     const tracksVisibleText = await shouldTreatDeliveredTextAsVisible({
       channel: directChannel,
+      runtime: runtimeForChannel(directChannel),
       kind,
       text: ttsPayload.text,
       routed: false,

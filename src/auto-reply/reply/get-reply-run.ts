@@ -50,6 +50,7 @@ import {
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import { applySessionHints } from "./body.js";
+import { resolveReplyChannelRuntime, type ReplyChannelRuntime } from "./channel-runtime.js";
 import type { buildCommandContext } from "./commands.js";
 import type { InlineDirectives } from "./directive-handling.js";
 import { isSystemEventProvider } from "./effective-reply-route.js";
@@ -353,6 +354,7 @@ type RunPreparedReplyParams = {
   storePath?: string;
   workspaceDir: string;
   abortedLastRun: boolean;
+  replyChannelRuntime?: ReplyChannelRuntime;
 };
 
 export async function runPreparedReply(
@@ -428,6 +430,12 @@ export async function runPreparedReply(
     ctx,
     isHeartbeat,
   });
+  const replyChannelRuntime =
+    params.replyChannelRuntime ??
+    resolveReplyChannelRuntime({
+      cfg,
+      channel: promptSessionCtx.Provider ?? promptSessionCtx.Surface,
+    });
   const silentReplyConversationType = resolvePromptSilentReplyConversationType({
     ctx: promptSessionCtx,
     inboundSessionKey: ctx.SessionKey,
@@ -860,6 +868,7 @@ export async function runPreparedReply(
     : resolveQueueSettings({
         cfg,
         channel: sessionCtx.Provider,
+        runtime: replyChannelRuntime,
         sessionEntry,
         inlineMode: perMessageQueueMode,
         inlineOptions: perMessageQueueOptions,
@@ -1076,6 +1085,8 @@ export async function runPreparedReply(
       extraSystemPromptStatic: extraSystemPromptStaticParts.join("\n\n"),
       skipProviderRuntimeHints: useFastReplyRuntime,
       allowEmptyAssistantReplyAsSilent,
+      channelPromptRuntime: replyChannelRuntime?.promptRuntime,
+      replyChannelRuntime,
     },
   };
 
@@ -1133,5 +1144,6 @@ export async function runPreparedReply(
     typingSignals,
     resetTriggered: effectiveResetTriggered,
     replyThreadingOverride,
+    replyChannelRuntime,
   });
 }

@@ -76,6 +76,7 @@ import { appendUsageLine, formatResponseUsageLine } from "./agent-runner-usage-l
 import { resolveQueuedReplyExecutionConfig } from "./agent-runner-utils.js";
 import { createAudioAsVoiceBuffer, createBlockReplyPipeline } from "./block-reply-pipeline.js";
 import { resolveEffectiveBlockStreamingConfig } from "./block-streaming.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import { createFollowupRunner } from "./followup-runner.js";
 import { REPLY_RUN_STILL_SHUTTING_DOWN_TEXT } from "./get-reply-run-queue.js";
 import { resolveOriginMessageProvider, resolveOriginMessageTo } from "./origin-routing.js";
@@ -955,6 +956,7 @@ export async function runReplyAgent(params: {
   typingSignals?: TypingSignaler;
   resetTriggered?: boolean;
   replyThreadingOverride?: TemplateContext["ReplyThreading"];
+  replyChannelRuntime?: ReplyChannelRuntime;
   replyOperation?: ReplyOperation;
 }): Promise<ReplyPayload | ReplyPayload[] | undefined> {
   const {
@@ -989,6 +991,7 @@ export async function runReplyAgent(params: {
     typingSignals: providedTypingSignals,
     resetTriggered,
     replyThreadingOverride,
+    replyChannelRuntime,
     replyOperation: providedReplyOperation,
   } = params;
 
@@ -1138,6 +1141,7 @@ export async function runReplyAgent(params: {
     replyToChannel,
     sessionCtx.AccountId,
     sessionCtx.ChatType,
+    replyChannelRuntime,
   );
   const applyReplyToMode = createReplyToModeFilterForChannel(replyToMode, replyToChannel);
   const cfg = followupRun.run.config;
@@ -1161,6 +1165,7 @@ export async function runReplyAgent(params: {
           cfg,
           provider: sessionCtx.Provider,
           accountId: sessionCtx.AccountId,
+          runtime: replyChannelRuntime,
           chunking: blockReplyChunking,
         }).coalescing
       : undefined;
@@ -1512,6 +1517,7 @@ export async function runReplyAgent(params: {
         to: sessionCtx.To,
       }),
       accountId: sessionCtx.AccountId,
+      runtime: replyChannelRuntime,
       normalizeMediaPaths: replyMediaContext.normalizePayload,
     });
     const { replyPayloads } = payloadResult;

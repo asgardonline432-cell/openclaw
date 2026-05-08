@@ -224,6 +224,44 @@ describe("routeReply", () => {
     expect(mocks.deliverOutboundPayloads).not.toHaveBeenCalled();
   });
 
+  it("uses prepared reply runtime for structured payload and reply transport", async () => {
+    setActivePluginRegistry(createTestRegistry([]));
+    mocks.deliverOutboundPayloads.mockResolvedValue([{ messageId: "sent-1" }]);
+
+    const res = await routeReply({
+      payload: {
+        text: "choose",
+        replyToId: "reply-1",
+        channelData: { customchat: { card: true } },
+      },
+      channel: "customchat" as never,
+      to: "room-1",
+      threadId: "thread-1",
+      cfg: {} as OpenClawConfig,
+      runtime: {
+        id: "customchat",
+        transformReplyPayload: ({ payload }) => ({
+          ...payload,
+          text: `${payload.text ?? ""}!`,
+        }),
+        hasStructuredReplyPayload: ({ payload }) =>
+          Boolean((payload.channelData?.customchat as { card?: boolean } | undefined)?.card),
+        resolveReplyTransport: ({ replyToId }) => ({
+          replyToId,
+          threadId: null,
+        }),
+      },
+    });
+
+    expect(res).toEqual({ ok: true, messageId: "sent-1" });
+    expectLastDelivery({
+      channel: "customchat",
+      payloads: [expect.objectContaining({ text: "choose!" })],
+      replyToId: "reply-1",
+      threadId: null,
+    });
+  });
+
   it("no-ops on empty payload", async () => {
     await expectSlackNoDelivery({});
   });

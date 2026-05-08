@@ -8,6 +8,9 @@ import {
   __testing,
   listAllChannelSupportedActions,
   listChannelSupportedActions,
+  resolveChannelMessageToolHints,
+  resolveChannelPromptCapabilities,
+  resolveChannelReactionGuidance,
 } from "./channel-tools.js";
 
 describe("channel tools", () => {
@@ -137,5 +140,41 @@ describe("channel tools", () => {
 
     const cfg = {} as OpenClawConfig;
     expect(listChannelSupportedActions({ cfg, channel: "telegram" })).toEqual(["react"]);
+  });
+
+  it("uses prepared prompt runtime for prompt-facing channel facts", () => {
+    setActivePluginRegistry(createTestRegistry([]));
+    const cfg = {} as OpenClawConfig;
+    const promptRuntime = {
+      messageToolHints: () => [" use messages_send "],
+      messageToolCapabilities: () => ["native-replies"],
+      reactionGuidance: () => ({
+        level: "minimal" as const,
+        channelLabel: "Prepared Chat",
+      }),
+      hasNativeApprovalPromptUi: true,
+    };
+
+    expect(
+      resolveChannelMessageToolHints({
+        cfg,
+        channel: "telegram",
+        promptRuntime,
+      }),
+    ).toEqual(["use messages_send"]);
+    expect(
+      resolveChannelPromptCapabilities({
+        cfg,
+        channel: "telegram",
+        promptRuntime,
+      }),
+    ).toEqual(["native-replies", "nativeApprovals"]);
+    expect(
+      resolveChannelReactionGuidance({
+        cfg,
+        channel: "telegram",
+        promptRuntime,
+      }),
+    ).toEqual({ level: "minimal", channel: "Prepared Chat" });
   });
 });

@@ -16,6 +16,8 @@ import type {
 } from "../channels/plugins/types.public.js";
 import { normalizeAnyChannelId } from "../channels/registry.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { ChannelPromptRuntime } from "../infra/outbound/channel-resolution.js";
+import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 
 type ChannelAgentToolMeta = {
   channelId: string;
@@ -119,12 +121,19 @@ export function resolveChannelMessageToolHints(params: {
   cfg?: OpenClawConfig;
   channel?: string | null;
   accountId?: string | null;
+  promptRuntime?: ChannelPromptRuntime;
 }): string[] {
-  const channelId = normalizeAnyChannelId(params.channel);
+  const channelId =
+    params.promptRuntime !== undefined
+      ? normalizeOptionalLowercaseString(params.channel)
+      : normalizeAnyChannelId(params.channel);
   if (!channelId) {
     return [];
   }
-  const resolve = getChannelPlugin(channelId)?.agentPrompt?.messageToolHints;
+  const resolve =
+    params.promptRuntime !== undefined
+      ? params.promptRuntime.messageToolHints
+      : getChannelPlugin(channelId)?.agentPrompt?.messageToolHints;
   if (!resolve) {
     return [];
   }
@@ -138,17 +147,32 @@ export function resolveChannelPromptCapabilities(params: {
   cfg?: OpenClawConfig;
   channel?: string | null;
   accountId?: string | null;
+  promptRuntime?: ChannelPromptRuntime;
 }): string[] {
-  const channelId = normalizeAnyChannelId(params.channel);
+  const channelId =
+    params.promptRuntime !== undefined
+      ? normalizeOptionalLowercaseString(params.channel)
+      : normalizeAnyChannelId(params.channel);
   if (!channelId) {
     return [];
   }
-  const plugin = getChannelPlugin(channelId);
   const cfg = params.cfg ?? ({} as OpenClawConfig);
+  const runtimeCapabilities =
+    params.promptRuntime !== undefined
+      ? params.promptRuntime.messageToolCapabilities?.({ cfg, accountId: params.accountId })
+      : undefined;
   const capabilities = normalizePromptCapabilities(
-    plugin?.agentPrompt?.messageToolCapabilities?.({ cfg, accountId: params.accountId }),
+    params.promptRuntime !== undefined
+      ? runtimeCapabilities
+      : getChannelPlugin(channelId)?.agentPrompt?.messageToolCapabilities?.({
+          cfg,
+          accountId: params.accountId,
+        }),
   );
-  if (channelPluginHasNativeApprovalPromptUi(plugin)) {
+  if (
+    params.promptRuntime?.hasNativeApprovalPromptUi === true ||
+    (!params.promptRuntime && channelPluginHasNativeApprovalPromptUi(getChannelPlugin(channelId)))
+  ) {
     capabilities.push(NATIVE_APPROVAL_PROMPT_RUNTIME_CAPABILITY);
   }
   return capabilities;
@@ -162,12 +186,19 @@ export function resolveChannelReactionGuidance(params: {
   cfg?: OpenClawConfig;
   channel?: string | null;
   accountId?: string | null;
+  promptRuntime?: ChannelPromptRuntime;
 }): { level: "minimal" | "extensive"; channel: string } | undefined {
-  const channelId = normalizeAnyChannelId(params.channel);
+  const channelId =
+    params.promptRuntime !== undefined
+      ? normalizeOptionalLowercaseString(params.channel)
+      : normalizeAnyChannelId(params.channel);
   if (!channelId) {
     return undefined;
   }
-  const resolve = getChannelPlugin(channelId)?.agentPrompt?.reactionGuidance;
+  const resolve =
+    params.promptRuntime !== undefined
+      ? params.promptRuntime.reactionGuidance
+      : getChannelPlugin(channelId)?.agentPrompt?.reactionGuidance;
   if (!resolve) {
     return undefined;
   }

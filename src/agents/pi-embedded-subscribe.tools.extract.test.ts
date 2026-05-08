@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as channelPlugins from "../channels/plugins/index.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createChannelTestPluginBase, createTestRegistry } from "../test-utils/channel-plugins.js";
 import { extractMessagingToolSend } from "./pi-embedded-subscribe.tools.js";
@@ -118,5 +119,42 @@ describe("extractMessagingToolSend", () => {
     expect(result?.provider).toBe("discord");
     expect(result?.to).toBe("channel:123");
     expect(result?.threadId).toBe("456");
+  });
+
+  it("uses prepared action extractors without resolving channel plugins", () => {
+    const getChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected channel plugin lookup");
+      });
+    const actionExtractorsByToolName = new Map([
+      [
+        "slack",
+        ({ args }: { args: Record<string, unknown> }) => ({
+          to: String(args.channelId ?? ""),
+          accountId: "acct-prepared",
+        }),
+      ],
+    ]);
+
+    try {
+      expect(
+        extractMessagingToolSend(
+          "slack",
+          {
+            channelId: "C123",
+          },
+          actionExtractorsByToolName,
+        ),
+      ).toEqual({
+        tool: "slack",
+        provider: "slack",
+        accountId: "acct-prepared",
+        to: "C123",
+      });
+      expect(getChannelPluginSpy).not.toHaveBeenCalled();
+    } finally {
+      getChannelPluginSpy.mockRestore();
+    }
   });
 });

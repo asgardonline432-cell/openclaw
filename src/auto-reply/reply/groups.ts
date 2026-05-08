@@ -11,6 +11,7 @@ import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
 import { normalizeGroupActivation } from "../group-activation.js";
 import type { TemplateContext } from "../templating.js";
+import type { ReplyChannelRuntime } from "./channel-runtime.js";
 import { extractExplicitGroupId } from "./group-id.js";
 
 const groupsRuntimeLoader = createLazyImportLoader(() => import("./groups.runtime.js"));
@@ -147,10 +148,15 @@ export async function resolveGroupRequireMention(params: {
   cfg: OpenClawConfig;
   ctx: TemplateContext;
   groupResolution?: GroupKeyResolution;
+  runtime?: Pick<ReplyChannelRuntime, "id" | "resolveGroupRequireMention">;
 }): Promise<boolean> {
   const { cfg, ctx, groupResolution } = params;
   const rawChannel = groupResolution?.channel ?? normalizeOptionalString(ctx.Provider);
-  const channel = await resolveRuntimeChannelId(rawChannel);
+  const channel =
+    params.runtime !== undefined
+      ? (normalizeOptionalLowercaseString(params.runtime.id) ??
+        normalizeOptionalLowercaseString(rawChannel))
+      : await resolveRuntimeChannelId(rawChannel);
   if (!channel) {
     return true;
   }
@@ -161,17 +167,27 @@ export async function resolveGroupRequireMention(params: {
     normalizeOptionalString(ctx.GroupChannel) ?? normalizeOptionalString(ctx.GroupSubject);
   const groupSpace = normalizeOptionalString(ctx.GroupSpace);
   let requireMention: boolean | undefined;
-  const runtime = await loadGroupsRuntime();
-  try {
-    requireMention = runtime.getChannelPlugin(channel)?.groups?.resolveRequireMention?.({
+  if (params.runtime !== undefined) {
+    requireMention = params.runtime.resolveGroupRequireMention?.({
       cfg,
       groupId,
       groupChannel,
       groupSpace,
       accountId: ctx.AccountId,
     });
-  } catch {
-    requireMention = undefined;
+  } else {
+    const runtime = await loadGroupsRuntime();
+    try {
+      requireMention = runtime.getChannelPlugin(channel)?.groups?.resolveRequireMention?.({
+        cfg,
+        groupId,
+        groupChannel,
+        groupSpace,
+        accountId: ctx.AccountId,
+      });
+    } catch {
+      requireMention = undefined;
+    }
   }
   if (typeof requireMention === "boolean") {
     return requireMention;
