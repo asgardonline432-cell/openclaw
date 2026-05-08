@@ -1,5 +1,10 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { TSchema } from "typebox";
+import type { PluginMetadataSnapshot } from "../../plugins/plugin-metadata-snapshot.types.js";
+import type {
+  ProviderRuntimePluginHandle,
+  ProviderRuntimePluginLookupParams,
+} from "../../plugins/provider-hook-runtime.js";
 import type { RuntimeWebToolsMetadata } from "../../secrets/runtime-web-tools.types.js";
 
 export type AgentRuntimeTransport = "sse" | "websocket" | "auto";
@@ -71,15 +76,10 @@ export type AgentRuntimeTextTransforms = {
   output?: AgentRuntimeTextReplacement[];
 };
 
-export type AgentRuntimeProviderHandle = {
-  provider: string;
-  config?: AgentRuntimeConfig;
-  workspaceDir?: string;
-  env?: NodeJS.ProcessEnv;
-  applyAutoEnable?: boolean;
-  bundledProviderAllowlistCompat?: boolean;
-  bundledProviderVitestCompat?: boolean;
-};
+export type AgentRuntimeProviderHandle = ProviderRuntimePluginHandle;
+export type AgentRuntimeProviderHandleInput =
+  | ProviderRuntimePluginHandle
+  | ProviderRuntimePluginLookupParams;
 
 export type AgentRuntimeInteractiveButtonStyle = "primary" | "secondary" | "success" | "danger";
 
@@ -284,8 +284,7 @@ export type AgentRuntimePromptPlan = {
   ): string;
 };
 
-// Keep the leaf runtime-plan contract decoupled from plugin metadata internals.
-export type AgentRuntimePreparedMetadataSnapshot = object;
+export type AgentRuntimePreparedMetadataSnapshot = PluginMetadataSnapshot;
 
 export type PreparedOpenClawToolPlanning = {
   metadataSnapshot?: AgentRuntimePreparedMetadataSnapshot;
@@ -376,7 +375,7 @@ export type BuildAgentRuntimeDeliveryPlanParams = {
   agentDir?: string;
   provider: string;
   modelId: string;
-  providerRuntimeHandle?: AgentRuntimeProviderHandle;
+  providerRuntimeHandle?: AgentRuntimeProviderHandleInput;
 };
 
 export type BuildAgentRuntimePlanParams = {
@@ -396,5 +395,5 @@ export type BuildAgentRuntimePlanParams = {
   thinkingLevel?: AgentRuntimeThinkLevel;
   extraParamsOverride?: Record<string, unknown>;
   resolvedTransport?: AgentRuntimeTransport;
-  providerRuntimeHandle?: AgentRuntimeProviderHandle;
+  providerRuntimeHandle?: AgentRuntimeProviderHandleInput;
 };

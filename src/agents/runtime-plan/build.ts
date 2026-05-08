@@ -30,6 +30,7 @@ import type {
   AgentRuntimeDeliveryPlan,
   AgentRuntimeOutcomePlan,
   AgentRuntimePlan,
+  AgentRuntimeProviderHandleInput,
   BuildAgentRuntimeDeliveryPlanParams,
   BuildAgentRuntimePlanParams,
 } from "./types.js";
@@ -59,7 +60,7 @@ function asThinkLevel(value: BuildAgentRuntimePlanParams["thinkingLevel"]): Thin
 }
 
 function isProviderRuntimePluginHandle(
-  value: BuildAgentRuntimePlanParams["providerRuntimeHandle"] | ProviderRuntimePluginHandle,
+  value: AgentRuntimeProviderHandleInput | undefined,
 ): value is ProviderRuntimePluginHandle {
   return value !== undefined && "plugin" in value;
 }

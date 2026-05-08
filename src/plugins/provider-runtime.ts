@@ -183,9 +183,13 @@ export function runProviderDynamicModel(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderResolveDynamicModelContext;
 }): ProviderRuntimeModel | undefined {
-  return resolveProviderRuntimePlugin(params)?.resolveDynamicModel?.(params.context) ?? undefined;
+  return (
+    ensureProviderRuntimePluginHandle(params).plugin?.resolveDynamicModel?.(params.context) ??
+    undefined
+  );
 }
 
 export function resolveProviderSystemPromptContribution(params: {
@@ -277,9 +281,10 @@ export async function prepareProviderDynamicModel(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderPrepareDynamicModelContext;
 }): Promise<void> {
-  await resolveProviderRuntimePlugin(params)?.prepareDynamicModel?.(params.context);
+  await ensureProviderRuntimePluginHandle(params).plugin?.prepareDynamicModel?.(params.context);
 }
 
 export function shouldPreferProviderRuntimeResolvedModel(params: {
@@ -287,10 +292,13 @@ export function shouldPreferProviderRuntimeResolvedModel(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderPreferRuntimeResolvedModelContext;
 }): boolean {
   return (
-    resolveProviderRuntimePlugin(params)?.preferRuntimeResolvedModel?.(params.context) ?? false
+    ensureProviderRuntimePluginHandle(params).plugin?.preferRuntimeResolvedModel?.(
+      params.context,
+    ) ?? false
   );
 }
 
@@ -299,6 +307,7 @@ export function normalizeProviderResolvedModelWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: {
     config?: OpenClawConfig;
     agentDir?: string;
@@ -309,7 +318,8 @@ export function normalizeProviderResolvedModelWithPlugin(params: {
   };
 }): ProviderRuntimeModel | undefined {
   return (
-    resolveProviderRuntimePlugin(params)?.normalizeResolvedModel?.(params.context) ?? undefined
+    ensureProviderRuntimePluginHandle(params).plugin?.normalizeResolvedModel?.(params.context) ??
+    undefined
   );
 }
 
@@ -318,9 +328,10 @@ function resolveProviderCompatHookPlugins(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
 }): ProviderPlugin[] {
-  const candidates = resolveProviderPluginsForHooks(params);
-  const owner = resolveProviderRuntimePlugin(params);
+  const owner = ensureProviderRuntimePluginHandle(params).plugin;
+  const candidates = params.runtimeHandle ? [] : resolveProviderPluginsForHooks(params);
   if (!owner) {
     return candidates;
   }
@@ -362,6 +373,7 @@ export function applyProviderResolvedModelCompatWithPlugins(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderNormalizeResolvedModelContext;
 }): ProviderRuntimeModel | undefined {
   let nextModel = params.context.model;
@@ -391,6 +403,7 @@ export function applyProviderResolvedTransportWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderNormalizeResolvedModelContext;
 }): ProviderRuntimeModel | undefined {
   const normalized = normalizeProviderTransportWithPlugin({
@@ -398,6 +411,7 @@ export function applyProviderResolvedTransportWithPlugin(params: {
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
+    runtimeHandle: params.runtimeHandle,
     context: {
       provider: params.context.provider,
       api: params.context.model.api,
@@ -426,9 +440,10 @@ export function normalizeProviderModelIdWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderNormalizeModelIdContext;
 }): string | undefined {
-  const plugin = resolveProviderRuntimePlugin(params);
+  const plugin = ensureProviderRuntimePluginHandle(params).plugin;
   return (
     normalizeOptionalString(plugin?.normalizeModelId?.(params.context)) ??
     normalizeProviderModelIdWithManifest(params)
@@ -440,15 +455,19 @@ export function normalizeProviderTransportWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderNormalizeTransportContext;
 }): { api?: string | null; baseUrl?: string } | undefined {
   const hasTransportChange = (normalized: { api?: string | null; baseUrl?: string }) =>
     (normalized.api ?? params.context.api) !== params.context.api ||
     (normalized.baseUrl ?? params.context.baseUrl) !== params.context.baseUrl;
-  const matchedPlugin = resolveProviderRuntimePlugin(params);
+  const matchedPlugin = ensureProviderRuntimePluginHandle(params).plugin;
   const normalizedMatched = matchedPlugin?.normalizeTransport?.(params.context);
   if (normalizedMatched && hasTransportChange(normalizedMatched)) {
     return normalizedMatched;
+  }
+  if (params.runtimeHandle) {
+    return undefined;
   }
 
   for (const candidate of resolveProviderPluginsForHooks(params)) {
@@ -627,10 +646,12 @@ export function resolveProviderTransportTurnStateWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderResolveTransportTurnStateContext;
 }): ProviderTransportTurnState | undefined {
   return (
-    resolveProviderRuntimePlugin(params)?.resolveTransportTurnState?.(params.context) ?? undefined
+    ensureProviderRuntimePluginHandle(params).plugin?.resolveTransportTurnState?.(params.context) ??
+    undefined
   );
 }
 
@@ -639,11 +660,13 @@ export function resolveProviderWebSocketSessionPolicyWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderResolveWebSocketSessionPolicyContext;
 }): ProviderWebSocketSessionPolicy | undefined {
   return (
-    resolveProviderRuntimePlugin(params)?.resolveWebSocketSessionPolicy?.(params.context) ??
-    undefined
+    ensureProviderRuntimePluginHandle(params).plugin?.resolveWebSocketSessionPolicy?.(
+      params.context,
+    ) ?? undefined
   );
 }
 
@@ -652,9 +675,12 @@ export async function createProviderEmbeddingProvider(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderCreateEmbeddingProviderContext;
 }) {
-  return await resolveProviderRuntimePlugin(params)?.createEmbeddingProvider?.(params.context);
+  return await ensureProviderRuntimePluginHandle(params).plugin?.createEmbeddingProvider?.(
+    params.context,
+  );
 }
 
 export async function prepareProviderRuntimeAuth(params: {
@@ -675,9 +701,10 @@ export async function resolveProviderUsageAuthWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderResolveUsageAuthContext;
 }) {
-  return await resolveProviderRuntimePlugin(params)?.resolveUsageAuth?.(params.context);
+  return await ensureProviderRuntimePluginHandle(params).plugin?.resolveUsageAuth?.(params.context);
 }
 
 export async function resolveProviderUsageSnapshotWithPlugin(params: {
@@ -685,9 +712,12 @@ export async function resolveProviderUsageSnapshotWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderFetchUsageSnapshotContext;
 }) {
-  return await resolveProviderRuntimePlugin(params)?.fetchUsageSnapshot?.(params.context);
+  return await ensureProviderRuntimePluginHandle(params).plugin?.fetchUsageSnapshot?.(
+    params.context,
+  );
 }
 
 export function matchesProviderContextOverflowWithPlugin(params: {
@@ -695,13 +725,18 @@ export function matchesProviderContextOverflowWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderFailoverErrorContext;
 }): boolean {
-  const plugins = params.provider
-    ? [resolveProviderRuntimePlugin({ ...params, provider: params.provider })].filter(
-        (plugin): plugin is ProviderPlugin => Boolean(plugin),
-      )
-    : resolveProviderPluginsForHooks(params);
+  const plugins = params.runtimeHandle
+    ? [
+        ensureProviderRuntimePluginHandle({ ...params, provider: params.provider ?? "" }).plugin,
+      ].filter((plugin): plugin is ProviderPlugin => Boolean(plugin))
+    : params.provider
+      ? [resolveProviderRuntimePlugin({ ...params, provider: params.provider })].filter(
+          (plugin): plugin is ProviderPlugin => Boolean(plugin),
+        )
+      : resolveProviderPluginsForHooks(params);
   for (const plugin of plugins) {
     if (plugin.matchesContextOverflowError?.(params.context)) {
       return true;
@@ -715,13 +750,18 @@ export function classifyProviderFailoverReasonWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderFailoverErrorContext;
 }) {
-  const plugins = params.provider
-    ? [resolveProviderRuntimePlugin({ ...params, provider: params.provider })].filter(
-        (plugin): plugin is ProviderPlugin => Boolean(plugin),
-      )
-    : resolveProviderPluginsForHooks(params);
+  const plugins = params.runtimeHandle
+    ? [
+        ensureProviderRuntimePluginHandle({ ...params, provider: params.provider ?? "" }).plugin,
+      ].filter((plugin): plugin is ProviderPlugin => Boolean(plugin))
+    : params.provider
+      ? [resolveProviderRuntimePlugin({ ...params, provider: params.provider })].filter(
+          (plugin): plugin is ProviderPlugin => Boolean(plugin),
+        )
+      : resolveProviderPluginsForHooks(params);
   for (const plugin of plugins) {
     const reason = plugin.classifyFailoverReason?.(params.context);
     if (reason) {
@@ -736,9 +776,10 @@ export function formatProviderAuthProfileApiKeyWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: AuthProfileCredential;
 }) {
-  return resolveProviderRuntimePlugin(params)?.formatApiKey?.(params.context);
+  return ensureProviderRuntimePluginHandle(params).plugin?.formatApiKey?.(params.context);
 }
 
 export async function refreshProviderOAuthCredentialWithPlugin(params: {
@@ -746,9 +787,10 @@ export async function refreshProviderOAuthCredentialWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: OAuthCredential;
 }) {
-  return await resolveProviderRuntimePlugin(params)?.refreshOAuth?.(params.context);
+  return await ensureProviderRuntimePluginHandle(params).plugin?.refreshOAuth?.(params.context);
 }
 
 export async function buildProviderAuthDoctorHintWithPlugin(params: {
@@ -756,9 +798,12 @@ export async function buildProviderAuthDoctorHintWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderAuthDoctorHintContext;
 }) {
-  return await resolveProviderRuntimePlugin(params)?.buildAuthDoctorHint?.(params.context);
+  return await ensureProviderRuntimePluginHandle(params).plugin?.buildAuthDoctorHint?.(
+    params.context,
+  );
 }
 
 export function resolveProviderCacheTtlEligibility(params: {
@@ -777,9 +822,10 @@ export function resolveProviderBinaryThinking(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderThinkingPolicyContext;
 }) {
-  return resolveProviderRuntimePlugin(params)?.isBinaryThinking?.(params.context);
+  return ensureProviderRuntimePluginHandle(params).plugin?.isBinaryThinking?.(params.context);
 }
 
 export function resolveProviderXHighThinking(params: {
@@ -787,9 +833,10 @@ export function resolveProviderXHighThinking(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderThinkingPolicyContext;
 }) {
-  return resolveProviderRuntimePlugin(params)?.supportsXHighThinking?.(params.context);
+  return ensureProviderRuntimePluginHandle(params).plugin?.supportsXHighThinking?.(params.context);
 }
 
 export function resolveProviderThinkingProfile(params: {
@@ -797,13 +844,14 @@ export function resolveProviderThinkingProfile(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderDefaultThinkingPolicyContext;
 }): ProviderThinkingProfile | null | undefined {
   const bundledSurface = resolveBundledProviderPolicySurface(params.provider);
   if (bundledSurface?.resolveThinkingProfile) {
     return bundledSurface.resolveThinkingProfile(params.context) ?? undefined;
   }
-  return resolveProviderRuntimePlugin(params)?.resolveThinkingProfile?.(params.context);
+  return ensureProviderRuntimePluginHandle(params).plugin?.resolveThinkingProfile?.(params.context);
 }
 
 export function resolveProviderDefaultThinkingLevel(params: {
@@ -811,9 +859,12 @@ export function resolveProviderDefaultThinkingLevel(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderDefaultThinkingPolicyContext;
 }) {
-  return resolveProviderRuntimePlugin(params)?.resolveDefaultThinkingLevel?.(params.context);
+  return ensureProviderRuntimePluginHandle(params).plugin?.resolveDefaultThinkingLevel?.(
+    params.context,
+  );
 }
 
 export function applyProviderConfigDefaultsWithPlugin(params: {
@@ -821,13 +872,17 @@ export function applyProviderConfigDefaultsWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderApplyConfigDefaultsContext;
 }) {
   const bundledSurface = resolveBundledProviderPolicySurface(params.provider);
   if (bundledSurface?.applyConfigDefaults) {
     return bundledSurface.applyConfigDefaults(params.context) ?? undefined;
   }
-  return resolveProviderRuntimePlugin(params)?.applyConfigDefaults?.(params.context) ?? undefined;
+  return (
+    ensureProviderRuntimePluginHandle(params).plugin?.applyConfigDefaults?.(params.context) ??
+    undefined
+  );
 }
 
 export function resolveProviderModernModelRef(params: {
@@ -835,9 +890,10 @@ export function resolveProviderModernModelRef(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderModernModelPolicyContext;
 }) {
-  return resolveProviderRuntimePlugin(params)?.isModernModelRef?.(params.context);
+  return ensureProviderRuntimePluginHandle(params).plugin?.isModernModelRef?.(params.context);
 }
 
 export function buildProviderMissingAuthMessageWithPlugin(params: {
@@ -845,10 +901,12 @@ export function buildProviderMissingAuthMessageWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderBuildMissingAuthMessageContext;
 }) {
   return (
-    resolveProviderRuntimePlugin(params)?.buildMissingAuthMessage?.(params.context) ?? undefined
+    ensureProviderRuntimePluginHandle(params).plugin?.buildMissingAuthMessage?.(params.context) ??
+    undefined
   );
 }
 
@@ -857,9 +915,13 @@ export function buildProviderUnknownModelHintWithPlugin(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
+  runtimeHandle?: ProviderRuntimePluginHandle;
   context: ProviderBuildUnknownModelHintContext;
 }) {
-  return resolveProviderRuntimePlugin(params)?.buildUnknownModelHint?.(params.context) ?? undefined;
+  return (
+    ensureProviderRuntimePluginHandle(params).plugin?.buildUnknownModelHint?.(params.context) ??
+    undefined
+  );
 }
 
 export function resolveProviderSyntheticAuthWithPlugin(params: {

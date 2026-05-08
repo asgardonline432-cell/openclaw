@@ -182,7 +182,12 @@ export async function resolveSessionAuthProfileOverrideState(params: {
   }
 
   // Explicit user picks should survive provider rotation order changes.
-  if (current && resolvedOrder.length > 0 && !resolvedOrder.includes(current) && source !== "user") {
+  if (
+    current &&
+    resolvedOrder.length > 0 &&
+    !resolvedOrder.includes(current) &&
+    source !== "user"
+  ) {
     await clearSessionAuthProfileOverride({ sessionEntry, sessionStore, sessionKey, storePath });
     current = undefined;
   }
@@ -270,6 +275,7 @@ export async function resolveSessionAuthProfileOverride(params: {
   sessionKey?: string;
   storePath?: string;
   isNewSession: boolean;
+  acceptedProviderIds?: string[];
 }): Promise<string | undefined> {
   return (await resolveSessionAuthProfileOverrideState(params)).authProfileId;
 }

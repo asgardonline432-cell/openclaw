@@ -90,6 +90,7 @@ let prepareProviderDynamicModel: typeof import("./provider-runtime.js").prepareP
 let prepareProviderRuntimeAuth: typeof import("./provider-runtime.js").prepareProviderRuntimeAuth;
 let refreshProviderOAuthCredentialWithPlugin: typeof import("./provider-runtime.js").refreshProviderOAuthCredentialWithPlugin;
 let resolveProviderRuntimePlugin: typeof import("./provider-runtime.js").resolveProviderRuntimePlugin;
+let shouldPreferProviderRuntimeResolvedModel: typeof import("./provider-runtime.js").shouldPreferProviderRuntimeResolvedModel;
 let providerRuntimeTesting: typeof import("./provider-runtime.js").__testing;
 let runProviderDynamicModel: typeof import("./provider-runtime.js").runProviderDynamicModel;
 let validateProviderReplayTurnsWithPlugin: typeof import("./provider-runtime.js").validateProviderReplayTurnsWithPlugin;
@@ -343,6 +344,7 @@ describe("provider-runtime", () => {
       prepareProviderRuntimeAuth,
       refreshProviderOAuthCredentialWithPlugin,
       resolveProviderRuntimePlugin,
+      shouldPreferProviderRuntimeResolvedModel,
       __testing: providerRuntimeTesting,
       runProviderDynamicModel,
       validateProviderReplayTurnsWithPlugin,
@@ -2104,6 +2106,88 @@ describe("provider-runtime", () => {
       resolveUsageAuth,
       fetchUsageSnapshot,
     );
+  });
+
+  it("uses a prepared runtime handle for selected-provider helpers", async () => {
+    const prepareDynamicModel = vi.fn();
+    const plugin = {
+      id: DEMO_PROVIDER_ID,
+      label: "Demo",
+      auth: [],
+      resolveDynamicModel: () => MODEL,
+      prepareDynamicModel,
+      preferRuntimeResolvedModel: () => true,
+      normalizeResolvedModel: ({ model }) => ({ ...model, name: "handled model" }),
+      contributeResolvedModelCompat: () => ({ handledByRuntimeHandle: true }),
+      normalizeTransport: () => ({
+        api: "openai-responses",
+        baseUrl: "https://handled.example",
+      }),
+      buildUnknownModelHint: () => "Use demo/handled.",
+    } satisfies ProviderPlugin;
+    const runtimeHandle = { provider: DEMO_PROVIDER_ID, plugin };
+
+    expect(
+      runProviderDynamicModel({
+        provider: DEMO_PROVIDER_ID,
+        runtimeHandle,
+        context: createDemoRuntimeContext({
+          modelRegistry: EMPTY_MODEL_REGISTRY,
+        }),
+      }),
+    ).toBe(MODEL);
+    await prepareProviderDynamicModel({
+      provider: DEMO_PROVIDER_ID,
+      runtimeHandle,
+      context: createDemoRuntimeContext({
+        modelRegistry: EMPTY_MODEL_REGISTRY,
+      }),
+    });
+    expect(
+      shouldPreferProviderRuntimeResolvedModel({
+        provider: DEMO_PROVIDER_ID,
+        runtimeHandle,
+        context: createDemoRuntimeContext({}),
+      }),
+    ).toBe(true);
+    expect(
+      normalizeProviderResolvedModelWithPlugin({
+        provider: DEMO_PROVIDER_ID,
+        runtimeHandle,
+        context: createDemoResolvedModelContext({}),
+      }),
+    ).toMatchObject({ name: "handled model" });
+    expect(
+      applyProviderResolvedModelCompatWithPlugins({
+        provider: DEMO_PROVIDER_ID,
+        runtimeHandle,
+        context: createDemoResolvedModelContext({}),
+      }),
+    ).toMatchObject({ compat: { handledByRuntimeHandle: true } });
+    expect(
+      normalizeProviderTransportWithPlugin({
+        provider: DEMO_PROVIDER_ID,
+        runtimeHandle,
+        context: {
+          provider: DEMO_PROVIDER_ID,
+          api: "openai-completions",
+          baseUrl: "https://demo.example",
+        },
+      }),
+    ).toEqual({ api: "openai-responses", baseUrl: "https://handled.example" });
+    expect(
+      buildProviderUnknownModelHintWithPlugin({
+        provider: DEMO_PROVIDER_ID,
+        runtimeHandle,
+        context: {
+          provider: DEMO_PROVIDER_ID,
+          modelId: MODEL.id,
+        },
+      }),
+    ).toBe("Use demo/handled.");
+
+    expect(prepareDynamicModel).toHaveBeenCalledTimes(1);
+    expect(resolvePluginProvidersMock).not.toHaveBeenCalled();
   });
 
   it("matches provider hooks through a custom provider's native api owner", () => {

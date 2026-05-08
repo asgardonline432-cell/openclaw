@@ -121,4 +121,34 @@ describe("resolveModelAsync skipPiDiscovery runtime hooks", () => {
     expect(mocks.prepareProviderDynamicModel).toHaveBeenCalledTimes(1);
     expect(mocks.runProviderDynamicModel).toHaveBeenCalledTimes(1);
   });
+
+  it("passes a prepared provider runtime handle through skipPiDiscovery hooks", async () => {
+    const runtimeHandle = {
+      provider: "ollama",
+      plugin: { id: "ollama", label: "Ollama", auth: [] },
+    };
+
+    const first = await resolveModelAsync("ollama", "llama3.2:handled", "/tmp/agent", undefined, {
+      skipPiDiscovery: true,
+      runtimeHandle,
+    });
+    const second = await resolveModelAsync("ollama", "llama3.2:handled", "/tmp/agent", undefined, {
+      skipPiDiscovery: true,
+      runtimeHandle,
+    });
+
+    expect(first.model).toMatchObject({ provider: "ollama", id: "llama3.2:handled" });
+    expect(second.model).toMatchObject({ provider: "ollama", id: "llama3.2:handled" });
+    expect(mocks.prepareProviderDynamicModel).toHaveBeenCalledTimes(2);
+    expect(mocks.prepareProviderDynamicModel).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeHandle }),
+    );
+    expect(mocks.runProviderDynamicModel).toHaveBeenCalledTimes(2);
+    expect(mocks.runProviderDynamicModel).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeHandle }),
+    );
+    expect(mocks.normalizeProviderResolvedModelWithPlugin).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeHandle }),
+    );
+  });
 });

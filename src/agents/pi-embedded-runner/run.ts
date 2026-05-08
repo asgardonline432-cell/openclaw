@@ -518,6 +518,13 @@ export async function runEmbeddedPiAgent(
       });
       startupStages.mark(EmbeddedRunStageName.harnessPrep);
       const pluginHarnessOwnsTransport = agentHarness.id !== "pi";
+      const providerRuntimeHandle = resolveProviderRuntimePluginHandle({
+        provider,
+        config: params.config,
+        workspaceDir: resolvedWorkspace,
+        env: process.env,
+      });
+      startupStages.mark(EmbeddedRunStageName.providerRuntimeLookup);
       const modelResolution = await resolvePreparedRuntimeModelAsync(
         provider,
         modelId,
@@ -528,6 +535,7 @@ export async function runEmbeddedPiAgent(
           // first generating PI models.json. This keeps one-shot model runs from
           // blocking on unrelated provider discovery.
           workspaceDir: resolvedWorkspace,
+          runtimeHandle: providerRuntimeHandle,
         },
       );
       const { model, error, authStorage, modelRegistry } = modelResolution;
@@ -556,12 +564,6 @@ export async function runEmbeddedPiAgent(
       let effectiveModel = resolvedRuntimeModel.effectiveModel;
       notifyExecutionPhase("model_resolution", { provider, model: modelId });
       startupStages.mark(EmbeddedRunStageName.modelSelection);
-      const providerRuntimeHandle = resolveProviderRuntimePluginHandle({
-        provider: runtimeModel.provider,
-        config: params.config,
-        env: process.env,
-      });
-      startupStages.mark(EmbeddedRunStageName.providerRuntimeLookup);
 
       const {
         authStore,
