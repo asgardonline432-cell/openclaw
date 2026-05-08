@@ -1,6 +1,5 @@
 import type { MsgContext } from "../../auto-reply/templating.js";
 import type { ChatType } from "../../channels/chat-type.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelId } from "../../channels/plugins/types.public.js";
 import {
   recordSessionMetaFromInbound,
@@ -11,6 +10,10 @@ import type { RoutePeer } from "../../routing/resolve-route.js";
 import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { buildOutboundBaseSessionKey } from "./base-session-key.js";
+import {
+  resolveOutboundChannelRuntime,
+  type OutboundChannelRuntime,
+} from "./channel-resolution.js";
 import type { ResolvedMessagingTarget } from "./target-resolver.js";
 
 export type OutboundSessionRoute = {
@@ -33,11 +36,8 @@ export type ResolveOutboundSessionRouteParams = {
   resolvedTarget?: ResolvedMessagingTarget;
   replyToId?: string | null;
   threadId?: string | number | null;
+  runtime?: Pick<OutboundChannelRuntime, "chatTypes" | "resolveOutboundSessionRoute">;
 };
-
-function resolveOutboundChannelPlugin(channel: ChannelId) {
-  return getChannelPlugin(channel);
-}
 
 function stripProviderPrefix(raw: string, channel: string): string {
   const trimmed = raw.trim();
@@ -56,6 +56,7 @@ function stripKindPrefix(raw: string): string {
 function inferPeerKind(params: {
   channel: ChannelId;
   resolvedTarget?: ResolvedMessagingTarget;
+  runtime?: Pick<OutboundChannelRuntime, "chatTypes">;
 }): ChatType {
   const resolvedKind = params.resolvedTarget?.kind;
   if (resolvedKind === "user") {
@@ -65,8 +66,7 @@ function inferPeerKind(params: {
     return "channel";
   }
   if (resolvedKind === "group") {
-    const plugin = resolveOutboundChannelPlugin(params.channel);
-    const chatTypes = plugin?.capabilities?.chatTypes ?? [];
+    const chatTypes = params.runtime?.chatTypes ?? [];
     const supportsChannel = chatTypes.includes("channel");
     const supportsGroup = chatTypes.includes("group");
     if (supportsChannel && !supportsGroup) {
@@ -87,6 +87,7 @@ function resolveFallbackSession(
   const peerKind = inferPeerKind({
     channel: params.channel,
     resolvedTarget: params.resolvedTarget,
+    runtime: params.runtime,
   });
   const peerId = stripKindPrefix(trimmed);
   if (!peerId) {
@@ -123,9 +124,14 @@ export async function resolveOutboundSessionRoute(
   if (!target) {
     return null;
   }
-  const nextParams = { ...params, target };
-  const resolver = resolveOutboundChannelPlugin(params.channel)?.messaging
-    ?.resolveOutboundSessionRoute;
+  const runtime =
+    params.runtime ??
+    resolveOutboundChannelRuntime({
+      channel: params.channel,
+      cfg: params.cfg,
+    });
+  const nextParams = { ...params, target, runtime };
+  const resolver = runtime?.resolveOutboundSessionRoute;
   if (resolver) {
     return await resolver(nextParams);
   }

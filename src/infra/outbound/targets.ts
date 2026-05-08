@@ -20,9 +20,12 @@ import {
 } from "../../utils/message-channel.js";
 import {
   normalizeDeliverableOutboundChannel,
+  resolveOutboundChannelRuntime,
   resolveOutboundChannelPlugin,
+  type OutboundChannelRuntime,
 } from "./channel-resolution.js";
 import {
+  resolveOutboundTargetWithRuntime,
   resolveOutboundTargetWithPlugin,
   type OutboundTargetResolution,
 } from "./targets-resolve-shared.js";
@@ -59,7 +62,32 @@ export function resolveOutboundTarget(params: {
   cfg?: OpenClawConfig;
   accountId?: string | null;
   mode?: ChannelOutboundTargetMode;
+  runtime?: OutboundChannelRuntime;
 }): OutboundTargetResolution {
+  const runtime =
+    params.runtime ??
+    resolveOutboundChannelRuntime({
+      channel: params.channel,
+      cfg: params.cfg,
+    });
+  if (runtime) {
+    return (
+      resolveOutboundTargetWithRuntime({
+        runtime,
+        target: params,
+        onMissingRuntime: () =>
+          params.channel === INTERNAL_MESSAGE_CHANNEL
+            ? undefined
+            : {
+                ok: false,
+                error: new Error(`Unsupported channel: ${params.channel}`),
+              },
+      }) ?? {
+        ok: false,
+        error: new Error(`Unsupported channel: ${params.channel}`),
+      }
+    );
+  }
   return (
     resolveOutboundTargetWithPlugin({
       plugin: resolveOutboundChannelPlugin({
@@ -192,6 +220,7 @@ export function resolveHeartbeatDeliveryTarget(params: {
     channel: resolvedTarget.channel,
     to: resolved.to,
     sessionChatType: sessionChatTypeHint,
+    runtime: resolveOutboundChannelRuntime({ channel: resolvedTarget.channel, cfg }),
   });
   if (deliveryChatType === "direct" && heartbeat?.directPolicy === "block") {
     return buildNoHeartbeatDeliveryTarget({
@@ -262,6 +291,7 @@ function buildNoHeartbeatDeliveryTarget(params: {
 function inferChatTypeFromTarget(params: {
   channel: DeliverableMessageChannel;
   to: string;
+  runtime?: Pick<OutboundChannelRuntime, "inferTargetChatType">;
 }): ChatType | undefined {
   const to = params.to.trim();
   if (!to) {
@@ -277,17 +307,18 @@ function inferChatTypeFromTarget(params: {
   if (/^group:/i.test(to)) {
     return "group";
   }
-  return (
-    resolveOutboundChannelPlugin({
-      channel: params.channel,
-    })?.messaging?.inferTargetChatType?.({ to }) ?? undefined
-  );
+  return params.runtime
+    ? (params.runtime.inferTargetChatType?.({ to }) ?? undefined)
+    : (resolveOutboundChannelPlugin({
+        channel: params.channel,
+      })?.messaging?.inferTargetChatType?.({ to }) ?? undefined);
 }
 
 function resolveHeartbeatDeliveryChatType(params: {
   channel: DeliverableMessageChannel;
   to: string;
   sessionChatType?: ChatType;
+  runtime?: Pick<OutboundChannelRuntime, "inferTargetChatType">;
 }): ChatType | undefined {
   if (params.sessionChatType) {
     return params.sessionChatType;
@@ -295,6 +326,7 @@ function resolveHeartbeatDeliveryChatType(params: {
   return inferChatTypeFromTarget({
     channel: params.channel,
     to: params.to,
+    runtime: params.runtime,
   });
 }
 
@@ -307,10 +339,9 @@ function shouldReuseHeartbeatRouteThreadId(params: {
   resolvedTarget: SessionDeliveryTarget;
 }): boolean {
   const channel = params.resolvedTarget.channel;
-  const messaging =
-    channel && resolveOutboundChannelPlugin({ channel, cfg: params.cfg })?.messaging;
+  const runtime = channel ? resolveOutboundChannelRuntime({ channel, cfg: params.cfg }) : undefined;
   return (
-    messaging?.preserveHeartbeatThreadIdForGroupRoute === true &&
+    runtime?.preserveHeartbeatThreadIdForGroupRoute === true &&
     params.resolvedTarget.threadId == null &&
     params.target === "last" &&
     !params.heartbeat?.to &&

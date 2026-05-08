@@ -3,8 +3,7 @@ import { REPLY_RUN_STILL_SHUTTING_DOWN_TEXT } from "../auto-reply/reply/get-repl
 import { finalizeInboundContext } from "../auto-reply/reply/inbound-context.js";
 import { dispatchReplyWithBufferedBlockDispatcher } from "../auto-reply/reply/provider-dispatcher.js";
 import type { ChatType } from "../channels/chat-type.js";
-import { sendDurableMessageBatch } from "../channels/message/runtime.js";
-import { getChannelPlugin, normalizeChannelId } from "../channels/plugins/index.js";
+import { normalizeChannelId } from "../channels/plugins/index.js";
 import { recordInboundSession } from "../channels/session.js";
 import { dispatchAssembledChannelTurn } from "../channels/turn/kernel.js";
 import type { CliDeps } from "../cli/deps.types.js";
@@ -12,6 +11,8 @@ import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
 import { parseSessionThreadInfo } from "../config/sessions/thread-info.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { requestHeartbeat } from "../infra/heartbeat-wake.js";
+import { resolveOutboundChannelRuntime } from "../infra/outbound/channel-resolution.js";
+import { deliverOutboundPayloads } from "../infra/outbound/deliver.js";
 import { ackDelivery, enqueueDelivery, failDelivery } from "../infra/outbound/delivery-queue.js";
 import { buildOutboundSessionContext } from "../infra/outbound/session-context.js";
 import { resolveOutboundTarget } from "../infra/outbound/targets.js";
@@ -124,7 +125,7 @@ async function deliverRestartSentinelNotice(params: {
   }).catch(() => null);
   for (let attempt = 1; attempt <= OUTBOUND_MAX_ATTEMPTS; attempt += 1) {
     try {
-      const send = await sendDurableMessageBatch({
+      const results = await deliverOutboundPayloads({
         cfg: params.cfg,
         channel: params.channel,
         to: params.to,
@@ -137,10 +138,6 @@ async function deliverRestartSentinelNotice(params: {
         bestEffort: false,
         skipQueue: true,
       });
-      if (send.status === "failed" || send.status === "partial_failed") {
-        throw send.error;
-      }
-      const results = send.status === "sent" ? send.results : [];
       if (results.length > 0) {
         if (queueId) {
           await ackDelivery(queueId).catch(() => {});
@@ -365,7 +362,7 @@ async function deliverQueuedSessionDelivery(params: {
             }
           : false,
       deliver: async (payload) => {
-        const send = await sendDurableMessageBatch({
+        const results = await deliverOutboundPayloads({
           cfg,
           channel: route.channel,
           to: route.to,
@@ -380,10 +377,6 @@ async function deliverQueuedSessionDelivery(params: {
           deps: params.deps,
           bestEffort: false,
         });
-        if (send.status === "failed" || send.status === "partial_failed") {
-          throw send.error;
-        }
-        const results = send.status === "sent" ? send.results : [];
         if (results.length === 0) {
           throw new Error("restart continuation delivery returned no results");
         }
@@ -568,8 +561,9 @@ async function loadRestartSentinelStartupTask(params: {
       });
       if (resolved.ok) {
         resolvedTo = resolved.to;
+        const outboundRuntime = resolveOutboundChannelRuntime({ channel, cfg });
         const replyTransport =
-          getChannelPlugin(channel)?.threading?.resolveReplyTransport?.({
+          outboundRuntime?.resolveReplyTransport?.({
             cfg,
             accountId: origin?.accountId,
             threadId,

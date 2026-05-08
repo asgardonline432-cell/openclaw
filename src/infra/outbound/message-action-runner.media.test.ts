@@ -22,12 +22,14 @@ const onePixelPng = Buffer.from(
 
 const channelResolutionMocks = vi.hoisted(() => ({
   resolveOutboundChannelPlugin: vi.fn(),
+  resolveOutboundChannelRuntime: vi.fn(),
   executeSendAction: vi.fn(),
   executePollAction: vi.fn(),
 }));
 
 vi.mock("./channel-resolution.js", () => ({
   resolveOutboundChannelPlugin: channelResolutionMocks.resolveOutboundChannelPlugin,
+  resolveOutboundChannelRuntime: channelResolutionMocks.resolveOutboundChannelRuntime,
   resetOutboundChannelResolutionStateForTest: vi.fn(),
 }));
 
@@ -211,6 +213,25 @@ describe("runMessageAction media behavior", () => {
     channelResolutionMocks.resolveOutboundChannelPlugin.mockImplementation(
       ({ channel }: { channel: string }) =>
         getActivePluginRegistry()?.channels.find((entry) => entry?.plugin?.id === channel)?.plugin,
+    );
+    channelResolutionMocks.resolveOutboundChannelRuntime.mockReset();
+    channelResolutionMocks.resolveOutboundChannelRuntime.mockImplementation(
+      ({ channel }: { channel: string }) => {
+        const plugin = channelResolutionMocks.resolveOutboundChannelPlugin({ channel });
+        return plugin
+          ? {
+              id: plugin.id,
+              label: plugin.meta?.label ?? plugin.id,
+              chatTypes: plugin.capabilities?.chatTypes ?? [],
+              actions: plugin.actions,
+              outbound: plugin.outbound,
+              normalizeTarget: plugin.messaging?.normalizeTarget,
+              looksLikeTargetId: plugin.messaging?.targetResolver?.looksLikeId,
+              resolveMessagingTargetFallback: plugin.messaging?.targetResolver?.resolveTarget,
+              resolveAutoThreadId: plugin.threading?.resolveAutoThreadId,
+            }
+          : undefined;
+      },
     );
     channelResolutionMocks.executeSendAction.mockReset();
     channelResolutionMocks.executeSendAction.mockImplementation(

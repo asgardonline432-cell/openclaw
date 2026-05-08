@@ -5,6 +5,7 @@ import type {
   ChannelThreadingToolContext,
 } from "../../channels/plugins/types.public.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OutboundChannelRuntime } from "./channel-resolution.js";
 import type {
   OutboundSessionRoute,
   ResolveOutboundSessionRouteParams,
@@ -133,6 +134,7 @@ export async function prepareOutboundMirrorRoute(params: {
   currentSessionKey?: string;
   dryRun?: boolean;
   resolvedTarget?: ResolvedMessagingTarget;
+  outboundRuntime?: Pick<OutboundChannelRuntime, "chatTypes" | "resolveOutboundSessionRoute">;
   resolveAutoThreadId?: ResolveAutoThreadId;
   resolveOutboundSessionRoute: (
     params: ResolveOutboundSessionRouteParams,
@@ -167,6 +169,7 @@ export async function prepareOutboundMirrorRoute(params: {
           resolvedTarget: params.resolvedTarget,
           replyToId,
           threadId: resolvedThreadId,
+          runtime: params.outboundRuntime,
         })
       : null;
   if (outboundRoute && params.agentId && !params.dryRun) {

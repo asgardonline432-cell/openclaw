@@ -5,6 +5,7 @@ import { formatCliCommand } from "../../cli/command-format.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel-constants.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
+import type { OutboundChannelRuntime } from "./channel-resolution.js";
 import { validateTargetProviderPrefix } from "./channel-target-prefix.js";
 import { missingTargetError } from "./target-errors.js";
 
@@ -30,6 +31,31 @@ export function resolveOutboundTargetWithPlugin(params: {
   target: ResolveOutboundTargetParams;
   onMissingPlugin?: () => OutboundTargetResolution | undefined;
 }): OutboundTargetResolution | undefined {
+  return resolveOutboundTargetWithRuntime({
+    runtime: params.plugin
+      ? {
+          label: params.plugin.meta?.label ?? params.plugin.id,
+          targetResolverHint: params.plugin.messaging?.targetResolver?.hint,
+          resolveAllowFrom: params.plugin.config?.resolveAllowFrom,
+          resolveDefaultTo: params.plugin.config?.resolveDefaultTo,
+          resolveTarget: params.plugin.outbound?.resolveTarget,
+        }
+      : undefined,
+    target: params.target,
+    onMissingRuntime: params.onMissingPlugin,
+  });
+}
+
+export function resolveOutboundTargetWithRuntime(params: {
+  runtime:
+    | Pick<
+        OutboundChannelRuntime,
+        "label" | "resolveAllowFrom" | "resolveDefaultTo" | "resolveTarget" | "targetResolverHint"
+      >
+    | undefined;
+  target: ResolveOutboundTargetParams;
+  onMissingRuntime?: () => OutboundTargetResolution | undefined;
+}): OutboundTargetResolution | undefined {
   if (params.target.channel === INTERNAL_MESSAGE_CHANNEL) {
     return {
       ok: false,
@@ -37,15 +63,15 @@ export function resolveOutboundTargetWithPlugin(params: {
     };
   }
 
-  const plugin = params.plugin;
-  if (!plugin) {
-    return params.onMissingPlugin?.();
+  const runtime = params.runtime;
+  if (!runtime) {
+    return params.onMissingRuntime?.();
   }
 
   const allowFromRaw =
     params.target.allowFrom ??
-    (params.target.cfg && plugin.config.resolveAllowFrom
-      ? plugin.config.resolveAllowFrom({
+    (params.target.cfg && runtime.resolveAllowFrom
+      ? runtime.resolveAllowFrom({
           cfg: params.target.cfg,
           accountId: params.target.accountId ?? undefined,
         })
@@ -54,8 +80,8 @@ export function resolveOutboundTargetWithPlugin(params: {
 
   const effectiveTo =
     params.target.to?.trim() ||
-    (params.target.cfg && plugin.config.resolveDefaultTo
-      ? plugin.config.resolveDefaultTo({
+    (params.target.cfg && runtime.resolveDefaultTo
+      ? runtime.resolveDefaultTo({
           cfg: params.target.cfg,
           accountId: params.target.accountId ?? undefined,
         })
@@ -68,7 +94,7 @@ export function resolveOutboundTargetWithPlugin(params: {
     return { ok: false, error: targetPrefixError };
   }
 
-  const resolveTarget = plugin.outbound?.resolveTarget;
+  const resolveTarget = runtime.resolveTarget;
   if (resolveTarget) {
     return resolveTarget({
       cfg: params.target.cfg,
@@ -82,9 +108,8 @@ export function resolveOutboundTargetWithPlugin(params: {
   if (effectiveTo) {
     return { ok: true, to: effectiveTo };
   }
-  const hint = plugin.messaging?.targetResolver?.hint;
   return {
     ok: false,
-    error: missingTargetError(plugin.meta.label ?? params.target.channel, hint),
+    error: missingTargetError(runtime.label ?? params.target.channel, runtime.targetResolverHint),
   };
 }

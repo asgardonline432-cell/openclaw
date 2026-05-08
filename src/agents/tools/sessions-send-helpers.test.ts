@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as channelPlugins from "../../channels/plugins/index.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import { createSessionConversationTestRegistry } from "../../test-utils/session-conversation-registry.js";
 import { resolveAnnounceTargetFromKey } from "./sessions-send-helpers.js";
@@ -19,6 +21,31 @@ describe("resolveAnnounceTargetFromKey", () => {
       to: "channel:C123",
       threadId: undefined,
     });
+  });
+
+  it("uses prepared outbound runtime without resolving the channel plugin", () => {
+    const getChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected channel plugin lookup");
+      });
+    const runtime = {
+      id: "slack",
+      label: "Slack",
+      chatTypes: ["group"],
+      resolveSessionTarget: ({ kind, id }) => `prepared:${kind}:${id}`,
+    } satisfies OutboundChannelRuntime;
+
+    try {
+      expect(resolveAnnounceTargetFromKey("agent:main:slack:group:C123", runtime)).toEqual({
+        channel: "slack",
+        to: "prepared:group:C123",
+        threadId: undefined,
+      });
+      expect(getChannelPluginSpy).not.toHaveBeenCalled();
+    } finally {
+      getChannelPluginSpy.mockRestore();
+    }
   });
 
   it("keeps generic topic extraction and plugin normalization for other channels", () => {

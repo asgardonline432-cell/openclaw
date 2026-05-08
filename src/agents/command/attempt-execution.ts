@@ -590,6 +590,7 @@ export function runAgentAttempt(params: {
     trigger: "user",
     messageChannel: params.messageChannel,
     messageProvider: params.opts.messageProvider ?? params.messageChannel,
+    outboundChannelRuntime: params.opts.outboundChannelRuntime,
     agentAccountId: params.runContext.accountId,
     messageTo: params.opts.replyTo ?? params.opts.to,
     messageThreadId: params.opts.threadId,

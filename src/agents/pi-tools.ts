@@ -5,6 +5,7 @@ import type { ModelCompatConfig } from "../config/types.models.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { DiagnosticTraceContext } from "../infra/diagnostic-trace-context.js";
 import { resolveMergedSafeBinProfileFixtures } from "../infra/exec-safe-bin-runtime-policy.js";
+import type { OutboundChannelRuntime } from "../infra/outbound/channel-resolution.js";
 import { logWarn } from "../logger.js";
 import { getPluginToolMeta } from "../plugins/tools.js";
 import { createLazyImportLoader } from "../shared/lazy-promise.js";
@@ -23,6 +24,7 @@ import { execSchema, processSchema } from "./bash-tools.schemas.js";
 import { listChannelAgentTools } from "./channel-tools.js";
 import { shouldSuppressManagedWebSearchTool } from "./codex-native-web-search.js";
 import { resolveImageSanitizationLimits } from "./image-sanitization.js";
+import type { ModelAuthMode } from "./model-auth.js";
 import { resolveOpenClawPluginToolsForOptions } from "./openclaw-plugin-tools.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
@@ -312,6 +314,8 @@ export function createOpenClawCodingTools(options?: {
   agentId?: string;
   exec?: ExecToolDefaults & ProcessToolDefaults;
   messageProvider?: string;
+  /** Prepared outbound runtime for messageProvider when available. */
+  outboundChannelRuntime?: OutboundChannelRuntime;
   agentAccountId?: string;
   messageTo?: string;
   messageThreadId?: string | number;
@@ -357,6 +361,8 @@ export function createOpenClawCodingTools(options?: {
   modelApi?: string;
   /** Model context window in tokens (used to scale read-tool output budget). */
   modelContextWindowTokens?: number;
+  /** Resolved auth mode for the selected runtime model. */
+  modelAuthMode?: ModelAuthMode;
   /** Resolved runtime model compatibility hints. */
   modelCompat?: ModelCompatConfig;
   /** If false, keep OpenClaw web_search even when a provider-native search tool is active. */
@@ -753,6 +759,10 @@ export function createOpenClawCodingTools(options?: {
     agentSessionKey: options?.sessionKey,
     runSessionKey: options?.runSessionKey,
     agentChannel,
+    agentChannelRuntime:
+      options?.outboundChannelRuntime?.id === agentChannel
+        ? options?.outboundChannelRuntime
+        : undefined,
     agentAccountId: options?.agentAccountId,
     agentTo: options?.messageTo,
     agentThreadId: options?.messageThreadId,

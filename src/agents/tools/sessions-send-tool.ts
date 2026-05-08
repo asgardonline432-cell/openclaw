@@ -6,6 +6,7 @@ import type { SessionEntry } from "../../config/sessions/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { callGateway } from "../../gateway/call.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import {
   isSubagentSessionKey,
   normalizeAgentId,
@@ -110,6 +111,7 @@ async function startAgentRun(params: {
 export function createSessionsSendTool(opts?: {
   agentSessionKey?: string;
   agentChannel?: GatewayMessageChannel;
+  agentChannelRuntime?: OutboundChannelRuntime;
   sandboxed?: boolean;
   config?: OpenClawConfig;
   callGateway?: GatewayCaller;
@@ -381,6 +383,7 @@ export function createSessionsSendTool(opts?: {
           maxPingPongTurns,
           requesterSessionKey,
           requesterChannel,
+          requesterChannelRuntime: opts?.agentChannelRuntime,
           baseline: baselineReply,
           roundOneReply,
           waitRunId,

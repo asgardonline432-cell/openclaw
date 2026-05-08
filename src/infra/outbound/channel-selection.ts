@@ -13,7 +13,7 @@ import {
   normalizeMessageChannel,
 } from "../../utils/message-channel.js";
 import { formatErrorMessage } from "../errors.js";
-import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
+import { resolveOutboundChannelRuntime } from "./channel-resolution.js";
 
 export type MessageChannelId = DeliverableMessageChannel;
 export type MessageChannelSelectionSource =
@@ -49,7 +49,7 @@ function resolveAvailableKnownChannel(params: {
   if (!normalized) {
     return undefined;
   }
-  return resolveOutboundChannelPlugin({
+  return resolveOutboundChannelRuntime({
     channel: normalized,
     cfg: params.cfg,
   })

@@ -21,11 +21,13 @@ import {
 const mocks = vi.hoisted(() => ({
   normalizeDeliverableOutboundChannel: vi.fn(),
   resolveOutboundChannelPlugin: vi.fn(),
+  resolveOutboundChannelRuntime: vi.fn(),
 }));
 
 vi.mock("./channel-resolution.js", () => ({
   normalizeDeliverableOutboundChannel: mocks.normalizeDeliverableOutboundChannel,
   resolveOutboundChannelPlugin: mocks.resolveOutboundChannelPlugin,
+  resolveOutboundChannelRuntime: mocks.resolveOutboundChannelRuntime,
 }));
 
 runResolveOutboundTargetCoreTests();
@@ -41,6 +43,26 @@ beforeEach(() => {
     ({ channel }: { channel: string }) =>
       getActivePluginRegistry()?.channels.find((entry) => entry?.plugin?.id === channel)?.plugin,
   );
+  mocks.resolveOutboundChannelRuntime.mockReset();
+  mocks.resolveOutboundChannelRuntime.mockImplementation(({ channel }: { channel: string }) => {
+    const plugin = mocks.resolveOutboundChannelPlugin({ channel });
+    return plugin
+      ? {
+          id: plugin.id,
+          label: plugin.meta?.label ?? plugin.id,
+          chatTypes: plugin.capabilities?.chatTypes ?? [],
+          actions: plugin.actions,
+          outbound: plugin.outbound,
+          resolveAllowFrom: plugin.config?.resolveAllowFrom,
+          resolveDefaultTo: plugin.config?.resolveDefaultTo,
+          resolveTarget: plugin.outbound?.resolveTarget,
+          inferTargetChatType: plugin.messaging?.inferTargetChatType,
+          targetResolverHint: plugin.messaging?.targetResolver?.hint,
+          preserveHeartbeatThreadIdForGroupRoute:
+            plugin.messaging?.preserveHeartbeatThreadIdForGroupRoute,
+        }
+      : undefined;
+  });
   setActivePluginRegistry(
     createTargetsTestRegistry([
       createGenericTargetTestPlugin("alpha", "Alpha"),

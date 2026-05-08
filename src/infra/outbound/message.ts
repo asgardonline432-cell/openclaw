@@ -11,7 +11,10 @@ import {
   type GatewayClientMode,
   type GatewayClientName,
 } from "../../utils/message-channel.js";
-import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
+import {
+  resolveOutboundChannelRuntime,
+  type OutboundChannelRuntime,
+} from "./channel-resolution.js";
 import { resolveMessageChannelSelection } from "./channel-selection.js";
 import {
   resolveOutboundDurableFinalDeliverySupport,
@@ -91,6 +94,7 @@ type MessageSendParams = {
   mirror?: OutboundMirror;
   abortSignal?: AbortSignal;
   silent?: boolean;
+  outboundRuntime?: OutboundChannelRuntime;
 };
 
 export type MessageSendResult = {
@@ -119,6 +123,7 @@ type MessagePollParams = {
   cfg?: OpenClawConfig;
   gateway?: MessageGatewayOptions;
   idempotencyKey?: string;
+  outboundRuntime?: OutboundChannelRuntime;
 };
 
 export type MessagePollResult = {
@@ -178,12 +183,16 @@ async function resolveRequiredChannel(params: {
   ).channel;
 }
 
-function resolveRequiredPlugin(channel: string, cfg: OpenClawConfig) {
-  const plugin = resolveOutboundChannelPlugin({ channel, cfg });
-  if (!plugin) {
+function resolveRequiredRuntime(
+  channel: string,
+  cfg: OpenClawConfig,
+  runtime?: OutboundChannelRuntime,
+) {
+  const resolved = runtime ?? resolveOutboundChannelRuntime({ channel, cfg });
+  if (!resolved) {
     throw new Error(`Unknown channel: ${channel}`);
   }
-  return plugin;
+  return resolved;
 }
 
 function payloadRequiresDurablePayloadTransport(payload: ReplyPayload): boolean {
@@ -240,11 +249,13 @@ async function assertRequiredMessageSendDurability(params: {
   replyToId?: string | null;
   threadId?: string | number | null;
   silent?: boolean;
+  runtime?: OutboundChannelRuntime;
 }): Promise<void> {
   const support = await resolveOutboundDurableFinalDeliverySupport({
     cfg: params.cfg,
     channel: params.channel,
     requirements: deriveRequiredMessageSendCapabilities(params),
+    runtime: params.runtime,
   });
   if (support.ok) {
     return;
@@ -315,8 +326,8 @@ async function resolveGatewayIdempotencyKey(idempotencyKey?: string): Promise<st
 export async function sendMessage(params: MessageSendParams): Promise<MessageSendResult> {
   const cfg = await resolveMessageConfig(params.cfg);
   const channel = await resolveRequiredChannel({ cfg, channel: params.channel });
-  const plugin = resolveRequiredPlugin(channel, cfg);
-  const deliveryMode = plugin.outbound?.deliveryMode ?? "direct";
+  const outboundRuntime = resolveRequiredRuntime(channel, cfg, params.outboundRuntime);
+  const deliveryMode = outboundRuntime.outbound?.deliveryMode ?? "direct";
   const outboundPayloads =
     params.payloads && params.payloads.length > 0
       ? params.payloads
@@ -354,6 +365,7 @@ export async function sendMessage(params: MessageSendParams): Promise<MessageSen
       cfg,
       accountId: params.accountId,
       mode: "explicit",
+      runtime: outboundRuntime,
     });
     if (!resolvedTarget.ok) {
       throw resolvedTarget.error;
@@ -377,6 +389,7 @@ export async function sendMessage(params: MessageSendParams): Promise<MessageSen
         replyToId: params.replyToId,
         threadId: params.threadId,
         silent: params.silent,
+        runtime: outboundRuntime,
       });
     }
     const send = await sendDurableMessageBatch({
@@ -397,6 +410,7 @@ export async function sendMessage(params: MessageSendParams): Promise<MessageSen
       signal: params.abortSignal,
       silent: params.silent,
       mediaAccess: params.mediaAccess,
+      outboundRuntime,
       mirror: params.mirror
         ? {
             ...params.mirror,
@@ -461,8 +475,8 @@ export async function sendPoll(params: MessagePollParams): Promise<MessagePollRe
     durationSeconds: params.durationSeconds,
     durationHours: params.durationHours,
   };
-  const plugin = resolveRequiredPlugin(channel, cfg);
-  const outbound = plugin?.outbound;
+  const outboundRuntime = resolveRequiredRuntime(channel, cfg, params.outboundRuntime);
+  const outbound = outboundRuntime.outbound;
   if (!outbound?.sendPoll) {
     throw new Error(`Unsupported poll channel: ${channel}`);
   }

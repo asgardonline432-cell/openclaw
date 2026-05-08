@@ -3,6 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   listChannelPlugins: vi.fn(),
   resolveOutboundChannelPlugin: vi.fn(),
+  resolveOutboundChannelRuntime: vi.fn(),
   missingOfficialExternalChannels: new Set<string>(),
 }));
 
@@ -30,6 +31,7 @@ vi.mock("../../utils/message-channel.js", () => ({
 
 vi.mock("./channel-resolution.js", () => ({
   resolveOutboundChannelPlugin: mocks.resolveOutboundChannelPlugin,
+  resolveOutboundChannelRuntime: mocks.resolveOutboundChannelRuntime,
 }));
 
 vi.mock("../../plugins/official-external-plugin-repair-hints.js", () => ({
@@ -97,6 +99,25 @@ describe("listConfiguredMessageChannels", () => {
     mocks.resolveOutboundChannelPlugin.mockImplementation(({ channel }: { channel: string }) => ({
       id: channel,
     }));
+    mocks.resolveOutboundChannelRuntime.mockReset();
+    mocks.resolveOutboundChannelRuntime.mockImplementation(({ channel }: { channel: string }) => {
+      const plugin = mocks.resolveOutboundChannelPlugin({ channel });
+      return plugin
+        ? {
+            id: plugin.id,
+            label: plugin.meta?.label ?? plugin.id,
+            chatTypes: plugin.capabilities?.chatTypes ?? [],
+            actions: plugin.actions,
+            outbound: plugin.outbound,
+            directory: plugin.directory,
+            resolveAllowFrom: plugin.config?.resolveAllowFrom,
+            resolveDefaultTo: plugin.config?.resolveDefaultTo,
+            resolveTarget: plugin.outbound?.resolveTarget,
+            inferTargetChatType: plugin.messaging?.inferTargetChatType,
+            targetResolverHint: plugin.messaging?.targetResolver?.hint,
+          }
+        : undefined;
+    });
     __testing.resetLoggedChannelSelectionErrors();
     errorSpy.mockClear();
   });
@@ -169,6 +190,25 @@ describe("resolveMessageChannelSelection", () => {
     mocks.resolveOutboundChannelPlugin.mockImplementation(({ channel }: { channel: string }) => ({
       id: channel,
     }));
+    mocks.resolveOutboundChannelRuntime.mockReset();
+    mocks.resolveOutboundChannelRuntime.mockImplementation(({ channel }: { channel: string }) => {
+      const plugin = mocks.resolveOutboundChannelPlugin({ channel });
+      return plugin
+        ? {
+            id: plugin.id,
+            label: plugin.meta?.label ?? plugin.id,
+            chatTypes: plugin.capabilities?.chatTypes ?? [],
+            actions: plugin.actions,
+            outbound: plugin.outbound,
+            directory: plugin.directory,
+            resolveAllowFrom: plugin.config?.resolveAllowFrom,
+            resolveDefaultTo: plugin.config?.resolveDefaultTo,
+            resolveTarget: plugin.outbound?.resolveTarget,
+            inferTargetChatType: plugin.messaging?.inferTargetChatType,
+            targetResolverHint: plugin.messaging?.targetResolver?.hint,
+          }
+        : undefined;
+    });
     mocks.missingOfficialExternalChannels.clear();
   });
 

@@ -1,7 +1,6 @@
 import { getChatChannelMeta } from "../../channels/chat-meta.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
-import type { ChannelId } from "../../channels/plugins/types.public.js";
 import { normalizeChatChannelId } from "../../channels/registry.js";
+import { getCurrentPluginMetadataSnapshot } from "../../plugins/current-plugin-metadata-snapshot.js";
 import type { OutboundDeliveryResult } from "./deliver.js";
 
 export type OutboundDeliveryJson = {
@@ -31,13 +30,15 @@ type OutboundDeliveryMeta = {
 };
 
 const resolveChannelLabel = (channel: string) => {
-  const pluginLabel = getChannelPlugin(channel as ChannelId)?.meta.label;
-  if (pluginLabel) {
-    return pluginLabel;
-  }
   const normalized = normalizeChatChannelId(channel);
   if (normalized) {
     return getChatChannelMeta(normalized).label;
+  }
+  const manifestLabel = getCurrentPluginMetadataSnapshot()
+    ?.plugins.find((record) => record.channelCatalogMeta?.id === channel)
+    ?.channelCatalogMeta?.label?.trim();
+  if (manifestLabel) {
+    return manifestLabel;
   }
   return channel;
 };

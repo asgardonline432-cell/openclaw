@@ -7,10 +7,12 @@ import type {
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { defaultRuntime, type RuntimeEnv } from "../../runtime.js";
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
+import type { OutboundChannelRuntime } from "./channel-resolution.js";
 import { buildDirectoryCacheKey, DirectoryCache } from "./directory-cache.js";
 import { ambiguousTargetError, unknownTargetError } from "./target-errors.js";
 import { maybeResolveIdLikeTarget, type ResolvedIdLikeTarget } from "./target-id-resolution.js";
 import {
+  buildTargetResolverSignatureForRuntime,
   buildTargetResolverSignature,
   looksLikeTargetId,
   maybeResolvePluginMessagingTarget,
@@ -48,7 +50,18 @@ export async function resolveChannelTarget(params: {
   input: string;
   accountId?: string | null;
   preferredKind?: TargetResolveKind;
-  runtime?: RuntimeEnv;
+  runtime?: Pick<
+    OutboundChannelRuntime,
+    | "directory"
+    | "formatTargetDisplay"
+    | "inferTargetChatType"
+    | "label"
+    | "looksLikeTargetId"
+    | "normalizeTarget"
+    | "resolveMessagingTargetFallback"
+    | "targetResolverHint"
+  >;
+  runtimeEnv?: RuntimeEnv;
 }): Promise<ResolveMessagingTargetResult> {
   return resolveMessagingTarget(params);
 }
@@ -90,7 +103,15 @@ export function formatTargetDisplay(params: {
   target: string;
   display?: string;
   kind?: ChannelDirectoryEntryKind;
+  runtime?: Pick<OutboundChannelRuntime, "formatTargetDisplay">;
 }): string {
+  if (params.runtime?.formatTargetDisplay) {
+    return params.runtime.formatTargetDisplay({
+      target: params.target,
+      display: params.display,
+      kind: params.kind,
+    });
+  }
   const plugin = getChannelPlugin(params.channel);
   if (plugin?.messaging?.formatTargetDisplay) {
     return plugin.messaging.formatTargetDisplay({
@@ -145,6 +166,7 @@ function detectTargetKind(
   channel: ChannelId,
   raw: string,
   preferred?: TargetResolveKind,
+  runtime?: Pick<OutboundChannelRuntime, "inferTargetChatType">,
 ): TargetResolveKind {
   if (preferred) {
     return preferred;
@@ -153,7 +175,9 @@ function detectTargetKind(
   if (!trimmed) {
     return "group";
   }
-  const inferredChatType = getChannelPlugin(channel)?.messaging?.inferTargetChatType?.({ to: raw });
+  const inferredChatType = runtime
+    ? runtime.inferTargetChatType?.({ to: raw })
+    : getChannelPlugin(channel)?.messaging?.inferTargetChatType?.({ to: raw });
   if (inferredChatType === "direct") {
     return "user";
   }
@@ -174,8 +198,14 @@ function detectTargetKind(
   return "group";
 }
 
-function normalizeDirectoryEntryId(channel: ChannelId, entry: ChannelDirectoryEntry): string {
-  const normalized = normalizeTargetForProvider(channel, entry.id);
+function normalizeDirectoryEntryId(
+  channel: ChannelId,
+  entry: ChannelDirectoryEntry,
+  runtime?: Pick<OutboundChannelRuntime, "normalizeTarget">,
+): string {
+  const normalized = normalizeTargetForProvider(channel, entry.id, {
+    normalizeTarget: runtime?.normalizeTarget,
+  });
   return normalized ?? entry.id.trim();
 }
 
@@ -183,12 +213,15 @@ function matchesDirectoryEntry(params: {
   channel: ChannelId;
   entry: ChannelDirectoryEntry;
   query: string;
+  runtime?: Pick<OutboundChannelRuntime, "normalizeTarget">;
 }): boolean {
   const query = normalizeQuery(params.query);
   if (!query) {
     return false;
   }
-  const id = stripTargetPrefixes(normalizeDirectoryEntryId(params.channel, params.entry));
+  const id = stripTargetPrefixes(
+    normalizeDirectoryEntryId(params.channel, params.entry, params.runtime),
+  );
   const name = params.entry.name ? stripTargetPrefixes(params.entry.name) : "";
   const handle = params.entry.handle ? stripTargetPrefixes(params.entry.handle) : "";
   const candidates = [id, name, handle].map((value) => normalizeQuery(value)).filter(Boolean);
@@ -199,9 +232,15 @@ function resolveMatch(params: {
   channel: ChannelId;
   entries: ChannelDirectoryEntry[];
   query: string;
+  runtime?: Pick<OutboundChannelRuntime, "normalizeTarget">;
 }) {
   const matches = params.entries.filter((entry) =>
-    matchesDirectoryEntry({ channel: params.channel, entry, query: params.query }),
+    matchesDirectoryEntry({
+      channel: params.channel,
+      entry,
+      query: params.query,
+      runtime: params.runtime,
+    }),
   );
   if (matches.length === 0) {
     return { kind: "none" as const };
@@ -217,16 +256,18 @@ async function listDirectoryEntries(params: {
   channel: ChannelId;
   accountId?: string | null;
   kind: ChannelDirectoryEntryKind;
-  runtime?: RuntimeEnv;
+  runtime?: Pick<OutboundChannelRuntime, "directory">;
+  runtimeEnv?: RuntimeEnv;
   query?: string;
   source: "cache" | "live";
 }): Promise<ChannelDirectoryEntry[]> {
-  const plugin = getChannelPlugin(params.channel);
-  const directory = plugin?.directory;
+  const directory = params.runtime
+    ? params.runtime.directory
+    : getChannelPlugin(params.channel)?.directory;
   if (!directory) {
     return [];
   }
-  const runtime = params.runtime ?? defaultRuntime;
+  const runtime = params.runtimeEnv ?? defaultRuntime;
   const useLive = params.source === "live";
   const fn =
     params.kind === "user"
@@ -254,10 +295,17 @@ async function getDirectoryEntries(params: {
   accountId?: string | null;
   kind: ChannelDirectoryEntryKind;
   query?: string;
-  runtime?: RuntimeEnv;
+  runtime?: Pick<OutboundChannelRuntime, "directory" | "looksLikeTargetId" | "targetResolverHint">;
+  runtimeEnv?: RuntimeEnv;
   preferLiveOnMiss?: boolean;
 }): Promise<ChannelDirectoryEntry[]> {
-  const signature = buildTargetResolverSignature(params.channel);
+  const signature = params.runtime
+    ? buildTargetResolverSignatureForRuntime({
+        channel: params.channel,
+        targetResolverHint: params.runtime.targetResolverHint,
+        looksLikeTargetId: params.runtime.looksLikeTargetId,
+      })
+    : buildTargetResolverSignature(params.channel);
   const listParams = {
     cfg: params.cfg,
     channel: params.channel,
@@ -265,6 +313,7 @@ async function getDirectoryEntries(params: {
     kind: params.kind,
     query: params.query,
     runtime: params.runtime,
+    runtimeEnv: params.runtimeEnv,
   };
   const cacheKey = buildDirectoryCacheKey({
     channel: params.channel,
@@ -341,18 +390,31 @@ export async function resolveMessagingTarget(params: {
   input: string;
   accountId?: string | null;
   preferredKind?: TargetResolveKind;
-  runtime?: RuntimeEnv;
+  runtime?: Pick<
+    OutboundChannelRuntime,
+    | "directory"
+    | "formatTargetDisplay"
+    | "inferTargetChatType"
+    | "label"
+    | "looksLikeTargetId"
+    | "normalizeTarget"
+    | "resolveMessagingTargetFallback"
+    | "targetResolverHint"
+  >;
+  runtimeEnv?: RuntimeEnv;
   resolveAmbiguous?: ResolveAmbiguousMode;
 }): Promise<ResolveMessagingTargetResult> {
   const raw = normalizeChannelTargetInput(params.input);
   if (!raw) {
     return { ok: false, error: new Error("Target is required") };
   }
-  const plugin = getChannelPlugin(params.channel);
-  const providerLabel = plugin?.meta?.label ?? params.channel;
-  const hint = plugin?.messaging?.targetResolver?.hint;
-  const kind = detectTargetKind(params.channel, raw, params.preferredKind);
-  const normalizedInput = resolveNormalizedTargetInput(params.channel, raw);
+  const plugin = params.runtime ? undefined : getChannelPlugin(params.channel);
+  const providerLabel = params.runtime?.label ?? plugin?.meta?.label ?? params.channel;
+  const hint = params.runtime?.targetResolverHint ?? plugin?.messaging?.targetResolver?.hint;
+  const kind = detectTargetKind(params.channel, raw, params.preferredKind, params.runtime);
+  const normalizedInput = resolveNormalizedTargetInput(params.channel, raw, {
+    normalizeTarget: params.runtime?.normalizeTarget,
+  });
   const normalized = normalizedInput?.normalized ?? raw;
   if (
     normalizedInput &&
@@ -360,6 +422,8 @@ export async function resolveMessagingTarget(params: {
       channel: params.channel,
       raw: normalizedInput.raw,
       normalized,
+      normalizeTarget: params.runtime?.normalizeTarget,
+      looksLikeTargetId: params.runtime?.looksLikeTargetId,
     })
   ) {
     const resolvedIdLikeTarget = await maybeResolveIdLikeTarget({
@@ -388,15 +452,16 @@ export async function resolveMessagingTarget(params: {
     kind: kind === "user" ? "user" : "group",
     query,
     runtime: params.runtime,
+    runtimeEnv: params.runtimeEnv,
     preferLiveOnMiss: true,
   });
-  const match = resolveMatch({ channel: params.channel, entries, query });
+  const match = resolveMatch({ channel: params.channel, entries, query, runtime: params.runtime });
   if (match.kind === "single") {
     const entry = match.entry;
     return {
       ok: true,
       target: {
-        to: normalizeDirectoryEntryId(params.channel, entry),
+        to: normalizeDirectoryEntryId(params.channel, entry, params.runtime),
         kind,
         display: entry.name ?? entry.handle ?? stripTargetPrefixes(entry.id),
         source: "directory",
@@ -411,7 +476,7 @@ export async function resolveMessagingTarget(params: {
         return {
           ok: true,
           target: {
-            to: normalizeDirectoryEntryId(params.channel, best),
+            to: normalizeDirectoryEntryId(params.channel, best, params.runtime),
             kind,
             display: best.name ?? best.handle ?? stripTargetPrefixes(best.id),
             source: "directory",
@@ -432,6 +497,9 @@ export async function resolveMessagingTarget(params: {
       input: raw,
       accountId: params.accountId,
       preferredKind: params.preferredKind,
+      normalizeTarget: params.runtime?.normalizeTarget,
+      looksLikeTargetId: params.runtime?.looksLikeTargetId,
+      resolveMessagingTargetFallback: params.runtime?.resolveMessagingTargetFallback,
     }),
   );
   if (resolvedFallbackTarget) {
@@ -452,9 +520,16 @@ export async function lookupDirectoryDisplay(params: {
   channel: ChannelId;
   targetId: string;
   accountId?: string | null;
-  runtime?: RuntimeEnv;
+  runtime?: Pick<
+    OutboundChannelRuntime,
+    "directory" | "looksLikeTargetId" | "normalizeTarget" | "targetResolverHint"
+  >;
+  runtimeEnv?: RuntimeEnv;
 }): Promise<string | undefined> {
-  const normalized = normalizeTargetForProvider(params.channel, params.targetId) ?? params.targetId;
+  const normalized =
+    normalizeTargetForProvider(params.channel, params.targetId, {
+      normalizeTarget: params.runtime?.normalizeTarget,
+    }) ?? params.targetId;
 
   // Targets can resolve to either peers (DMs) or groups. Try both.
   const [groups, users] = await Promise.all([
@@ -464,6 +539,7 @@ export async function lookupDirectoryDisplay(params: {
       accountId: params.accountId,
       kind: "group",
       runtime: params.runtime,
+      runtimeEnv: params.runtimeEnv,
       preferLiveOnMiss: false,
     }),
     getDirectoryEntries({
@@ -472,13 +548,15 @@ export async function lookupDirectoryDisplay(params: {
       accountId: params.accountId,
       kind: "user",
       runtime: params.runtime,
+      runtimeEnv: params.runtimeEnv,
       preferLiveOnMiss: false,
     }),
   ]);
 
   const findMatch = (candidates: ChannelDirectoryEntry[]) =>
     candidates.find(
-      (candidate) => normalizeDirectoryEntryId(params.channel, candidate) === normalized,
+      (candidate) =>
+        normalizeDirectoryEntryId(params.channel, candidate, params.runtime) === normalized,
     );
 
   const entry = findMatch(groups) ?? findMatch(users);

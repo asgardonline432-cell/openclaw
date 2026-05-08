@@ -32,7 +32,7 @@ function loadCapabilityMetadataSnapshot(params: {
     ({
       index: { plugins: [] },
       plugins: [],
-    } as Pick<PluginMetadataSnapshot, "index" | "plugins">)
+    } as unknown as Pick<PluginMetadataSnapshot, "index" | "plugins">)
   );
 }
 

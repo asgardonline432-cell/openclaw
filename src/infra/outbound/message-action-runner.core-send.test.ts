@@ -4,8 +4,16 @@ import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../../test-utils/channel-plugins.js";
 import { runMessageAction } from "./message-action-runner.js";
 
+const getChannelPluginMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../channels/plugins/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../channels/plugins/index.js")>()),
+  getChannelPlugin: getChannelPluginMock,
+}));
+
 describe("runMessageAction core send routing", () => {
   afterEach(() => {
+    getChannelPluginMock.mockReset();
     setActivePluginRegistry(createTestRegistry([]));
   });
 
@@ -175,5 +183,63 @@ describe("runMessageAction core send routing", () => {
         dryRun: true,
       }),
     );
+  });
+
+  it("uses prepared outbound runtime without falling back to getChannelPlugin for known sends", async () => {
+    const sendText = vi.fn().mockResolvedValue({
+      channel: "testchat",
+      messageId: "m3",
+      chatId: "c1",
+    });
+    getChannelPluginMock.mockImplementation(() => {
+      throw new Error("getChannelPlugin should not run for known outbound sends");
+    });
+    setActivePluginRegistry(
+      createTestRegistry([
+        {
+          pluginId: "testchat",
+          source: "test",
+          plugin: createOutboundTestPlugin({
+            id: "testchat",
+            outbound: {
+              deliveryMode: "direct",
+              sendText,
+            },
+            messaging: {
+              normalizeTarget: (raw) => (raw === "room-one" ? "channel:room-one" : undefined),
+              targetResolver: {
+                looksLikeId: () => true,
+              },
+            },
+          }),
+        },
+      ]),
+    );
+
+    const result = await runMessageAction({
+      cfg: {
+        channels: {
+          testchat: {
+            enabled: true,
+          },
+        },
+      } as OpenClawConfig,
+      action: "send",
+      params: {
+        channel: "testchat",
+        target: "room-one",
+        message: "prepared runtime",
+      },
+      dryRun: false,
+    });
+
+    expect(result.kind).toBe("send");
+    expect(sendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "channel:room-one",
+        text: "prepared runtime",
+      }),
+    );
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
   });
 });

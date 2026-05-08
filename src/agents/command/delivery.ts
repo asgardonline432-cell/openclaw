@@ -14,6 +14,7 @@ import {
   resolveAgentDeliveryPlan,
   resolveAgentOutboundTarget,
 } from "../../infra/outbound/agent-delivery.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { resolveMessageChannelSelection } from "../../infra/outbound/channel-selection.js";
 import { buildOutboundResultEnvelope } from "../../infra/outbound/envelope.js";
 import {
@@ -269,6 +270,7 @@ export function normalizeAgentCommandReplyPayloads(params: {
   deliveryChannel?: string;
   accountId?: string;
   applyChannelTransforms?: boolean;
+  outboundChannelRuntime?: OutboundChannelRuntime;
 }): ReplyPayload[] {
   const payloads = params.payloads ?? [];
   if (payloads.length === 0) {
@@ -282,7 +284,12 @@ export function normalizeAgentCommandReplyPayloads(params: {
     return payloads as ReplyPayload[];
   }
   const applyChannelTransforms = params.applyChannelTransforms ?? true;
-  const deliveryPlugin = applyChannelTransforms ? getChannelPlugin(channel) : undefined;
+  const deliveryRuntime =
+    applyChannelTransforms && params.outboundChannelRuntime?.id === channel
+      ? params.outboundChannelRuntime
+      : undefined;
+  const deliveryPlugin =
+    applyChannelTransforms && !deliveryRuntime ? getChannelPlugin(channel) : undefined;
 
   const sessionKey = params.outboundSession?.key ?? params.opts.sessionKey;
   const agentId =
@@ -307,14 +314,21 @@ export function normalizeAgentCommandReplyPayloads(params: {
     });
   }
   const responsePrefixContext = replyPrefix.responsePrefixContextProvider();
-  const transformReplyPayload = deliveryPlugin?.messaging?.transformReplyPayload
+  const transformReplyPayload = deliveryRuntime?.transformReplyPayload
     ? (payload: ReplyPayload) =>
-        deliveryPlugin.messaging?.transformReplyPayload?.({
+        deliveryRuntime.transformReplyPayload?.({
           payload,
           cfg: params.cfg,
           accountId: params.accountId,
         }) ?? payload
-    : undefined;
+    : deliveryPlugin?.messaging?.transformReplyPayload
+      ? (payload: ReplyPayload) =>
+          deliveryPlugin.messaging?.transformReplyPayload?.({
+            payload,
+            cfg: params.cfg,
+            accountId: params.accountId,
+          }) ?? payload
+      : undefined;
 
   const normalizedPayloads: ReplyPayload[] = [];
   for (const payload of payloads) {
@@ -371,6 +385,13 @@ export async function deliverAgentCommandResult(params: {
       // Keep the internal channel marker; error handling below reports the failure.
     }
   }
+  const normalizedDeliveryChannel = normalizeChannelId(deliveryChannel) ?? deliveryChannel;
+  const deliveryRuntime =
+    deliver &&
+    !isInternalMessageChannel(deliveryChannel) &&
+    opts.outboundChannelRuntime?.id === normalizedDeliveryChannel
+      ? opts.outboundChannelRuntime
+      : undefined;
   const effectiveDeliveryPlan =
     deliveryChannel === deliveryPlan.resolvedChannel
       ? deliveryPlan
@@ -380,12 +401,12 @@ export async function deliverAgentCommandResult(params: {
         };
   // Channel docking: delivery channels are resolved via plugin registry.
   const deliveryPlugin =
-    deliver && !isInternalMessageChannel(deliveryChannel)
-      ? getChannelPlugin(normalizeChannelId(deliveryChannel) ?? deliveryChannel)
+    deliver && !isInternalMessageChannel(deliveryChannel) && !deliveryRuntime
+      ? getChannelPlugin(normalizedDeliveryChannel)
       : undefined;
 
   const isDeliveryChannelKnown =
-    isInternalMessageChannel(deliveryChannel) || Boolean(deliveryPlugin);
+    isInternalMessageChannel(deliveryChannel) || Boolean(deliveryRuntime ?? deliveryPlugin);
 
   const targetMode =
     opts.deliveryTargetMode ??
@@ -399,6 +420,7 @@ export async function deliverAgentCommandResult(params: {
           plan: effectiveDeliveryPlan,
           targetMode,
           validateExplicitTarget: true,
+          runtime: deliveryRuntime,
         })
       : {
           resolvedTarget: null,
@@ -409,7 +431,7 @@ export async function deliverAgentCommandResult(params: {
   const deliveryTarget = resolved.resolvedTo;
   const resolvedThreadId = deliveryPlan.resolvedThreadId ?? opts.threadId;
   const replyTransport =
-    deliveryPlugin?.threading?.resolveReplyTransport?.({
+    (deliveryRuntime?.resolveReplyTransport ?? deliveryPlugin?.threading?.resolveReplyTransport)?.({
       cfg,
       accountId: resolvedAccountId,
       threadId: resolvedThreadId,
@@ -466,6 +488,7 @@ export async function deliverAgentCommandResult(params: {
     deliveryChannel,
     accountId: resolvedAccountId,
     applyChannelTransforms: deliver,
+    outboundChannelRuntime: deliveryRuntime,
   });
   // Auto-reply-style media-path normalization must also run for the CLI
   // `--deliver` path. Without it, relative `MEDIA:./out/photo.png` tokens
@@ -554,6 +577,7 @@ export async function deliverAgentCommandResult(params: {
         onError: logDeliveryError,
         onPayload: logPayload,
         deps: createOutboundSendDeps(deps),
+        outboundRuntime: deliveryRuntime,
       });
       deliveryStatus = deliveryStatusFromDurableSend(send);
       if (!bestEffortDeliver && (send.status === "failed" || send.status === "partial_failed")) {

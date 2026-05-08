@@ -5,6 +5,7 @@ import {
 import { resolveSessionConversationRef } from "../../channels/plugins/session-conversation.js";
 import { normalizeChannelId as normalizeChatChannelId } from "../../channels/registry.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { ANNOUNCE_SKIP_TOKEN, REPLY_SKIP_TOKEN } from "./sessions-send-tokens.js";
 export {
   isAnnounceSkip,
@@ -22,7 +23,10 @@ export type AnnounceTarget = {
   threadId?: string; // Forum topic/thread ID
 };
 
-export function resolveAnnounceTargetFromKey(sessionKey: string): AnnounceTarget | null {
+export function resolveAnnounceTargetFromKey(
+  sessionKey: string,
+  runtime?: OutboundChannelRuntime,
+): AnnounceTarget | null {
   const parsed = resolveSessionConversationRef(sessionKey);
   if (!parsed) {
     return null;
@@ -30,14 +34,15 @@ export function resolveAnnounceTargetFromKey(sessionKey: string): AnnounceTarget
   const normalizedChannel =
     normalizeAnyChannelId(parsed.channel) ?? normalizeChatChannelId(parsed.channel);
   const channel = normalizedChannel ?? parsed.channel;
-  const plugin = normalizedChannel ? getChannelPlugin(normalizedChannel) : null;
+  const channelRuntime = runtime?.id === channel ? runtime : undefined;
+  const plugin = normalizedChannel && !channelRuntime ? getChannelPlugin(normalizedChannel) : null;
   const genericTarget = parsed.kind === "channel" ? `channel:${parsed.id}` : `group:${parsed.id}`;
   const normalized =
-    plugin?.messaging?.resolveSessionTarget?.({
+    (channelRuntime?.resolveSessionTarget ?? plugin?.messaging?.resolveSessionTarget)?.({
       kind: parsed.kind,
       id: parsed.id,
       threadId: parsed.threadId,
-    }) ?? plugin?.messaging?.normalizeTarget?.(genericTarget);
+    }) ?? (channelRuntime?.normalizeTarget ?? plugin?.messaging?.normalizeTarget)?.(genericTarget);
   return {
     channel,
     to: normalized ?? (normalizedChannel ? genericTarget : parsed.id),

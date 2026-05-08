@@ -12,7 +12,7 @@ import type { OutboundMediaAccess, OutboundMediaReadFile } from "../../media/loa
 import { resolveAgentScopedOutboundMediaAccess } from "../../media/read-capability.js";
 import type { GatewayClientMode, GatewayClientName } from "../../utils/message-channel.js";
 import { throwIfAborted } from "./abort.js";
-import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
+import { resolveOutboundChannelPlugin, type OutboundChannelRuntime } from "./channel-resolution.js";
 import type { OutboundSendDeps } from "./deliver.js";
 import type { MessagePollResult, MessageSendResult } from "./message.js";
 import { sendMessage, sendPoll } from "./message.js";
@@ -48,6 +48,7 @@ export type OutboundSendContext = {
   gateway?: OutboundGatewayContext;
   toolContext?: ChannelThreadingToolContext;
   deps?: OutboundSendDeps;
+  outboundRuntime?: OutboundChannelRuntime;
   dryRun: boolean;
   mirror?: OutboundMirror;
   abortSignal?: AbortSignal;
@@ -107,6 +108,7 @@ async function sendCoreMessage(params: {
     abortSignal: params.ctx.abortSignal,
     silent: params.ctx.silent,
     mediaAccess: params.ctx.mediaAccess,
+    outboundRuntime: params.ctx.outboundRuntime,
   });
 }
 
@@ -146,7 +148,7 @@ async function tryHandleWithPluginAction(params: {
     mediaAccess: params.ctx.mediaAccess,
     mediaReadFile: params.ctx.mediaReadFile,
   });
-  const handled = await dispatchChannelMessageAction({
+  const actionContext = {
     channel: params.ctx.channel,
     action: params.action,
     cfg: params.ctx.cfg,
@@ -163,7 +165,38 @@ async function tryHandleWithPluginAction(params: {
     gateway: params.ctx.gateway,
     toolContext: params.ctx.toolContext,
     dryRun: params.ctx.dryRun,
-  });
+  };
+  const actions = params.ctx.outboundRuntime?.actions;
+  if (
+    actions?.requiresTrustedRequesterSender?.({
+      action: params.action,
+      toolContext: params.ctx.toolContext,
+    }) &&
+    !params.ctx.requesterSenderId?.trim()
+  ) {
+    throw new Error(
+      `Trusted sender identity is required for ${params.ctx.channel}:${params.action} in tool-driven contexts.`,
+    );
+  }
+  if (actions?.handleAction) {
+    if (actions.supportsAction && !actions.supportsAction({ action: params.action })) {
+      return null;
+    }
+    const handled = await actions.handleAction(actionContext);
+    if (!handled) {
+      return null;
+    }
+    await params.onHandled?.();
+    return {
+      handledBy: "plugin",
+      payload: extractToolPayload(handled),
+      toolResult: handled,
+    };
+  }
+  if (params.ctx.outboundRuntime) {
+    return null;
+  }
+  const handled = await dispatchChannelMessageAction(actionContext);
   if (!handled) {
     return null;
   }
@@ -208,14 +241,16 @@ async function tryPreparePluginSendPayload(params: {
   replyToId?: string;
   threadId?: string | number;
 }): Promise<ReplyPayload | null> {
-  const plugin = resolveOutboundChannelPlugin({
-    channel: params.ctx.channel,
-    cfg: params.ctx.cfg,
-  });
-  if (!plugin?.outbound) {
+  const actions =
+    params.ctx.outboundRuntime?.actions ??
+    resolveOutboundChannelPlugin({
+      channel: params.ctx.channel,
+      cfg: params.ctx.cfg,
+    })?.actions;
+  if (!params.ctx.outboundRuntime?.outbound && !actions?.prepareSendPayload) {
     return null;
   }
-  const prepareSendPayload = plugin?.actions?.prepareSendPayload;
+  const prepareSendPayload = actions?.prepareSendPayload;
   if (!prepareSendPayload) {
     return null;
   }
@@ -360,6 +395,7 @@ export async function executePollAction(params: {
     isAnonymous: corePoll.isAnonymous ?? undefined,
     dryRun: params.ctx.dryRun,
     gateway: params.ctx.gateway,
+    outboundRuntime: params.ctx.outboundRuntime,
   });
 
   return {

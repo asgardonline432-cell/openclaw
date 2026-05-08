@@ -1,4 +1,3 @@
-import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type {
   ChannelId,
   ChannelMessageActionName,
@@ -6,6 +5,7 @@ import type {
 } from "../../channels/plugins/types.public.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { MessagePresentation } from "../../interactive/payload.js";
+import type { OutboundChannelRuntime } from "./channel-resolution.js";
 import { normalizeTargetForProvider } from "./target-normalization.js";
 import { formatTargetDisplay, lookupDirectoryDisplay } from "./target-resolver.js";
 
@@ -67,21 +67,29 @@ function resolveContextGuardTarget(
   return undefined;
 }
 
-function normalizeTarget(channel: ChannelId, raw: string): string | undefined {
-  return normalizeTargetForProvider(channel, raw) ?? raw.trim();
+function normalizeTarget(
+  channel: ChannelId,
+  raw: string,
+  runtime?: Pick<OutboundChannelRuntime, "normalizeTarget">,
+): string | undefined {
+  return (
+    normalizeTargetForProvider(channel, raw, { normalizeTarget: runtime?.normalizeTarget }) ??
+    raw.trim()
+  );
 }
 
 function isCrossContextTarget(params: {
   channel: ChannelId;
   target: string;
   toolContext?: ChannelThreadingToolContext;
+  runtime?: Pick<OutboundChannelRuntime, "normalizeTarget">;
 }): boolean {
   const currentTarget = params.toolContext?.currentChannelId?.trim();
   if (!currentTarget) {
     return false;
   }
-  const normalizedTarget = normalizeTarget(params.channel, params.target);
-  const normalizedCurrent = normalizeTarget(params.channel, currentTarget);
+  const normalizedTarget = normalizeTarget(params.channel, params.target, params.runtime);
+  const normalizedCurrent = normalizeTarget(params.channel, currentTarget, params.runtime);
   if (!normalizedTarget || !normalizedCurrent) {
     return false;
   }
@@ -94,6 +102,7 @@ export function enforceCrossContextPolicy(params: {
   args: Record<string, unknown>;
   toolContext?: ChannelThreadingToolContext;
   cfg: OpenClawConfig;
+  runtime?: Pick<OutboundChannelRuntime, "normalizeTarget">;
 }): void {
   const currentTarget = params.toolContext?.currentChannelId?.trim();
   if (!currentTarget) {
@@ -131,7 +140,14 @@ export function enforceCrossContextPolicy(params: {
     return;
   }
 
-  if (!isCrossContextTarget({ channel: params.channel, target, toolContext: params.toolContext })) {
+  if (
+    !isCrossContextTarget({
+      channel: params.channel,
+      target,
+      toolContext: params.toolContext,
+      runtime: params.runtime,
+    })
+  ) {
     return;
   }
 
@@ -146,6 +162,10 @@ export async function buildCrossContextDecoration(params: {
   target: string;
   toolContext?: ChannelThreadingToolContext;
   accountId?: string | null;
+  runtime?: Pick<
+    OutboundChannelRuntime,
+    "buildCrossContextPresentation" | "directory" | "formatTargetDisplay" | "normalizeTarget"
+  >;
 }): Promise<CrossContextDecoration | null> {
   if (!params.toolContext?.currentChannelId) {
     return null;
@@ -169,20 +189,21 @@ export async function buildCrossContextDecoration(params: {
       channel: params.channel,
       targetId: params.toolContext.currentChannelId,
       accountId: params.accountId ?? undefined,
+      runtime: params.runtime,
     })) ?? params.toolContext.currentChannelId;
   // Don't force group formatting here; currentChannelId can be a DM or a group.
   const originLabel = formatTargetDisplay({
     channel: params.channel,
     target: params.toolContext.currentChannelId,
     display: currentName,
+    runtime: params.runtime,
   });
   const prefixTemplate = markerConfig?.prefix ?? "[from {channel}] ";
   const suffixTemplate = markerConfig?.suffix ?? "";
   const prefix = prefixTemplate.replaceAll("{channel}", originLabel);
   const suffix = suffixTemplate.replaceAll("{channel}", originLabel);
 
-  const buildPresentation = getChannelPlugin(params.channel)?.messaging
-    ?.buildCrossContextPresentation;
+  const buildPresentation = params.runtime?.buildCrossContextPresentation;
   const presentationBuilder = buildPresentation
     ? (message: string) =>
         buildPresentation({

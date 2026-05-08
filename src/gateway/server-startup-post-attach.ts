@@ -420,11 +420,13 @@ export async function startGatewaySidecars(params: {
     if (params.cfg.hooks?.gmail?.model) {
       const [
         { DEFAULT_MODEL, DEFAULT_PROVIDER },
-        { resolveModelCatalogScope, loadModelCatalog },
+        { loadModelCatalog },
+        { resolveModelCatalogScope },
         { getModelRefStatus, resolveConfiguredModelRef, resolveHooksGmailModel },
       ] = await Promise.all([
         import("../agents/defaults.js"),
         import("../agents/model-catalog.js"),
+        import("../agents/model-catalog-scope.js"),
         import("../agents/model-selection.js"),
       ]);
       const hooksModelRef = resolveHooksGmailModel({

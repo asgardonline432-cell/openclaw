@@ -43,6 +43,7 @@ export type OutboundChannelRuntime = {
   id: string;
   label: string;
   chatTypes: NonNullable<ChannelCapabilities["chatTypes"]>;
+  message?: ChannelMessageAdapterShape;
   preferSessionLookupForAnnounceTarget?: ChannelPlugin["meta"]["preferSessionLookupForAnnounceTarget"];
   actions?: ChannelMessageActionAdapter;
   approvalCapability?: ChannelPlugin["approvalCapability"];
@@ -61,6 +62,7 @@ export type OutboundChannelRuntime = {
   resolveSessionTarget?: ChannelMessagingAdapter["resolveSessionTarget"];
   formatTargetDisplay?: ChannelMessagingAdapter["formatTargetDisplay"];
   resolveOutboundSessionRoute?: ChannelMessagingAdapter["resolveOutboundSessionRoute"];
+  preserveHeartbeatThreadIdForGroupRoute?: ChannelMessagingAdapter["preserveHeartbeatThreadIdForGroupRoute"];
   buildCrossContextPresentation?: ChannelMessagingAdapter["buildCrossContextPresentation"];
   transformReplyPayload?: ChannelMessagingAdapter["transformReplyPayload"];
   resolveAllowFrom?: ChannelConfigAdapter<unknown>["resolveAllowFrom"];
@@ -122,16 +124,17 @@ function resolveDirectFromActiveRegistry(channel: string): ChannelPlugin | undef
 function toOutboundChannelRuntime(plugin: ChannelPlugin): OutboundChannelRuntime {
   return {
     id: plugin.id,
-    label: plugin.meta.label,
-    chatTypes: plugin.capabilities.chatTypes,
-    preferSessionLookupForAnnounceTarget: plugin.meta.preferSessionLookupForAnnounceTarget,
+    label: plugin.meta?.label ?? plugin.id,
+    chatTypes: plugin.capabilities?.chatTypes ?? [],
+    message: plugin.message,
+    preferSessionLookupForAnnounceTarget: plugin.meta?.preferSessionLookupForAnnounceTarget,
     actions: plugin.actions,
     approvalCapability: plugin.approvalCapability,
     conversationBindings: plugin.conversationBindings,
     allowlist: plugin.allowlist,
     pairing: plugin.pairing,
     commands: plugin.commands,
-    defaultAccountId: plugin.config.defaultAccountId,
+    defaultAccountId: plugin.config?.defaultAccountId,
     directory: plugin.directory,
     promptRuntime: {
       messageToolHints: plugin.agentPrompt?.messageToolHints,
@@ -147,6 +150,8 @@ function toOutboundChannelRuntime(plugin: ChannelPlugin): OutboundChannelRuntime
     resolveSessionTarget: plugin.messaging?.resolveSessionTarget,
     formatTargetDisplay: plugin.messaging?.formatTargetDisplay,
     resolveOutboundSessionRoute: plugin.messaging?.resolveOutboundSessionRoute,
+    preserveHeartbeatThreadIdForGroupRoute:
+      plugin.messaging?.preserveHeartbeatThreadIdForGroupRoute,
     buildCrossContextPresentation: plugin.messaging?.buildCrossContextPresentation,
     transformReplyPayload: plugin.messaging?.transformReplyPayload,
     resolveAllowFrom: plugin.config?.resolveAllowFrom,
@@ -227,6 +232,10 @@ export function resolveOutboundChannelPluginForRead(params: {
   }
   const deliverable = normalizeDeliverableOutboundChannel(normalized);
   if (deliverable) {
+    const registered = getChannelPlugin(deliverable);
+    if (registered) {
+      return registered;
+    }
     maybeBootstrapChannelPlugin({ channel: deliverable, cfg: params.cfg });
     return (
       getLoadedChannelPlugin(deliverable) ??

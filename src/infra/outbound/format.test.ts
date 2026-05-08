@@ -5,23 +5,16 @@ import {
   formatOutboundDeliverySummary,
 } from "./format.js";
 
-const getChannelPluginMock = vi.hoisted(() =>
-  vi.fn((channel: string) => {
-    const labels: Record<string, string> = {
-      alpha: "Alpha",
-      localchat: "Local Chat",
-      richchat: "Rich Chat",
-      workspace: "Workspace",
-      teamchat: "Team Chat",
-    };
-    const label = labels[channel];
-    return label ? { meta: { label } } : undefined;
+vi.mock("../../plugins/current-plugin-metadata-snapshot.js", () => ({
+  getCurrentPluginMetadataSnapshot: () => ({
+    plugins: [
+      { channelCatalogMeta: { id: "alpha", label: "Alpha" } },
+      { channelCatalogMeta: { id: "localchat", label: "Local Chat" } },
+      { channelCatalogMeta: { id: "richchat", label: "Rich Chat" } },
+      { channelCatalogMeta: { id: "workspace", label: "Workspace" } },
+      { channelCatalogMeta: { id: "teamchat", label: "Team Chat" } },
+    ],
   }),
-);
-
-vi.mock("../../channels/plugins/index.js", () => ({
-  getLoadedChannelPlugin: getChannelPluginMock,
-  getChannelPlugin: getChannelPluginMock,
 }));
 describe("formatOutboundDeliverySummary", () => {
   it.each([

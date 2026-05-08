@@ -8,8 +8,6 @@ import {
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import { parseReplyDirectives } from "../../auto-reply/reply/reply-directives.js";
 import { normalizeChatType, type ChatType } from "../../channels/chat-type.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
-import { dispatchChannelMessageAction } from "../../channels/plugins/message-action-dispatch.js";
 import type {
   ChannelId,
   ChannelMessageActionName,
@@ -42,7 +40,10 @@ import {
 } from "../../utils/message-channel.js";
 import { formatErrorMessage } from "../errors.js";
 import { throwIfAborted } from "./abort.js";
-import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
+import {
+  resolveOutboundChannelRuntime,
+  type OutboundChannelRuntime,
+} from "./channel-resolution.js";
 import {
   listConfiguredMessageChannels,
   resolveMessageChannelSelection,
@@ -257,6 +258,7 @@ async function maybeApplyCrossContextMarker(params: {
   args: Record<string, unknown>;
   message: string;
   preferPresentation: boolean;
+  outboundRuntime?: OutboundChannelRuntime;
 }): Promise<string> {
   if (!shouldApplyCrossContextMarker(params.action) || !params.toolContext) {
     return params.message;
@@ -267,6 +269,7 @@ async function maybeApplyCrossContextMarker(params: {
     target: params.target,
     toolContext: params.toolContext,
     accountId: params.accountId ?? undefined,
+    runtime: params.outboundRuntime,
   });
   if (!decoration) {
     return params.message;
@@ -307,22 +310,30 @@ function addCandidateAndUnprefixedAlias(candidates: Set<string>, value?: string 
   }
 }
 
-function normalizeTargetForAccountBinding(channel: ChannelId, target: string): string | undefined {
+function normalizeTargetForAccountBinding(
+  channel: ChannelId,
+  target: string,
+  outboundRuntime?: OutboundChannelRuntime,
+): string | undefined {
   try {
-    return normalizeTargetForProvider(channel, target);
+    return normalizeTargetForProvider(channel, target, {
+      normalizeTarget: outboundRuntime?.normalizeTarget,
+    });
   } catch {
     return undefined;
   }
 }
 
-function inferPeerKindForAccountBinding(channel: ChannelId, target: string): ChatType | undefined {
-  const inferred = normalizeChatType(
-    getChannelPlugin(channel)?.messaging?.inferTargetChatType?.({ to: target }),
-  );
+function inferPeerKindForAccountBinding(
+  channel: ChannelId,
+  target: string,
+  outboundRuntime?: OutboundChannelRuntime,
+): ChatType | undefined {
+  const inferred = normalizeChatType(outboundRuntime?.inferTargetChatType?.({ to: target }));
   if (inferred) {
     return inferred;
   }
-  const normalized = normalizeTargetForAccountBinding(channel, target);
+  const normalized = normalizeTargetForAccountBinding(channel, target, outboundRuntime);
   const candidates = [target, normalized].filter((value): value is string => Boolean(value));
   if (candidates.some((value) => /^user:/i.test(value))) {
     return "direct";
@@ -338,6 +349,7 @@ function resolveTargetBoundAccountId(params: {
   channel: ChannelId;
   args: Record<string, unknown>;
   agentId?: string;
+  outboundRuntime?: OutboundChannelRuntime;
 }): string | undefined {
   if (!params.agentId) {
     return undefined;
@@ -356,7 +368,7 @@ function resolveTargetBoundAccountId(params: {
   addCandidateAndUnprefixedAlias(candidates, target);
   addCandidateAndUnprefixedAlias(
     candidates,
-    normalizeTargetForAccountBinding(params.channel, target),
+    normalizeTargetForAccountBinding(params.channel, target, params.outboundRuntime),
   );
   const [peerId, ...exactPeerIdAliases] = Array.from(candidates);
   return resolveFirstBoundAccountId({
@@ -365,7 +377,7 @@ function resolveTargetBoundAccountId(params: {
     agentId: params.agentId,
     peerId,
     exactPeerIdAliases,
-    peerKind: inferPeerKindForAccountBinding(params.channel, target),
+    peerKind: inferPeerKindForAccountBinding(params.channel, target, params.outboundRuntime),
   });
 }
 
@@ -375,6 +387,7 @@ async function resolveActionTarget(params: {
   action: ChannelMessageActionName;
   args: Record<string, unknown>;
   accountId?: string | null;
+  outboundRuntime?: OutboundChannelRuntime;
 }): Promise<ResolvedMessagingTarget | undefined> {
   let resolvedTarget: ResolvedMessagingTarget | undefined;
   const toRaw = normalizeOptionalString(params.args.to) ?? "";
@@ -384,6 +397,7 @@ async function resolveActionTarget(params: {
       channel: params.channel,
       input: toRaw,
       accountId: params.accountId ?? undefined,
+      outboundRuntime: params.outboundRuntime,
     });
     params.args.to = resolved.to;
     resolvedTarget = resolved;
@@ -396,6 +410,7 @@ async function resolveActionTarget(params: {
       input: channelIdRaw,
       accountId: params.accountId ?? undefined,
       preferredKind: "group",
+      outboundRuntime: params.outboundRuntime,
       validateResolvedTarget: (target) =>
         target.kind === "user"
           ? `Channel id "${channelIdRaw}" resolved to a user target.`
@@ -416,6 +431,7 @@ async function resolveResolvedTargetOrThrow(params: {
   input: string;
   accountId?: string;
   preferredKind?: "group" | "user" | "channel";
+  outboundRuntime?: OutboundChannelRuntime;
   validateResolvedTarget?: (target: ResolvedMessagingTarget) => string | undefined;
 }): Promise<ResolvedMessagingTarget> {
   const resolved = await resolveChannelTarget({
@@ -424,6 +440,7 @@ async function resolveResolvedTargetOrThrow(params: {
     input: params.input,
     accountId: params.accountId,
     preferredKind: params.preferredKind,
+    runtime: params.outboundRuntime,
   });
   if (!resolved.ok) {
     throw resolved.error;
@@ -446,6 +463,7 @@ type ResolvedActionContext = {
   input: RunMessageActionParams;
   agentId?: string;
   resolvedTarget?: ResolvedMessagingTarget;
+  outboundRuntime: OutboundChannelRuntime;
   abortSignal?: AbortSignal;
 };
 
@@ -460,15 +478,16 @@ async function runGatewayPluginMessageActionOrNull(params: {
   input: RunMessageActionParams;
   agentId?: string;
   result: (payload: unknown) => MessageActionRunResult;
+  outboundRuntime: OutboundChannelRuntime;
 }): Promise<MessageActionRunResult | null> {
   if (params.dryRun || !params.gateway) {
     return null;
   }
-  const plugin = resolveOutboundChannelPlugin({ channel: params.channel, cfg: params.cfg });
-  if (!plugin?.actions?.handleAction) {
+  const actions = params.outboundRuntime.actions;
+  if (!actions?.handleAction) {
     return null;
   }
-  const executionMode = plugin.actions.resolveExecutionMode?.({ action: params.action }) ?? "local";
+  const executionMode = actions.resolveExecutionMode?.({ action: params.action }) ?? "local";
   if (executionMode !== "gateway") {
     return null;
   }
@@ -598,6 +617,7 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
     input,
     agentId,
     resolvedTarget,
+    outboundRuntime,
     abortSignal,
   } = ctx;
   throwIfAborted(abortSignal);
@@ -675,6 +695,7 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
     args: params,
     message,
     preferPresentation: true,
+    outboundRuntime,
   });
 
   const mediaUrl = readStringParam(params, "media", { trim: false });
@@ -716,8 +737,9 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
     currentSessionKey: input.sessionKey,
     dryRun,
     resolvedTarget,
-    resolveAutoThreadId: getChannelPlugin(channel)?.threading?.resolveAutoThreadId,
+    resolveAutoThreadId: outboundRuntime.resolveAutoThreadId,
     resolveOutboundSessionRoute,
+    outboundRuntime,
     ensureOutboundSessionEntry,
   });
   const mirrorMediaUrls =
@@ -756,6 +778,7 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
     gateway,
     input,
     agentId,
+    outboundRuntime,
     result: (payload) => ({
       kind: "send",
       channel,
@@ -789,6 +812,7 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
       gateway,
       toolContext: input.toolContext,
       deps: input.deps,
+      outboundRuntime,
       dryRun,
       mirror:
         outboundRoute && !dryRun
@@ -829,7 +853,18 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
 }
 
 async function handlePollAction(ctx: ResolvedActionContext): Promise<MessageActionRunResult> {
-  const { cfg, params, channel, accountId, dryRun, gateway, input, agentId, abortSignal } = ctx;
+  const {
+    cfg,
+    params,
+    channel,
+    accountId,
+    dryRun,
+    gateway,
+    input,
+    agentId,
+    outboundRuntime,
+    abortSignal,
+  } = ctx;
   throwIfAborted(abortSignal);
   const action: ChannelMessageActionName = "poll";
   const to = readStringParam(params, "to", { required: true });
@@ -840,7 +875,7 @@ async function handlePollAction(ctx: ResolvedActionContext): Promise<MessageActi
     to,
     accountId,
     toolContext: input.toolContext,
-    resolveAutoThreadId: getChannelPlugin(channel)?.threading?.resolveAutoThreadId,
+    resolveAutoThreadId: outboundRuntime.resolveAutoThreadId,
   });
 
   const base = typeof params.message === "string" ? params.message : "";
@@ -854,6 +889,7 @@ async function handlePollAction(ctx: ResolvedActionContext): Promise<MessageActi
     args: params,
     message: base,
     preferPresentation: false,
+    outboundRuntime,
   });
 
   const gatewayPluginAction = await runGatewayPluginMessageActionOrNull({
@@ -866,6 +902,7 @@ async function handlePollAction(ctx: ResolvedActionContext): Promise<MessageActi
     gateway,
     input,
     agentId,
+    outboundRuntime,
     result: (payload) => ({
       kind: "poll",
       channel,
@@ -893,6 +930,7 @@ async function handlePollAction(ctx: ResolvedActionContext): Promise<MessageActi
       sessionId: input.sessionId,
       gateway,
       toolContext: input.toolContext,
+      outboundRuntime,
       dryRun,
       silent: silent ?? undefined,
     },
@@ -946,6 +984,7 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     input,
     abortSignal,
     agentId,
+    outboundRuntime,
   } = ctx;
   throwIfAborted(abortSignal);
   const action = input.action as Exclude<ChannelMessageActionName, "send" | "poll" | "broadcast">;
@@ -960,8 +999,7 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     };
   }
 
-  const plugin = resolveOutboundChannelPlugin({ channel, cfg });
-  if (!plugin?.actions?.handleAction) {
+  if (!outboundRuntime.actions?.handleAction) {
     throw new Error(`Channel ${channel} is unavailable for message actions (plugin not loaded).`);
   }
   const gatewayPluginAction = await runGatewayPluginMessageActionOrNull({
@@ -974,6 +1012,7 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     gateway,
     input,
     agentId,
+    outboundRuntime,
     result: (payload) => ({
       kind: "action",
       channel,
@@ -988,7 +1027,7 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     return gatewayPluginAction;
   }
 
-  const handled = await dispatchChannelMessageAction({
+  const actionContext = {
     channel,
     action,
     cfg,
@@ -1005,7 +1044,23 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     gateway,
     toolContext: input.toolContext,
     dryRun,
-  });
+  };
+  const actions = outboundRuntime.actions;
+  if (
+    actions.requiresTrustedRequesterSender?.({
+      action,
+      toolContext: input.toolContext,
+    }) &&
+    !input.requesterSenderId?.trim()
+  ) {
+    throw new Error(
+      `Trusted sender identity is required for ${channel}:${action} in tool-driven contexts.`,
+    );
+  }
+  const handled =
+    actions.supportsAction && !actions.supportsAction({ action })
+      ? null
+      : await actions.handleAction?.(actionContext);
   if (!handled) {
     throw new Error(`Message action ${action} not supported for channel ${channel}.`);
   }
@@ -1045,6 +1100,10 @@ export async function runMessageAction(
   });
 
   const channel = await resolveChannel(cfg, params, input.toolContext);
+  const outboundRuntime = resolveOutboundChannelRuntime({ channel, cfg });
+  if (!outboundRuntime) {
+    throw new Error(`Channel ${channel} is unavailable for message actions (plugin not loaded).`);
+  }
   let accountId = readStringParam(params, "accountId") ?? input.defaultAccountId;
   if (!accountId && resolvedAgentId) {
     accountId = resolveTargetBoundAccountId({
@@ -1052,6 +1111,7 @@ export async function runMessageAction(
       channel,
       args: params,
       agentId: resolvedAgentId,
+      outboundRuntime,
     });
   }
   if (accountId) {
@@ -1114,6 +1174,7 @@ export async function runMessageAction(
     action,
     args: params,
     accountId,
+    outboundRuntime,
   });
 
   enforceCrossContextPolicy({
@@ -1122,6 +1183,7 @@ export async function runMessageAction(
     args: params,
     toolContext: input.toolContext,
     cfg,
+    runtime: outboundRuntime,
   });
 
   if (action === "send" && hasPollCreationParams(params)) {
@@ -1142,6 +1204,7 @@ export async function runMessageAction(
       input,
       agentId: resolvedAgentId,
       resolvedTarget,
+      outboundRuntime,
       abortSignal: input.abortSignal,
     });
   }
@@ -1156,6 +1219,7 @@ export async function runMessageAction(
       dryRun,
       gateway,
       input,
+      outboundRuntime,
       abortSignal: input.abortSignal,
     });
   }
@@ -1170,6 +1234,7 @@ export async function runMessageAction(
     gateway,
     input,
     agentId: resolvedAgentId,
+    outboundRuntime,
     abortSignal: input.abortSignal,
   });
 }

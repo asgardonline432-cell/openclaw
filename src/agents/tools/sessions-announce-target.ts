@@ -1,5 +1,6 @@
 import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
 import type { CallGatewayOptions } from "../../gateway/call.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { parseThreadSessionSuffix } from "../../sessions/session-key-utils.js";
 import { normalizeOptionalStringifiedId } from "../../shared/string-coerce.js";
 import { deliveryContextFromSession } from "../../utils/delivery-context.shared.js";
@@ -15,9 +16,10 @@ async function callGatewayLazy<T = unknown>(opts: CallGatewayOptions): Promise<T
 export async function resolveAnnounceTarget(params: {
   sessionKey: string;
   displayKey: string;
+  runtime?: OutboundChannelRuntime;
 }): Promise<AnnounceTarget | null> {
-  const parsed = resolveAnnounceTargetFromKey(params.sessionKey);
-  const parsedDisplay = resolveAnnounceTargetFromKey(params.displayKey);
+  const parsed = resolveAnnounceTargetFromKey(params.sessionKey, params.runtime);
+  const parsedDisplay = resolveAnnounceTargetFromKey(params.displayKey, params.runtime);
   const fallback = parsed ?? parsedDisplay ?? null;
   const fallbackThreadId =
     fallback?.threadId ??
@@ -26,8 +28,14 @@ export async function resolveAnnounceTarget(params: {
 
   if (fallback) {
     const normalized = normalizeChannelId(fallback.channel);
-    const plugin = normalized ? getChannelPlugin(normalized) : null;
-    if (!plugin?.meta?.preferSessionLookupForAnnounceTarget) {
+    const runtime = params.runtime?.id === fallback.channel ? params.runtime : undefined;
+    const plugin = normalized && !runtime ? getChannelPlugin(normalized) : null;
+    if (
+      !(
+        runtime?.preferSessionLookupForAnnounceTarget ??
+        plugin?.meta?.preferSessionLookupForAnnounceTarget
+      )
+    ) {
       return fallback;
     }
   }

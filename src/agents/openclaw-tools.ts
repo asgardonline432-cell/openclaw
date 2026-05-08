@@ -3,6 +3,7 @@ import { selectApplicableRuntimeConfig } from "../config/config.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { callGateway } from "../gateway/call.js";
 import { isEmbeddedMode } from "../infra/embedded-mode.js";
+import type { OutboundChannelRuntime } from "../infra/outbound/channel-resolution.js";
 import { loadManifestMetadataSnapshot } from "../plugins/manifest-contract-eligibility.js";
 import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import {
@@ -119,6 +120,7 @@ export function createOpenClawTools(
      */
     runSessionKey?: string;
     agentChannel?: GatewayMessageChannel;
+    agentChannelRuntime?: OutboundChannelRuntime;
     agentAccountId?: string;
     /** Delivery target for topic/thread routing. */
     agentTo?: string;
@@ -514,6 +516,7 @@ export function createOpenClawTools(
             createSessionsSendTool({
               agentSessionKey: options?.agentSessionKey,
               agentChannel: options?.agentChannel,
+              agentChannelRuntime: options?.agentChannelRuntime,
               sandboxed: options?.sandboxed,
               config: resolvedConfig,
               callGateway: openClawToolsDeps.callGateway,

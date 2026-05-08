@@ -10,6 +10,7 @@ import {
   normalizeMessageChannel,
   type GatewayMessageChannel,
 } from "../../utils/message-channel.js";
+import type { OutboundChannelRuntime } from "./channel-resolution.js";
 import type { OutboundTargetResolution } from "./targets.js";
 import {
   resolveOutboundTarget,
@@ -135,6 +136,7 @@ export function resolveAgentOutboundTarget(params: {
   plan: AgentDeliveryPlan;
   targetMode?: ChannelOutboundTargetMode;
   validateExplicitTarget?: boolean;
+  runtime?: OutboundChannelRuntime;
 }): {
   resolvedTarget: OutboundTargetResolution | null;
   resolvedTo?: string;
@@ -164,6 +166,7 @@ export function resolveAgentOutboundTarget(params: {
     cfg: params.cfg,
     accountId: params.plan.resolvedAccountId,
     mode: targetMode,
+    runtime: params.runtime,
   });
   return {
     resolvedTarget,

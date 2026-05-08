@@ -14,6 +14,25 @@ export function normalizeChannelTargetInput(raw: string): string {
 }
 
 type TargetNormalizer = ((raw: string) => string | undefined) | undefined;
+type TargetResolverLooksLikeId = ((raw: string, normalized: string) => boolean) | undefined;
+type TargetResolverFallback =
+  | ((params: {
+      cfg: OpenClawConfig;
+      accountId?: string | null;
+      input: string;
+      normalized: string;
+      preferredKind?: TargetResolveKindLike;
+    }) => Promise<
+      | {
+          to: string;
+          kind: TargetResolveKindLike;
+          display?: string;
+          source?: "normalized" | "directory";
+        }
+      | null
+      | undefined
+    >)
+  | undefined;
 type TargetNormalizerCacheEntry = {
   version: number;
   normalizer: TargetNormalizer;
@@ -48,7 +67,13 @@ function resolveTargetNormalizer(channelId: ChannelId): TargetNormalizer {
   return normalizer;
 }
 
-export function normalizeTargetForProvider(provider: string, raw?: string): string | undefined {
+export function normalizeTargetForProvider(
+  provider: string,
+  raw?: string,
+  options?: {
+    normalizeTarget?: TargetNormalizer;
+  },
+): string | undefined {
   if (!raw) {
     return undefined;
   }
@@ -57,7 +82,8 @@ export function normalizeTargetForProvider(provider: string, raw?: string): stri
     return undefined;
   }
   const providerId = normalizeOptionalLowercaseString(provider);
-  const normalizer = providerId ? resolveTargetNormalizer(providerId) : undefined;
+  const normalizer =
+    options?.normalizeTarget ?? (providerId ? resolveTargetNormalizer(providerId) : undefined);
   return normalizeOptionalString(normalizer?.(raw) ?? fallback);
 }
 
@@ -73,6 +99,9 @@ export type ResolvedPluginMessagingTarget = {
 export function resolveNormalizedTargetInput(
   provider: string,
   raw?: string,
+  options?: {
+    normalizeTarget?: TargetNormalizer;
+  },
 ): { raw: string; normalized: string } | undefined {
   const trimmed = normalizeChannelTargetInput(raw ?? "");
   if (!trimmed) {
@@ -80,7 +109,7 @@ export function resolveNormalizedTargetInput(
   }
   return {
     raw: trimmed,
-    normalized: normalizeTargetForProvider(provider, trimmed) ?? trimmed,
+    normalized: normalizeTargetForProvider(provider, trimmed, options) ?? trimmed,
   };
 }
 
@@ -88,11 +117,17 @@ export function looksLikeTargetId(params: {
   channel: ChannelId;
   raw: string;
   normalized?: string;
+  normalizeTarget?: TargetNormalizer;
+  looksLikeTargetId?: TargetResolverLooksLikeId;
 }): boolean {
   const normalizedInput =
-    params.normalized ?? normalizeTargetForProvider(params.channel, params.raw);
-  const lookup = resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver
-    ?.looksLikeId;
+    params.normalized ??
+    normalizeTargetForProvider(params.channel, params.raw, {
+      normalizeTarget: params.normalizeTarget,
+    });
+  const lookup =
+    params.looksLikeTargetId ??
+    resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver?.looksLikeId;
   if (lookup) {
     return lookup(params.raw, normalizedInput ?? params.raw);
   }
@@ -118,13 +153,20 @@ export async function maybeResolvePluginMessagingTarget(params: {
   accountId?: string | null;
   preferredKind?: TargetResolveKindLike;
   requireIdLike?: boolean;
+  normalizeTarget?: TargetNormalizer;
+  looksLikeTargetId?: TargetResolverLooksLikeId;
+  resolveMessagingTargetFallback?: TargetResolverFallback;
 }): Promise<ResolvedPluginMessagingTarget | undefined> {
-  const normalizedInput = resolveNormalizedTargetInput(params.channel, params.input);
+  const normalizedInput = resolveNormalizedTargetInput(params.channel, params.input, {
+    normalizeTarget: params.normalizeTarget,
+  });
   if (!normalizedInput) {
     return undefined;
   }
-  const resolver = resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver;
-  if (!resolver?.resolveTarget) {
+  const resolveTarget =
+    params.resolveMessagingTargetFallback ??
+    resolveChannelPluginForTargetRead(params.channel)?.messaging?.targetResolver?.resolveTarget;
+  if (!resolveTarget) {
     return undefined;
   }
   if (
@@ -133,11 +175,13 @@ export async function maybeResolvePluginMessagingTarget(params: {
       channel: params.channel,
       raw: normalizedInput.raw,
       normalized: normalizedInput.normalized,
+      normalizeTarget: params.normalizeTarget,
+      looksLikeTargetId: params.looksLikeTargetId,
     })
   ) {
     return undefined;
   }
-  const resolved = await resolver.resolveTarget({
+  const resolved = await resolveTarget({
     cfg: params.cfg,
     accountId: params.accountId,
     input: normalizedInput.raw,
@@ -156,10 +200,22 @@ export async function maybeResolvePluginMessagingTarget(params: {
 }
 
 export function buildTargetResolverSignature(channel: ChannelId): string {
-  const plugin = resolveChannelPluginForTargetRead(channel);
+  return buildTargetResolverSignatureForRuntime({
+    channel,
+  });
+}
+
+export function buildTargetResolverSignatureForRuntime(params: {
+  channel: ChannelId;
+  targetResolverHint?: string;
+  looksLikeTargetId?: TargetResolverLooksLikeId;
+}): string {
+  const plugin = params.looksLikeTargetId
+    ? undefined
+    : resolveChannelPluginForTargetRead(params.channel);
   const resolver = plugin?.messaging?.targetResolver;
-  const hint = resolver?.hint ?? "";
-  const looksLike = resolver?.looksLikeId;
+  const hint = params.targetResolverHint ?? resolver?.hint ?? "";
+  const looksLike = params.looksLikeTargetId ?? resolver?.looksLikeId;
   const source = looksLike ? looksLike.toString() : "";
   return hashSignature(`${hint}|${source}`);
 }

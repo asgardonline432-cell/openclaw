@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
+import * as channelPlugins from "../../channels/plugins/index.js";
 import type { ChannelOutboundAdapter } from "../../channels/plugins/types.js";
 import type { CliDeps } from "../../cli/outbound-send-deps.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../../test-utils/channel-plugins.js";
 import { deliverAgentCommandResult, normalizeAgentCommandReplyPayloads } from "./delivery.js";
@@ -317,6 +319,61 @@ describe("normalizeAgentCommandReplyPayloads", () => {
       succeeded: true,
       reason: "no_visible_result",
     });
+  });
+
+  it("uses prepared outbound runtime for requested delivery without resolving channel plugins", async () => {
+    setActivePluginRegistry(emptyRegistry);
+    deliverOutboundPayloadsMock.mockResolvedValue([]);
+    const getChannelPluginSpy = vi
+      .spyOn(channelPlugins, "getChannelPlugin")
+      .mockImplementation(() => {
+        throw new Error("unexpected channel plugin lookup");
+      });
+    const outboundChannelRuntime = {
+      id: "slack",
+      label: "Slack",
+      chatTypes: ["direct"],
+      resolveTarget: ({ to }) => ({ ok: true, to: to ?? "#general" }),
+      resolveReplyTransport: () => ({
+        replyToId: "prepared-reply",
+        threadId: "prepared-thread",
+      }),
+      transformReplyPayload: ({ payload }) => ({
+        ...payload,
+        text: `prepared:${payload.text ?? ""}`,
+      }),
+    } satisfies OutboundChannelRuntime;
+
+    try {
+      await deliverAgentCommandResult({
+        cfg: {} as OpenClawConfig,
+        deps: {} as CliDeps,
+        runtime: { log: vi.fn(), error: vi.fn() } as never,
+        opts: {
+          message: "go",
+          deliver: true,
+          replyChannel: "slack",
+          replyTo: "#general",
+          outboundChannelRuntime,
+        } as AgentCommandOpts,
+        outboundSession: undefined,
+        sessionEntry: undefined,
+        payloads: [{ text: "here you go" }],
+        result: createResult(),
+      });
+
+      expect(getChannelPluginSpy).not.toHaveBeenCalled();
+      expect(deliverOutboundPayloadsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outboundRuntime: outboundChannelRuntime,
+          replyToId: "prepared-reply",
+          threadId: "prepared-thread",
+          payloads: [expect.objectContaining({ text: "prepared:here you go" })],
+        }),
+      );
+    } finally {
+      getChannelPluginSpy.mockRestore();
+    }
   });
 
   it("does not report success when best-effort delivery records an error", async () => {

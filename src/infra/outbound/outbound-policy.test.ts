@@ -191,6 +191,23 @@ describe("outbound policy helpers", () => {
       channel: "richchat",
       target: "123",
       toolContext: { currentChannelId: "C12345678", currentChannelProvider: "richchat" },
+      runtime: {
+        buildCrossContextPresentation: ({
+          originLabel,
+          message,
+        }: {
+          originLabel: string;
+          message: string;
+        }) => {
+          const trimmed = message.trim();
+          return {
+            blocks: [
+              ...(trimmed ? [{ type: "text" as const, text: message }] : []),
+              { type: "context" as const, text: `From ${originLabel}` },
+            ],
+          };
+        },
+      },
     });
 
     const requiredDecoration = expectCrossContextDecoration(decoration);

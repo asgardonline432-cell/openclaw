@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { CallGatewayOptions } from "../../gateway/call.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import type { OutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import { resolveNestedAgentLaneForSession } from "../lanes.js";
@@ -42,6 +43,7 @@ export async function runSessionsSendA2AFlow(params: {
   maxPingPongTurns: number;
   requesterSessionKey?: string;
   requesterChannel?: GatewayMessageChannel;
+  requesterChannelRuntime?: OutboundChannelRuntime;
   baseline?: AssistantReplySnapshot;
   roundOneReply?: string;
   waitRunId?: string;
@@ -80,6 +82,7 @@ export async function runSessionsSendA2AFlow(params: {
     const announceTarget = await resolveAnnounceTarget({
       sessionKey: params.targetSessionKey,
       displayKey: params.displayKey,
+      runtime: params.requesterChannelRuntime,
     });
     const targetChannel = announceTarget?.channel ?? "unknown";
 
