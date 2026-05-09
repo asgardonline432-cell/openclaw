@@ -596,7 +596,7 @@ and troubleshooting see the main [FAQ](/help/faq).
     OpenClaw supports **OpenAI Code (Codex)** via OAuth (ChatGPT sign-in). Use
     `openai/gpt-5.5` for the common setup: ChatGPT/Codex subscription auth plus
     native Codex app-server execution. `openai-codex/gpt-*` model refs are
-    legacy config repaired by `openclaw doctor --fix`. Direct OpenAI API-key
+    legacy compatibility aliases preserved by `openclaw doctor --fix`. Direct OpenAI API-key
     access remains available for non-agent OpenAI API surfaces and for agent
     models through an ordered `openai-codex` API-key profile.
     See [Model providers](/concepts/model-providers) and [Onboarding (CLI)](/start/wizard).
@@ -607,15 +607,16 @@ and troubleshooting see the main [FAQ](/help/faq).
     Older configs also used it as a model prefix:
 
     - `openai/gpt-5.5` = ChatGPT/Codex subscription auth with native Codex runtime for agent turns
-    - `openai-codex/gpt-5.5` = legacy model route repaired by `openclaw doctor --fix`
+    - `openai-codex/gpt-5.5` = legacy compatibility route preserved by `openclaw doctor --fix`
     - `openai/gpt-5.5` plus an ordered `openai-codex` API-key profile = API-key auth for an OpenAI agent model
     - `openai-codex:...` = auth profile id, not a model ref
 
     If you want the direct OpenAI Platform billing/limit path, set
     `OPENAI_API_KEY`. If you want ChatGPT/Codex subscription auth, sign in with
     `openclaw models auth login --provider openai-codex`. Keep the model ref as
-    `openai/gpt-5.5`; `openai-codex/*` model refs are legacy config that
-    `openclaw doctor --fix` rewrites.
+    `openai/gpt-5.5`; `openai-codex/*` model refs are legacy compatibility
+    config that `openclaw doctor --fix` preserves while cleaning stale route
+    state.
 
   </Accordion>
 

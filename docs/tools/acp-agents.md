@@ -184,7 +184,7 @@ Quick `/acp` flow from chat:
 
   </Accordion>
   <Accordion title="Model / provider / runtime selection cheat sheet">
-    - `openai-codex/*` - legacy Codex OAuth/subscription model route repaired by doctor.
+    - `openai-codex/*` - legacy Codex OAuth/subscription compatibility route preserved by doctor.
     - `openai/*` - native Codex app-server embedded runtime for OpenAI agent turns.
     - `/codex ...` - native Codex conversation control.
     - `/acp ...` or `runtime: "acp"` - explicit ACP/acpx control.

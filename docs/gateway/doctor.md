@@ -109,7 +109,7 @@ cat ~/.openclaw/openclaw.json
     - Channel status warnings (probed from the running gateway).
     - Channel-specific permission checks live under `openclaw channels capabilities`; for example, Discord voice channel permissions are audited with `openclaw channels capabilities --channel discord --target channel:<channel-id>`.
     - WhatsApp responsiveness checks for degraded Gateway event-loop health with local TUI clients still running; `--fix` stops only verified local TUI clients.
-    - Codex route repair for legacy `openai-codex/*` model refs in primary models, fallbacks, heartbeat/subagent/compaction overrides, hooks, channel model overrides, and session route pins; `--fix` rewrites them to `openai/*`, removes stale session/whole-agent runtime pins, and leaves canonical OpenAI agent refs on the default Codex harness.
+    - Codex route cleanup for legacy `openai-codex/*` compatibility model refs in primary models, fallbacks, heartbeat/subagent/compaction overrides, hooks, channel model overrides, and session route pins; `--fix` preserves those aliases, removes stale session/whole-agent runtime pins, clears stale fallback notices, and lets runtime alias resolution normalize the route.
     - Supervisor config audit (launchd/systemd/schtasks) with optional repair.
     - Embedded proxy environment cleanup for gateway services that captured shell `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` values during install or update.
     - Gateway runtime best-practice checks (Node vs Bun, version-manager paths).
@@ -263,16 +263,16 @@ That stages grounded durable candidates into the short-term dreaming store while
   <Accordion title="2e. Codex OAuth provider overrides">
     If you previously added legacy OpenAI transport settings under `models.providers.openai-codex`, they can shadow the built-in Codex OAuth provider path that newer releases use automatically. Doctor warns when it sees those old transport settings alongside Codex OAuth so you can remove or rewrite the stale transport override and get the built-in routing/fallback behavior back. Custom proxies and header-only overrides are still supported and do not trigger this warning.
   </Accordion>
-  <Accordion title="2f. Codex route repair">
-    Doctor checks for legacy `openai-codex/*` model refs. Native Codex harness routing uses canonical `openai/*` model refs; OpenAI agent turns go through the Codex app-server harness instead of the OpenClaw PI OpenAI path.
+  <Accordion title="2f. Codex route cleanup">
+    Doctor checks for legacy `openai-codex/*` compatibility model refs. New native Codex harness config should use canonical `openai/*` model refs; OpenAI agent turns go through the Codex app-server harness instead of the OpenClaw PI OpenAI path.
 
-    In `--fix` / `--repair` mode, doctor rewrites affected default-agent and per-agent refs, including primary models, fallbacks, heartbeat/subagent/compaction overrides, hooks, channel model overrides, and stale persisted session route state:
+    In `--fix` / `--repair` mode, doctor preserves affected default-agent and per-agent aliases, including primary models, fallbacks, heartbeat/subagent/compaction overrides, hooks, channel model overrides, and persisted session model pins:
 
-    - `openai-codex/gpt-*` becomes `openai/gpt-*`.
+    - `openai-codex/gpt-*` stays configured as a compatibility alias; runtime alias resolution normalizes it at use time.
     - Stale whole-agent runtime config and persisted session runtime pins are removed because runtime selection is provider/model-scoped.
     - Explicit provider/model runtime policy is preserved.
-    - Existing model fallback lists are preserved with their legacy entries rewritten; copied per-model settings move from the legacy key to the canonical `openai/*` key.
-    - Persisted session `modelProvider`/`providerOverride`, `model`/`modelOverride`, fallback notices, auth-profile pins, and Codex harness pins are repaired across all discovered agent session stores.
+    - Existing model fallback lists and per-model settings are preserved without destructive provider-prefix migration.
+    - Stale fallback notices and stale Codex harness pins are cleared across discovered agent session stores when they would force the wrong route; persisted model and auth-profile pins are preserved.
     - `/codex ...` means "control or bind a native Codex conversation from chat."
     - `/acp ...` or `runtime: "acp"` means "use the external ACP/acpx adapter."
 

@@ -30,7 +30,7 @@ Reference for **LLM/model providers** (not chat channels like WhatsApp/Telegram)
     OpenAI-family routes are prefix-specific:
 
     - `openai/<model>` uses the native Codex app-server harness for agent turns by default. This is the usual ChatGPT/Codex subscription setup.
-    - `openai-codex/<model>` is legacy config that doctor rewrites to `openai/<model>`.
+    - `openai-codex/<model>` is legacy compatibility config that doctor preserves while cleaning stale route state.
     - `openai/<model>` plus provider/model `agentRuntime.id: "pi"` uses PI for explicit API-key or compatibility routes.
 
     See [OpenAI](/providers/openai) and [Codex harness](/plugins/codex-harness). If the provider/runtime split is confusing, read [Agent runtimes](/concepts/agent-runtimes) first.
@@ -135,7 +135,7 @@ Anthropic staff told us OpenClaw-style Claude CLI usage is allowed again, so Ope
 
 - Provider: `openai-codex`
 - Auth: OAuth (ChatGPT)
-- Legacy PI model ref: `openai-codex/gpt-5.5`
+- Legacy compatibility model ref: `openai-codex/gpt-5.5`
 - Native Codex app-server harness ref: `openai/gpt-5.5`
 - Native Codex app-server harness docs: [Codex harness](/plugins/codex-harness)
 - Legacy model refs: `codex/gpt-*`
@@ -150,7 +150,7 @@ Anthropic staff told us OpenClaw-style Claude CLI usage is allowed again, so Ope
 - Policy note: OpenAI Codex OAuth is explicitly supported for external tools/workflows like OpenClaw.
 - For the common subscription plus native Codex runtime route, sign in with `openai-codex` auth but configure `openai/gpt-5.5`; OpenAI agent turns select Codex by default.
 - Use provider/model `agentRuntime.id: "pi"` only when you want a compatibility route through PI; otherwise keep `openai/gpt-5.5` on the default Codex harness.
-- Older `openai-codex/gpt-5.1*`, `openai-codex/gpt-5.2*`, and `openai-codex/gpt-5.3*` refs are suppressed because ChatGPT/Codex OAuth accounts reject them; use `openai-codex/gpt-5.5` or the native Codex runtime route instead.
+- Older `openai-codex/gpt-5.1*`, `openai-codex/gpt-5.2*`, and `openai-codex/gpt-5.3*` refs are suppressed because ChatGPT/Codex OAuth accounts reject them; use `openai/gpt-5.5` for new config or keep an existing `openai-codex/gpt-5.5` compatibility alias.
 
 ```json5
 {
