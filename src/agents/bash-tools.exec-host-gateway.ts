@@ -1,6 +1,7 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import { describeInterpreterInlineEval } from "../infra/command-analysis/inline-eval.js";
 import { detectPolicyInlineEval } from "../infra/command-analysis/policy.js";
+import type { ExecApprovalSurfaceRuntime } from "../infra/exec-approval-surface.js";
 import {
   addDurableCommandApproval,
   type ExecAsk,
@@ -68,6 +69,7 @@ export type ProcessGatewayAllowlistParams = {
   turnSourceTo?: string;
   turnSourceAccountId?: string;
   turnSourceThreadId?: string | number;
+  approvalSurfaceRuntime?: ExecApprovalSurfaceRuntime;
   scopeKey?: string;
   approvalFollowupText?: string;
   approvalFollowup?: ExecApprovalFollowupFactory;
@@ -363,6 +365,7 @@ export async function processGatewayAllowlist(
       createApprovalSlug,
       turnSourceChannel: params.turnSourceChannel,
       turnSourceAccountId: params.turnSourceAccountId,
+      approvalSurfaceRuntime: params.approvalSurfaceRuntime,
     });
     const registerGatewayApproval = async (approvalId: string) =>
       await registerExecApprovalRequestForHostOrThrow({

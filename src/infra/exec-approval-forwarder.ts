@@ -1,8 +1,5 @@
 import type { ReplyPayload } from "../auto-reply/types.js";
-import {
-  getLoadedChannelPlugin,
-  resolveChannelApprovalAdapter,
-} from "../channels/plugins/index.js";
+import { resolveChannelApprovalAdapter } from "../channels/plugins/index.js";
 import { getRuntimeConfig } from "../config/config.js";
 import type {
   ExecApprovalForwardingConfig,
@@ -34,6 +31,10 @@ import {
   type ExecApprovalRequest,
   type ExecApprovalResolved,
 } from "./exec-approvals.js";
+import {
+  resolveOutboundChannelRuntime,
+  type OutboundChannelRuntime,
+} from "./outbound/channel-resolution.js";
 import {
   approvalDecisionLabel,
   buildPluginApprovalExpiredMessage,
@@ -208,7 +209,8 @@ function shouldSkipForwardingFallback(params: {
   if (!channel) {
     return false;
   }
-  const adapter = resolveChannelApprovalAdapter(getLoadedChannelPlugin(channel));
+  const runtime = resolveForwardTargetRuntime({ cfg: params.cfg, channel });
+  const adapter = resolveForwardTargetApprovalAdapter(runtime);
   return (
     adapter?.delivery?.shouldSuppressForwardingFallback?.({
       cfg: params.cfg,
@@ -216,6 +218,24 @@ function shouldSkipForwardingFallback(params: {
       target: params.target,
       request: buildSyntheticApprovalRequest(params.routeRequest),
     }) ?? false
+  );
+}
+
+function resolveForwardTargetRuntime(params: {
+  cfg: OpenClawConfig;
+  channel: string;
+}): OutboundChannelRuntime | undefined {
+  return resolveOutboundChannelRuntime({
+    cfg: params.cfg,
+    channel: params.channel,
+  });
+}
+
+function resolveForwardTargetApprovalAdapter(
+  runtime?: Pick<OutboundChannelRuntime, "approvalCapability">,
+): ReturnType<typeof resolveChannelApprovalAdapter> {
+  return resolveChannelApprovalAdapter(
+    runtime ? { approvalCapability: runtime.approvalCapability } : undefined,
   );
 }
 
@@ -362,7 +382,11 @@ async function deliverToTargets(params: {
   targets: ForwardTarget[];
   buildPayload: (target: ForwardTarget) => ReplyPayload;
   deliver: DeliverApprovalPayloads;
-  beforeDeliver?: (target: ForwardTarget, payload: ReplyPayload) => Promise<void> | void;
+  beforeDeliver?: (
+    target: ForwardTarget,
+    payload: ReplyPayload,
+    runtime?: OutboundChannelRuntime,
+  ) => Promise<void> | void;
   shouldSend?: () => boolean;
 }) {
   const deliveries = params.targets.map(async (target) => {
@@ -373,9 +397,10 @@ async function deliverToTargets(params: {
     if (!isDeliverableMessageChannel(channel)) {
       return;
     }
+    const outboundRuntime = resolveForwardTargetRuntime({ cfg: params.cfg, channel });
     try {
       const payload = params.buildPayload(target);
-      await params.beforeDeliver?.(target, payload);
+      await params.beforeDeliver?.(target, payload, outboundRuntime);
       const send = await params.deliver({
         cfg: params.cfg,
         channel,
@@ -383,6 +408,7 @@ async function deliverToTargets(params: {
         accountId: target.accountId,
         threadId: target.threadId,
         payloads: [payload],
+        outboundRuntime,
       });
       if (send.status === "failed" || send.status === "partial_failed") {
         throw send.error;
@@ -395,6 +421,7 @@ async function deliverToTargets(params: {
 }
 
 function buildApprovalRenderPayload<TParams>(params: {
+  cfg: OpenClawConfig;
   target: ForwardTarget;
   renderParams: TParams;
   resolveRenderer: (
@@ -403,10 +430,9 @@ function buildApprovalRenderPayload<TParams>(params: {
   buildFallback: () => ReplyPayload;
 }): ReplyPayload {
   const channel = normalizeMessageChannel(params.target.channel) ?? params.target.channel;
+  const runtime = channel ? resolveForwardTargetRuntime({ cfg: params.cfg, channel }) : undefined;
   const adapterPayload = channel
-    ? params.resolveRenderer(resolveChannelApprovalAdapter(getLoadedChannelPlugin(channel)))?.(
-        params.renderParams,
-      )
+    ? params.resolveRenderer(resolveForwardTargetApprovalAdapter(runtime))?.(params.renderParams)
     : null;
   return adapterPayload ?? params.buildFallback();
 }
@@ -418,6 +444,7 @@ function buildExecPendingPayload(params: {
   nowMs: number;
 }): ReplyPayload {
   return buildApprovalRenderPayload({
+    cfg: params.cfg,
     target: params.target,
     renderParams: params,
     resolveRenderer: (adapter) => adapter?.render?.exec?.buildPendingPayload,
@@ -439,6 +466,7 @@ function buildExecResolvedPayload(params: {
   target: ForwardTarget;
 }): ReplyPayload {
   return buildApprovalRenderPayload({
+    cfg: params.cfg,
     target: params.target,
     renderParams: params,
     resolveRenderer: (adapter) => adapter?.render?.exec?.buildResolvedPayload,
@@ -458,6 +486,7 @@ function buildPluginPendingPayload(params: {
   nowMs: number;
 }): ReplyPayload {
   return buildApprovalRenderPayload({
+    cfg: params.cfg,
     target: params.target,
     renderParams: params,
     resolveRenderer: (adapter) => adapter?.render?.plugin?.buildPendingPayload,
@@ -477,6 +506,7 @@ function buildPluginResolvedPayload(params: {
   target: ForwardTarget;
 }): ReplyPayload {
   return buildApprovalRenderPayload({
+    cfg: params.cfg,
     target: params.target,
     renderParams: params,
     resolveRenderer: (adapter) => adapter?.render?.plugin?.buildResolvedPayload,
@@ -606,12 +636,8 @@ function createApprovalHandlers<
           routeRequest,
           nowMs: params.nowMs(),
         }),
-      beforeDeliver: async (target, payload) => {
-        const channel = normalizeMessageChannel(target.channel) ?? target.channel;
-        if (!channel) {
-          return;
-        }
-        await getLoadedChannelPlugin(channel)?.outbound?.beforeDeliverPayload?.({
+      beforeDeliver: async (target, payload, runtime) => {
+        await runtime?.outbound?.beforeDeliverPayload?.({
           cfg,
           target,
           payload,

@@ -77,7 +77,8 @@ export type RouteReplyParams = {
   runtime?: Pick<
     ReplyChannelRuntime,
     "id" | "transformReplyPayload" | "hasStructuredReplyPayload" | "resolveReplyTransport"
-  >;
+  > &
+    Partial<ReplyChannelRuntime>;
 };
 
 export type RouteReplyResult = {
@@ -88,6 +89,18 @@ export type RouteReplyResult = {
   /** Error message if the send failed. */
   error?: string;
 };
+
+function isPreparedOutboundRuntime(
+  runtime: RouteReplyParams["runtime"] | undefined,
+  channelId: string | null,
+): runtime is ReplyChannelRuntime {
+  return Boolean(
+    runtime &&
+    normalizeOptionalLowercaseString(runtime.id) === channelId &&
+    typeof runtime.label === "string" &&
+    Array.isArray(runtime.chatTypes),
+  );
+}
 
 /**
  * Routes a reply payload to the specified channel.
@@ -112,6 +125,9 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
   const transformReplyPayload = preparedRuntime?.transformReplyPayload;
   const hasStructuredReplyPayload = preparedRuntime?.hasStructuredReplyPayload;
   const resolveReplyTransport = preparedRuntime?.resolveReplyTransport;
+  const outboundRuntime = isPreparedOutboundRuntime(preparedRuntime, channelId)
+    ? preparedRuntime
+    : undefined;
   const resolvedAgentId = params.sessionKey
     ? resolveSessionAgentId({
         sessionKey: params.sessionKey,
@@ -247,6 +263,7 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
       threadId: resolvedThreadId,
       session: outboundSession,
       signal: abortSignal,
+      outboundRuntime,
       mirror:
         params.mirror !== false && params.sessionKey
           ? {

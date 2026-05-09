@@ -64,6 +64,11 @@ const mocks = vi.hoisted(() => {
     })),
     getChannelPlugin: vi.fn((): ChannelPlugin | undefined => undefined),
     normalizeChannelId: vi.fn<(channel?: string | null) => string | null>(),
+    resolveOutboundChannelRuntime: vi.fn((params?: { channel?: string }) => ({
+      id: params?.channel ?? "whatsapp",
+      label: params?.channel ?? "whatsapp",
+      chatTypes: ["direct"],
+    })),
     resolveOutboundTarget: vi.fn(((_params?: { to?: string }) => ({
       ok: true as const,
       to: "+15550002",
@@ -243,6 +248,10 @@ vi.mock("../infra/outbound/targets.js", () => ({
   resolveOutboundTarget: mocks.resolveOutboundTarget,
 }));
 
+vi.mock("../infra/outbound/channel-resolution.js", () => ({
+  resolveOutboundChannelRuntime: mocks.resolveOutboundChannelRuntime,
+}));
+
 vi.mock("../infra/outbound/deliver.js", () => ({
   deliverOutboundPayloads: mocks.deliverOutboundPayloads,
   deliverOutboundPayloadsInternal: mocks.deliverOutboundPayloads,
@@ -384,6 +393,12 @@ describe("scheduleRestartSentinelWake", () => {
     mocks.getChannelPlugin.mockReset();
     mocks.getChannelPlugin.mockReturnValue(undefined);
     mocks.normalizeChannelId.mockClear();
+    mocks.resolveOutboundChannelRuntime.mockReset();
+    mocks.resolveOutboundChannelRuntime.mockImplementation((params?: { channel?: string }) => ({
+      id: params?.channel ?? "whatsapp",
+      label: params?.channel ?? "whatsapp",
+      chatTypes: ["direct"],
+    }));
     mocks.resolveOutboundTarget.mockReset();
     mocks.resolveOutboundTarget.mockReturnValue({ ok: true as const, to: "+15550002" });
     mocks.deliverOutboundPayloads.mockReset();
@@ -722,26 +737,14 @@ describe("scheduleRestartSentinelWake", () => {
   });
 
   it("preserves derived reply transport ids in continuation context", async () => {
-    mocks.getChannelPlugin.mockReturnValue({
+    mocks.resolveOutboundChannelRuntime.mockReturnValue({
       id: "whatsapp",
-      meta: {
-        id: "whatsapp",
-        label: "WhatsApp",
-        selectionLabel: "WhatsApp",
-        docsPath: "/channels/whatsapp",
-        blurb: "WhatsApp",
-      },
-      capabilities: { chatTypes: ["direct"] },
-      config: {
-        listAccountIds: () => [],
-        resolveAccount: () => ({}),
-      },
-      threading: {
-        resolveReplyTransport: ({ threadId }: { threadId?: string | number | null }) => ({
-          replyToId: threadId != null ? `reply:${String(threadId)}` : undefined,
-          threadId: null,
-        }),
-      },
+      label: "WhatsApp",
+      chatTypes: ["direct"],
+      resolveReplyTransport: ({ threadId }: { threadId?: string | number | null }) => ({
+        replyToId: threadId != null ? `reply:${String(threadId)}` : undefined,
+        threadId: null,
+      }),
     });
     mocks.readRestartSentinel.mockResolvedValue({
       payload: {

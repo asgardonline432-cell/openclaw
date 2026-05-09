@@ -4,7 +4,10 @@ import { normalizeChannelId } from "../../channels/plugins/index.js";
 import { createOutboundSendDeps } from "../../cli/deps.js";
 import { applyPluginAutoEnable } from "../../config/plugin-auto-enable.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { resolveOutboundChannelRuntime } from "../../infra/outbound/channel-resolution.js";
+import {
+  resolveOutboundChannelRuntime,
+  type OutboundChannelRuntime,
+} from "../../infra/outbound/channel-resolution.js";
 import { resolveMessageChannelSelection } from "../../infra/outbound/channel-selection.js";
 import {
   ensureOutboundSessionEntry,
@@ -147,6 +150,7 @@ function resolveGatewayOutboundTarget(params: {
   to: string;
   cfg: OpenClawConfig;
   accountId?: string;
+  runtime?: OutboundChannelRuntime;
 }):
   | {
       ok: true;
@@ -162,6 +166,7 @@ function resolveGatewayOutboundTarget(params: {
     cfg: params.cfg,
     accountId: params.accountId,
     mode: "explicit",
+    runtime: params.runtime,
   });
   if (!resolved.ok) {
     return {
@@ -474,6 +479,7 @@ export const sendHandlers: GatewayRequestHandlers = {
           to,
           cfg,
           accountId,
+          runtime: outboundRuntime,
         });
         if (!resolvedTarget.ok) {
           return {
@@ -572,6 +578,7 @@ export const sendHandlers: GatewayRequestHandlers = {
           threadId: outboundRoute?.threadId ?? threadId ?? null,
           deps: outboundDeps,
           gatewayClientScopes: client?.connect?.scopes ?? [],
+          outboundRuntime,
           mirror: outboundSessionKey
             ? {
                 sessionKey: outboundSessionKey,
@@ -693,6 +700,7 @@ export const sendHandlers: GatewayRequestHandlers = {
         to,
         cfg,
         accountId,
+        runtime: outboundRuntime,
       });
       if (!resolvedTarget.ok) {
         respond(false, undefined, resolvedTarget.error);

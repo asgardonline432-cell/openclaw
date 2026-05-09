@@ -165,6 +165,37 @@ describe("resolveExecApprovalInitiatingSurfaceState", () => {
     });
   });
 
+  it("uses prepared approval runtime without loading the channel plugin", () => {
+    const getActionAvailabilityState = vi.fn(() => ({ kind: "disabled" as const }));
+
+    expect(
+      resolveExecApprovalInitiatingSurfaceState({
+        channel: "discord",
+        accountId: "main",
+        cfg: {} as never,
+        runtime: {
+          id: "discord",
+          label: "Prepared Discord",
+          approvalCapability: {
+            getActionAvailabilityState,
+          },
+        },
+      }),
+    ).toEqual({
+      kind: "disabled",
+      channel: "discord",
+      channelLabel: "Prepared Discord",
+      accountId: "main",
+    });
+    expect(getActionAvailabilityState).toHaveBeenCalledWith({
+      cfg: {} as never,
+      accountId: "main",
+      action: "approve",
+      approvalKind: "exec",
+    });
+    expect(getChannelPluginMock).not.toHaveBeenCalled();
+  });
+
   it("prefers exec-initiating-surface state over generic approval availability", () => {
     const getExecInitiatingSurfaceState = vi.fn(() => ({ kind: "disabled" as const }));
     const getActionAvailabilityState = vi.fn(() => ({ kind: "enabled" as const }));

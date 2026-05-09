@@ -31,6 +31,7 @@ import {
   parseMessageWithAttachments,
   registerApnsRegistration,
   requestHeartbeat,
+  resolveOutboundChannelRuntime,
   resolveChatAttachmentMaxBytes,
   resolveGatewayModelSupportsImages,
   resolveOutboundTarget,
@@ -332,11 +333,16 @@ async function sendReceiptAck(params: {
   to: string;
   text: string;
 }) {
+  const outboundRuntime = resolveOutboundChannelRuntime({
+    channel: params.channel,
+    cfg: params.cfg,
+  });
   const resolved = resolveOutboundTarget({
     channel: params.channel,
     to: params.to,
     cfg: params.cfg,
     mode: "explicit",
+    runtime: outboundRuntime,
   });
   if (!resolved.ok) {
     throw new Error(String(resolved.error));
@@ -354,6 +360,7 @@ async function sendReceiptAck(params: {
     bestEffort: true,
     durability: "best_effort",
     deps: createOutboundSendDeps(params.deps),
+    outboundRuntime,
   });
   if (send.status === "failed") {
     throw send.error;

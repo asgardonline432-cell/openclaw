@@ -52,6 +52,7 @@ export type OutboundChannelRuntime = {
   pairing?: ChannelPairingAdapter;
   commands?: ChannelCommandAdapter;
   defaultAccountId?: ChannelConfigAdapter<unknown>["defaultAccountId"];
+  listAccountIds?: ChannelConfigAdapter<unknown>["listAccountIds"];
   directory?: ChannelDirectoryAdapter;
   promptRuntime?: ChannelPromptRuntime;
   inferTargetChatType?: ChannelMessagingAdapter["inferTargetChatType"];
@@ -84,6 +85,7 @@ export type OutboundChannelRuntime = {
   targetsMatchForReplySuppression?: ChannelOutboundAdapter["targetsMatchForReplySuppression"];
   hasStructuredReplyPayload?: ChannelMessagingAdapter["hasStructuredReplyPayload"];
   blockStreamingCoalesceDefaults?: ChannelStreamingAdapter["blockStreamingCoalesceDefaults"];
+  heartbeat?: ChannelPlugin["heartbeat"];
 };
 
 export function resetOutboundChannelResolutionStateForTest(): void {
@@ -135,6 +137,7 @@ function toOutboundChannelRuntime(plugin: ChannelPlugin): OutboundChannelRuntime
     pairing: plugin.pairing,
     commands: plugin.commands,
     defaultAccountId: plugin.config?.defaultAccountId,
+    listAccountIds: plugin.config?.listAccountIds,
     directory: plugin.directory,
     promptRuntime: {
       messageToolHints: plugin.agentPrompt?.messageToolHints,
@@ -173,6 +176,7 @@ function toOutboundChannelRuntime(plugin: ChannelPlugin): OutboundChannelRuntime
     targetsMatchForReplySuppression: plugin.outbound?.targetsMatchForReplySuppression,
     hasStructuredReplyPayload: plugin.messaging?.hasStructuredReplyPayload,
     blockStreamingCoalesceDefaults: plugin.streaming?.blockStreamingCoalesceDefaults,
+    heartbeat: plugin.heartbeat,
   };
 }
 

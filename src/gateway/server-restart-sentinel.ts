@@ -11,7 +11,10 @@ import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
 import { parseSessionThreadInfo } from "../config/sessions/thread-info.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { requestHeartbeat } from "../infra/heartbeat-wake.js";
-import { resolveOutboundChannelRuntime } from "../infra/outbound/channel-resolution.js";
+import {
+  resolveOutboundChannelRuntime,
+  type OutboundChannelRuntime,
+} from "../infra/outbound/channel-resolution.js";
 import { deliverOutboundPayloads } from "../infra/outbound/deliver.js";
 import { ackDelivery, enqueueDelivery, failDelivery } from "../infra/outbound/delivery-queue.js";
 import { buildOutboundSessionContext } from "../infra/outbound/session-context.js";
@@ -112,6 +115,7 @@ async function deliverRestartSentinelNotice(params: {
   replyToId?: string;
   threadId?: string;
   session: ReturnType<typeof buildOutboundSessionContext>;
+  outboundRuntime?: OutboundChannelRuntime;
 }) {
   const payloads = [{ text: params.message }];
   const queueId = await enqueueDelivery({
@@ -137,6 +141,7 @@ async function deliverRestartSentinelNotice(params: {
         deps: params.deps,
         bestEffort: false,
         skipQueue: true,
+        outboundRuntime: params.outboundRuntime,
       });
       if (results.length > 0) {
         if (queueId) {
@@ -292,6 +297,7 @@ async function deliverQueuedSessionDelivery(params: {
   }
 
   const route = params.entry.route;
+  const outboundRuntime = resolveOutboundChannelRuntime({ channel: route.channel, cfg });
   const messageId = resolveQueuedRestartContinuationMessageId(params.entry);
   const userMessage = params.entry.message.trim();
   const agentId = resolveSessionAgentId({
@@ -376,6 +382,7 @@ async function deliverQueuedSessionDelivery(params: {
           }),
           deps: params.deps,
           bestEffort: false,
+          outboundRuntime,
         });
         if (results.length === 0) {
           throw new Error("restart continuation delivery returned no results");
@@ -550,18 +557,20 @@ async function loadRestartSentinelStartupTask(params: {
     let resolvedThreadId = threadId;
     let continuationQueueId: string | undefined;
     let continuationRoute: SessionDeliveryRoute | undefined;
+    let outboundRuntime: OutboundChannelRuntime | undefined;
 
     if (channel && to) {
+      outboundRuntime = resolveOutboundChannelRuntime({ channel, cfg });
       const resolved = resolveOutboundTarget({
         channel,
         to,
         cfg,
         accountId: origin?.accountId,
         mode: "implicit",
+        runtime: outboundRuntime,
       });
       if (resolved.ok) {
         resolvedTo = resolved.to;
-        const outboundRuntime = resolveOutboundChannelRuntime({ channel, cfg });
         const replyTransport =
           outboundRuntime?.resolveReplyTransport?.({
             cfg,
@@ -631,6 +640,7 @@ async function loadRestartSentinelStartupTask(params: {
         replyToId,
         threadId: resolvedThreadId,
         session: outboundSession,
+        outboundRuntime,
       });
     }
 

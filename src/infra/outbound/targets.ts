@@ -164,13 +164,12 @@ export function resolveHeartbeatDeliveryTarget(params: {
   const heartbeatAccountId = heartbeat?.accountId?.trim();
   // Use explicit accountId from heartbeat config if provided, otherwise fall back to session
   let effectiveAccountId = heartbeatAccountId || resolvedTarget.accountId;
+  const outboundRuntime = resolvedTarget.channel
+    ? resolveOutboundChannelRuntime({ channel: resolvedTarget.channel, cfg })
+    : undefined;
 
   if (heartbeatAccountId && resolvedTarget.channel) {
-    const plugin = resolveOutboundChannelPlugin({
-      channel: resolvedTarget.channel,
-      cfg,
-    });
-    const listAccountIds = plugin?.config.listAccountIds;
+    const listAccountIds = outboundRuntime?.listAccountIds;
     const accountIds = listAccountIds ? listAccountIds(cfg) : [];
     if (accountIds.length > 0) {
       const normalizedAccountId = normalizeAccountId(heartbeatAccountId);
@@ -204,6 +203,7 @@ export function resolveHeartbeatDeliveryTarget(params: {
     cfg,
     accountId: effectiveAccountId,
     mode: "heartbeat",
+    runtime: outboundRuntime,
   });
   if (!resolved.ok) {
     return buildNoHeartbeatDeliveryTarget({
@@ -220,7 +220,7 @@ export function resolveHeartbeatDeliveryTarget(params: {
     channel: resolvedTarget.channel,
     to: resolved.to,
     sessionChatType: sessionChatTypeHint,
-    runtime: resolveOutboundChannelRuntime({ channel: resolvedTarget.channel, cfg }),
+    runtime: outboundRuntime,
   });
   if (deliveryChatType === "direct" && heartbeat?.directPolicy === "block") {
     return buildNoHeartbeatDeliveryTarget({
@@ -232,17 +232,14 @@ export function resolveHeartbeatDeliveryTarget(params: {
   }
 
   let reason: string | undefined;
-  const plugin = resolveOutboundChannelPlugin({
-    channel: resolvedTarget.channel,
-    cfg,
-  });
-  if (plugin?.config.resolveAllowFrom) {
+  if (outboundRuntime?.resolveAllowFrom) {
     const explicit = resolveOutboundTarget({
       channel: resolvedTarget.channel,
       to: resolvedTarget.to,
       cfg,
       accountId: effectiveAccountId,
       mode: "explicit",
+      runtime: outboundRuntime,
     });
     if (explicit.ok && explicit.to !== resolved.to) {
       reason = "allowFrom-fallback";
@@ -256,6 +253,7 @@ export function resolveHeartbeatDeliveryTarget(params: {
     turnSource: params.turnSource,
     entry,
     resolvedTarget,
+    runtime: outboundRuntime,
   })
     ? resolvedTarget.lastThreadId
     : undefined;
@@ -337,11 +335,10 @@ function shouldReuseHeartbeatRouteThreadId(params: {
   turnSource?: DeliveryContext;
   entry?: SessionEntry;
   resolvedTarget: SessionDeliveryTarget;
+  runtime?: Pick<OutboundChannelRuntime, "preserveHeartbeatThreadIdForGroupRoute">;
 }): boolean {
-  const channel = params.resolvedTarget.channel;
-  const runtime = channel ? resolveOutboundChannelRuntime({ channel, cfg: params.cfg }) : undefined;
   return (
-    runtime?.preserveHeartbeatThreadIdForGroupRoute === true &&
+    params.runtime?.preserveHeartbeatThreadIdForGroupRoute === true &&
     params.resolvedTarget.threadId == null &&
     params.target === "last" &&
     !params.heartbeat?.to &&
@@ -397,11 +394,11 @@ export function resolveHeartbeatSenderContext(params: {
   const accountId =
     params.delivery.accountId ??
     (provider === params.delivery.lastChannel ? params.delivery.lastAccountId : undefined);
+  const runtime = provider
+    ? resolveOutboundChannelRuntime({ channel: provider, cfg: params.cfg })
+    : undefined;
   const allowFromRaw = provider
-    ? (resolveOutboundChannelPlugin({
-        channel: provider,
-        cfg: params.cfg,
-      })?.config.resolveAllowFrom?.({
+    ? (runtime?.resolveAllowFrom?.({
         cfg: params.cfg,
         accountId,
       }) ?? [])

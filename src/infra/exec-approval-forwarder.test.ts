@@ -460,6 +460,13 @@ describe("exec approval forwarder", () => {
     await expect(forwarder.handleRequested(baseRequest)).resolves.toBe(true);
     await flushPendingDelivery();
     expect(deliver).toHaveBeenCalled();
+    expect(deliver.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        outboundRuntime: expect.objectContaining({
+          id: "slack",
+        }),
+      }),
+    );
     const hookParams = requireFirstCallArg(beforeDeliverPayload, "beforeDeliverPayload params");
     expect(hookParams.hint).toEqual({ kind: "approval-pending", approvalKind: "exec" });
     const target = requireRecord(hookParams.target, "delivery target");

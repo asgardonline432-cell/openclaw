@@ -1,3 +1,4 @@
+import type { ExecApprovalSurfaceRuntime } from "../infra/exec-approval-surface.js";
 import type { ExecAsk, ExecSecurity } from "../infra/exec-approvals.js";
 import type { ExecElevatedDefaults } from "./bash-tools.exec-types.js";
 
@@ -14,6 +15,7 @@ export type ExecuteNodeHostCommandParams = {
   turnSourceTo?: string;
   turnSourceAccountId?: string;
   turnSourceThreadId?: string | number;
+  approvalSurfaceRuntime?: ExecApprovalSurfaceRuntime;
   trigger?: string;
   agentId?: string;
   security: ExecSecurity;

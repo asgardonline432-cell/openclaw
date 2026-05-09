@@ -671,6 +671,11 @@ export function createOpenClawCodingTools(options?: {
   }
   options?.recordToolPrepStage?.("base-coding-tools");
   const { cleanupMs: cleanupMsOverride, ...execDefaults } = options?.exec ?? {};
+  const agentChannel = resolveGatewayMessageChannel(options?.messageProvider);
+  const agentChannelRuntime =
+    options?.outboundChannelRuntime?.id === agentChannel
+      ? options?.outboundChannelRuntime
+      : undefined;
   const execTool = includeShellTools
     ? createLazyExecTool({
         ...execDefaults,
@@ -693,6 +698,7 @@ export function createOpenClawCodingTools(options?: {
         currentChannelId: options?.currentChannelId,
         currentThreadTs: options?.currentThreadTs,
         accountId: options?.agentAccountId,
+        approvalSurfaceRuntime: agentChannelRuntime,
         backgroundMs: options?.exec?.backgroundMs ?? execConfig.backgroundMs,
         timeoutSec: options?.exec?.timeoutSec ?? execConfig.timeoutSec,
         approvalRunningNoticeMs:
@@ -753,17 +759,13 @@ export function createOpenClawCodingTools(options?: {
     sandboxToolPolicy,
     subagentPolicy,
   ]);
-  const agentChannel = resolveGatewayMessageChannel(options?.messageProvider);
   const openClawToolOptions = {
     sandboxBrowserBridgeUrl: sandbox?.browser?.bridgeUrl,
     allowHostBrowserControl: sandbox ? sandbox.browserAllowHostControl : true,
     agentSessionKey: options?.sessionKey,
     runSessionKey: options?.runSessionKey,
     agentChannel,
-    agentChannelRuntime:
-      options?.outboundChannelRuntime?.id === agentChannel
-        ? options?.outboundChannelRuntime
-        : undefined,
+    agentChannelRuntime,
     agentAccountId: options?.agentAccountId,
     agentTo: options?.messageTo,
     agentThreadId: options?.messageThreadId,

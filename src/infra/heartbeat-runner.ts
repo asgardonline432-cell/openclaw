@@ -124,6 +124,10 @@ import {
   setHeartbeatsEnabled,
   setHeartbeatWakeHandler,
 } from "./heartbeat-wake.js";
+import {
+  resolveOutboundChannelRuntime,
+  type OutboundChannelRuntime,
+} from "./outbound/channel-resolution.js";
 import type { OutboundSendDeps } from "./outbound/deliver.js";
 import { buildOutboundSessionContext } from "./outbound/session-context.js";
 import {
@@ -184,7 +188,13 @@ function hasOptInBusyLaneWork(
   );
 }
 
-function resolveHeartbeatChannelPlugin(channel: string): ChannelPlugin | undefined {
+function resolveHeartbeatChannelPlugin(
+  channel: string,
+  runtime?: Pick<OutboundChannelRuntime, "heartbeat">,
+): Pick<ChannelPlugin, "heartbeat"> | undefined {
+  if (runtime) {
+    return runtime.heartbeat ? { heartbeat: runtime.heartbeat } : undefined;
+  }
   const activePlugin = getActivePluginChannelRegistry()?.channels.find(
     (entry) => entry.plugin.id === channel,
   )?.plugin;
@@ -1558,8 +1568,14 @@ export async function runHeartbeatOnce(opts: {
     delivery.channel !== "none" && delivery.to && (visibility.showAlerts || visibility.showOk),
   );
   const heartbeatTypingIntervalSeconds = resolveHeartbeatTypingIntervalSeconds(cfg);
+  const deliveryRuntime =
+    delivery.channel !== "none"
+      ? resolveOutboundChannelRuntime({ channel: delivery.channel, cfg })
+      : undefined;
   const heartbeatChannelPlugin =
-    delivery.channel !== "none" ? resolveHeartbeatChannelPlugin(delivery.channel) : undefined;
+    delivery.channel !== "none"
+      ? resolveHeartbeatChannelPlugin(delivery.channel, deliveryRuntime)
+      : undefined;
   const heartbeatTyping =
     delivery.channel !== "none" &&
     isHeartbeatTypingEnabled({
@@ -1586,7 +1602,7 @@ export async function runHeartbeatOnce(opts: {
     if (!canAttemptHeartbeatOk || delivery.channel === "none" || !delivery.to) {
       return false;
     }
-    const heartbeatPlugin = resolveHeartbeatChannelPlugin(delivery.channel);
+    const heartbeatPlugin = heartbeatChannelPlugin;
     if (heartbeatPlugin?.heartbeat?.checkReady) {
       const readiness = await heartbeatPlugin.heartbeat.checkReady({
         cfg,
@@ -1606,6 +1622,7 @@ export async function runHeartbeatOnce(opts: {
       payloads: [{ text: resolveHeartbeatOkText() }],
       session: outboundSession,
       deps: opts.deps,
+      outboundRuntime: deliveryRuntime,
     });
     if (send.status === "failed" || send.status === "partial_failed") {
       throw send.error;
@@ -1844,7 +1861,7 @@ export async function runHeartbeatOnce(opts: {
     }
 
     const deliveryAccountId = delivery.accountId;
-    const heartbeatPlugin = resolveHeartbeatChannelPlugin(delivery.channel);
+    const heartbeatPlugin = heartbeatChannelPlugin;
     if (heartbeatPlugin?.heartbeat?.checkReady) {
       const readiness = await heartbeatPlugin.heartbeat.checkReady({
         cfg,
@@ -1876,6 +1893,7 @@ export async function runHeartbeatOnce(opts: {
       accountId: deliveryAccountId,
       session: outboundSession,
       threadId: delivery.threadId,
+      outboundRuntime: deliveryRuntime,
       payloads: [
         ...reasoningPayloads,
         ...(shouldSkipMain

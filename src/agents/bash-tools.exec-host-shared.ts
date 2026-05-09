@@ -4,6 +4,7 @@ import { formatErrorMessage } from "../infra/errors.js";
 import { buildExecApprovalUnavailableReplyPayload } from "../infra/exec-approval-reply.js";
 import {
   type ExecApprovalInitiatingSurfaceState,
+  type ExecApprovalSurfaceRuntime,
   resolveExecApprovalInitiatingSurfaceState,
 } from "../infra/exec-approval-surface.js";
 import {
@@ -104,6 +105,7 @@ export type DefaultExecApprovalRequestArgs = {
   createApprovalSlug: (approvalId: string) => string;
   turnSourceChannel?: string;
   turnSourceAccountId?: string;
+  approvalSurfaceRuntime?: ExecApprovalSurfaceRuntime;
 };
 
 export function createExecApprovalPendingState(params: {
@@ -232,6 +234,7 @@ export async function resolveApprovalDecisionOrUndefined(params: {
 export function resolveExecApprovalUnavailableState(params: {
   turnSourceChannel?: string;
   turnSourceAccountId?: string;
+  approvalSurfaceRuntime?: ExecApprovalSurfaceRuntime;
   preResolvedDecision: string | null | undefined;
 }): {
   initiatingSurface: ExecApprovalInitiatingSurfaceState;
@@ -241,6 +244,7 @@ export function resolveExecApprovalUnavailableState(params: {
   const initiatingSurface = resolveExecApprovalInitiatingSurfaceState({
     channel: params.turnSourceChannel,
     accountId: params.turnSourceAccountId,
+    runtime: params.approvalSurfaceRuntime,
   });
   // Native approval runtimes emit routed-elsewhere notices after actual delivery.
   // Avoid claiming approver DMs were sent from config-only guesses here.
@@ -266,6 +270,7 @@ export async function createAndRegisterDefaultExecApprovalRequest(params: {
   createApprovalSlug: (approvalId: string) => string;
   turnSourceChannel?: string;
   turnSourceAccountId?: string;
+  approvalSurfaceRuntime?: ExecApprovalSurfaceRuntime;
   register: (approvalId: string) => Promise<ExecApprovalRegistration>;
 }): Promise<RegisteredExecApprovalRequestContext> {
   const {
@@ -285,6 +290,7 @@ export async function createAndRegisterDefaultExecApprovalRequest(params: {
     resolveExecApprovalUnavailableState({
       turnSourceChannel: params.turnSourceChannel,
       turnSourceAccountId: params.turnSourceAccountId,
+      approvalSurfaceRuntime: params.approvalSurfaceRuntime,
       preResolvedDecision,
     });
 
@@ -312,6 +318,7 @@ export function buildDefaultExecApprovalRequestArgs(
     createApprovalSlug: params.createApprovalSlug,
     turnSourceChannel: params.turnSourceChannel,
     turnSourceAccountId: params.turnSourceAccountId,
+    approvalSurfaceRuntime: params.approvalSurfaceRuntime,
   };
 }
 
