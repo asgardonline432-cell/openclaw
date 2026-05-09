@@ -36,10 +36,10 @@ let tempDir: string;
 let previousStateDir: string | undefined;
 
 async function seedCodexBinding(
-  sessionFile: string,
+  sessionId: string,
   binding: Partial<CodexAppServerThreadBinding> & { threadId: string },
 ): Promise<void> {
-  await writeCodexAppServerBinding(sessionFile, {
+  await writeCodexAppServerBinding(sessionId, {
     threadId: binding.threadId,
     cwd: binding.cwd ?? tempDir,
     authProfileId: binding.authProfileId,
@@ -88,7 +88,7 @@ describe("codex conversation binding", () => {
   });
 
   it("uses the default Codex auth profile and omits the public OpenAI provider for new binds", async () => {
-    const sessionFile = path.join(tempDir, "session.jsonl");
+    const sessionId = "session";
     const config = {
       auth: { order: { "openai-codex": ["openai-codex:default"] } },
     };
@@ -116,7 +116,7 @@ describe("codex conversation binding", () => {
 
     await startCodexConversationThread({
       config: config as never,
-      sessionFile,
+      sessionId,
       workspaceDir: tempDir,
       model: "gpt-5.4-mini",
       modelProvider: "openai",
@@ -131,13 +131,13 @@ describe("codex conversation binding", () => {
     expect(requests[0]?.method).toBe("thread/start");
     expect(requests[0]?.params.model).toBe("gpt-5.4-mini");
     expect(requests[0]?.params).not.toHaveProperty("modelProvider");
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
+    await expect(readCodexAppServerBinding(sessionId)).resolves.toMatchObject({
       authProfileId: "openai-codex:default",
     });
   });
 
   it("preserves Codex auth and omits the public OpenAI provider for native bind threads", async () => {
-    const sessionFile = path.join(tempDir, "session.jsonl");
+    const sessionId = "session";
     agentRuntimeMocks.ensureAuthProfileStore.mockReturnValue({
       version: 1,
       profiles: {
@@ -150,7 +150,7 @@ describe("codex conversation binding", () => {
         },
       },
     });
-    await seedCodexBinding(sessionFile, {
+    await seedCodexBinding(sessionId, {
       threadId: "thread-old",
       cwd: tempDir,
       authProfileId: "work",
@@ -169,7 +169,7 @@ describe("codex conversation binding", () => {
     });
 
     await startCodexConversationThread({
-      sessionFile,
+      sessionId,
       workspaceDir: tempDir,
       model: "gpt-5.4-mini",
       modelProvider: "openai",
@@ -181,14 +181,14 @@ describe("codex conversation binding", () => {
     expect(requests[0]?.method).toBe("thread/start");
     expect(requests[0]?.params.model).toBe("gpt-5.4-mini");
     expect(requests[0]?.params).not.toHaveProperty("modelProvider");
-    const binding = await readCodexAppServerBinding(sessionFile);
+    const binding = await readCodexAppServerBinding(sessionId);
     expect(binding?.authProfileId).toBe("work");
     expect(binding?.modelProvider).toBeUndefined();
   });
 
   it("clears the Codex app-server binding when a pending bind is denied", async () => {
-    const sessionFile = path.join(tempDir, "session.jsonl");
-    await seedCodexBinding(sessionFile, { threadId: "thread-1" });
+    const sessionId = "session";
+    await seedCodexBinding(sessionId, { threadId: "thread-1" });
 
     await handleCodexConversationBindingResolved({
       status: "denied",
@@ -197,7 +197,7 @@ describe("codex conversation binding", () => {
         data: {
           kind: "codex-app-server-session",
           version: 1,
-          sessionFile,
+          sessionId,
           workspaceDir: tempDir,
         },
         conversation: {
@@ -208,7 +208,7 @@ describe("codex conversation binding", () => {
       },
     });
 
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toBeUndefined();
+    await expect(readCodexAppServerBinding(sessionId)).resolves.toBeUndefined();
   });
 
   it("consumes inbound bound messages when command authorization is absent", async () => {
@@ -231,7 +231,7 @@ describe("codex conversation binding", () => {
           data: {
             kind: "codex-app-server-session",
             version: 1,
-            sessionFile: path.join(tempDir, "session.jsonl"),
+            sessionId: "session",
             workspaceDir: tempDir,
           },
         },
@@ -242,7 +242,7 @@ describe("codex conversation binding", () => {
   });
 
   it("recreates a missing bound thread and preserves auth plus turn overrides", async () => {
-    const sessionFile = path.join(tempDir, "session.jsonl");
+    const sessionId = "session";
     agentRuntimeMocks.ensureAuthProfileStore.mockReturnValue({
       version: 1,
       profiles: {
@@ -253,7 +253,7 @@ describe("codex conversation binding", () => {
         },
       },
     });
-    await seedCodexBinding(sessionFile, {
+    await seedCodexBinding(sessionId, {
       threadId: "thread-old",
       cwd: tempDir,
       authProfileId: "work",
@@ -331,7 +331,7 @@ describe("codex conversation binding", () => {
           data: {
             kind: "codex-app-server-session",
             version: 1,
-            sessionFile,
+            sessionId,
             workspaceDir: tempDir,
           },
         },
@@ -357,7 +357,7 @@ describe("codex conversation binding", () => {
       approvalPolicy: "on-request",
       serviceTier: "priority",
     });
-    const savedBinding = await readCodexAppServerBinding(sessionFile);
+    const savedBinding = await readCodexAppServerBinding(sessionId);
     expect(savedBinding).toMatchObject({
       threadId: "thread-new",
       authProfileId: "work",
@@ -369,8 +369,8 @@ describe("codex conversation binding", () => {
   });
 
   it("returns a clean failure reply when app-server turn start rejects", async () => {
-    const sessionFile = path.join(tempDir, "session.jsonl");
-    await seedCodexBinding(sessionFile, {
+    const sessionId = "session";
+    await seedCodexBinding(sessionId, {
       threadId: "thread-1",
       cwd: tempDir,
       authProfileId: "openai-codex:work",
@@ -415,7 +415,7 @@ describe("codex conversation binding", () => {
             data: {
               kind: "codex-app-server-session",
               version: 1,
-              sessionFile,
+              sessionId,
               workspaceDir: tempDir,
             },
           },
@@ -441,8 +441,8 @@ describe("codex conversation binding", () => {
   });
 
   it("falls back to content when the channel body for agent is blank", async () => {
-    const sessionFile = path.join(tempDir, "session.jsonl");
-    await seedCodexBinding(sessionFile, {
+    const sessionId = "session";
+    await seedCodexBinding(sessionId, {
       threadId: "thread-1",
       cwd: tempDir,
     });
@@ -497,7 +497,7 @@ describe("codex conversation binding", () => {
           data: {
             kind: "codex-app-server-session",
             version: 1,
-            sessionFile,
+            sessionId,
             workspaceDir: tempDir,
           },
         },
