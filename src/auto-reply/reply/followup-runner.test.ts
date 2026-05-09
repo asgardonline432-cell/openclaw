@@ -135,7 +135,6 @@ async function incrementRunCompactionCountForFollowupTest(
   };
   if (newSessionId && newSessionId !== entry.sessionId) {
     nextEntry.sessionId = newSessionId;
-    delete nextEntry.transcriptLocator;
   }
   const promptTokens =
     (lastCallUsage?.input ?? 0) +
@@ -196,7 +195,6 @@ function refreshQueuedFollowupSessionForFollowupTest(params: {
   key: string;
   previousSessionId?: string;
   nextSessionId?: string;
-  nextTranscriptLocator?: string;
   nextProvider?: string;
   nextModel?: string;
   nextAuthProfileId?: string;
@@ -228,9 +226,6 @@ function refreshQueuedFollowupSessionForFollowupTest(params: {
     }
     if (shouldRewriteSession && run.sessionId === params.previousSessionId) {
       run.sessionId = params.nextSessionId!;
-      if (params.nextTranscriptLocator?.trim()) {
-        run.transcriptLocator = params.nextTranscriptLocator;
-      }
     }
     if (shouldRewriteSelection) {
       if (typeof params.nextProvider === "string") {
@@ -801,7 +796,6 @@ describe("createFollowupRunner compaction", () => {
       meta: {
         agentMeta: {
           sessionId: "session-rotated",
-          transcriptLocator: rotatedTranscriptLocator,
           compactionCount: 1,
           lastCallUsage: { input: 10_000, output: 3_000, total: 13_000 },
         },
@@ -822,7 +816,6 @@ describe("createFollowupRunner compaction", () => {
       prompt: "next",
       run: {
         sessionId: "session",
-        transcriptLocator: initialTranscriptLocator,
       },
     });
     const queueSettings: QueueSettings = { mode: "queue" };
@@ -832,14 +825,12 @@ describe("createFollowupRunner compaction", () => {
       run: {
         verboseLevel: "on",
         sessionId: "session",
-        transcriptLocator: initialTranscriptLocator,
       },
     });
 
     await runner(current);
 
     expect(queuedNext.run.sessionId).toBe("session-rotated");
-    expect(queuedNext.run.transcriptLocator).toBe(rotatedTranscriptLocator);
   });
 
   it("does not count failed compaction end events in followup runs", async () => {
@@ -922,7 +913,6 @@ describe("createFollowupRunner compaction", () => {
     const sessionEntry: SessionEntry = {
       sessionId: "session",
       updatedAt: Date.now(),
-      transcriptLocator: transcriptPath,
       totalTokens: 10,
       totalTokensFresh: false,
       compactionCount: 1,
@@ -950,7 +940,6 @@ describe("createFollowupRunner compaction", () => {
         sessionKey?: string;
       }) => {
         await compactEmbeddedPiSessionMock({
-          transcriptLocator: transcriptPath,
           workspaceDir,
         });
         params.followupRun.run.extraSystemPrompt = joinPromptSections(
@@ -998,7 +987,6 @@ describe("createFollowupRunner compaction", () => {
 
     const queued = createQueuedRun({
       run: {
-        transcriptLocator: transcriptPath,
         workspaceDir,
       },
     });

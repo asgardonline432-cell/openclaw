@@ -51,7 +51,6 @@ vi.mock("./reply/agent-runner.runtime.js", () => ({
         authProfileIdSource?: "auto" | "user";
         sessionId: string;
         sessionKey?: string;
-        sessionFile: string;
         workspaceDir: string;
         config: object;
         extraSystemPrompt?: string;
@@ -85,7 +84,6 @@ vi.mock("./reply/agent-runner.runtime.js", () => ({
         authProfileIdSource: params.followupRun.run.authProfileIdSource,
         sessionId: params.followupRun.run.sessionId,
         sessionKey: params.followupRun.run.sessionKey,
-        sessionFile: params.followupRun.run.sessionFile,
         workspaceDir: params.followupRun.run.workspaceDir,
         config: params.followupRun.run.config,
         extraSystemPrompt: params.followupRun.run.extraSystemPrompt,
@@ -562,7 +560,7 @@ describe("trigger handling", () => {
     });
   });
 
-  it("compacts worker sessions via the agent session file", async () => {
+  it("compacts worker sessions via the agent transcript locator", async () => {
     await withTempHome(async (home) => {
       getCompactEmbeddedPiSessionMock().mockReset();
       mockSuccessfulCompaction();
@@ -582,9 +580,9 @@ describe("trigger handling", () => {
       const text = maybeReplyText(res);
       expect(text?.startsWith("⚙️ Compacted")).toBe(true);
       expect(getCompactEmbeddedPiSessionMock()).toHaveBeenCalledOnce();
-      expect(getCompactEmbeddedPiSessionMock().mock.calls.at(0)?.[0]?.sessionFile).toContain(
-        join("agents", "worker1", "sessions"),
-      );
+      expect(getCompactEmbeddedPiSessionMock().mock.calls[0]?.[0]).toMatchObject({
+        agentId: "worker1",
+      });
     });
   });
 
@@ -610,7 +608,6 @@ describe("trigger handling", () => {
           sessionKey: targetSessionKey,
           messageProvider: "telegram",
           agentAccountId: "acct",
-          sessionFile: join(home, "session.jsonl"),
           workspaceDir: join(home, "workspace"),
           config: cfg,
           provider: "anthropic",

@@ -110,7 +110,6 @@ describe("emitResetCommandHooks", () => {
       sessionKey: "agent:main:telegram:group:-1003826723328:topic:8428",
       previousSessionEntry: {
         sessionId: "prev-session",
-        sessionFile: "/tmp/prev-session.jsonl",
       } as HandleCommandsParams["previousSessionEntry"],
       workspaceDir: "/tmp/openclaw-workspace",
     });
@@ -118,7 +117,6 @@ describe("emitResetCommandHooks", () => {
     await vi.waitFor(() => expect(hookRunnerMocks.runBeforeReset).toHaveBeenCalledTimes(1));
     expect(hookRunnerMocks.runBeforeReset).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionFile: "/tmp/prev-session.jsonl",
         messages: [],
         reason: "new",
       }),
@@ -158,7 +156,6 @@ describe("emitResetCommandHooks", () => {
       sessionKey: "agent:target:main",
       previousSessionEntry: {
         sessionId: "prev-session",
-        sessionFile: "/tmp/prev-session.jsonl",
       } as HandleCommandsParams["previousSessionEntry"],
       workspaceDir: "/tmp/openclaw-workspace",
     });
@@ -174,7 +171,6 @@ describe("emitResetCommandHooks", () => {
     });
     expect(hookRunnerMocks.runBeforeReset).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionFile: "/tmp/prev-session.jsonl",
         messages: [{ role: "assistant", content: "Recovered from SQLite" }],
         reason: "reset",
       }),
