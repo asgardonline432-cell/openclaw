@@ -763,7 +763,6 @@ describe("spawnAcpDirect", () => {
         sessionKey: accepted.childSessionKey,
         entry: expect.objectContaining({
           sessionId: "sess-123",
-          sessionFile: "sess-123",
         }),
       }),
     );
@@ -1571,7 +1570,6 @@ describe("spawnAcpDirect", () => {
         agentId: "codex",
         entry: expect.objectContaining({
           sessionId: "sess-123",
-          sessionFile: "sess-123",
         }),
       }),
     );
@@ -1935,7 +1933,6 @@ describe("spawnAcpDirect", () => {
           agentId: "codex",
           entry: expect.objectContaining({
             sessionId: "sess-123",
-            sessionFile: "sess-123",
           }),
         }),
       );
