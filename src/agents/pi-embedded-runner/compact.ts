@@ -133,7 +133,6 @@ import { readPiModelContextTokens } from "./model-context-tokens.js";
 import { buildModelAliasLines, resolvePreparedRuntimeModelAsync } from "./model.js";
 import { sanitizeSessionHistory, validateReplayTurns } from "./replay-history.js";
 import { createEmbeddedPiResourceLoader } from "./resource-loader.js";
-import { shouldUseOpenAIWebSocketTransport } from "./run/attempt.thread-helpers.js";
 import { shouldPersistStrictTurnSessionRepair } from "./run/attempt.transcript-policy.js";
 import { buildEmbeddedSandboxInfo } from "./sandbox-info.js";
 import { prewarmSessionFile, trackSessionManagerAccess } from "./session-manager-cache.js";
