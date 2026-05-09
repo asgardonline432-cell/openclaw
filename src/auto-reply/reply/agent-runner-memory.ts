@@ -232,9 +232,10 @@ function resolveSessionLogPath(
     const transcriptPath = normalizeOptionalString(
       (sessionEntry as (SessionEntry & { transcriptPath?: string }) | undefined)?.transcriptPath,
     );
-    const sessionFile = normalizeOptionalString(sessionEntry?.sessionFile) || transcriptPath;
+    const transcriptLocator =
+      normalizeOptionalString(sessionEntry?.transcriptLocator) || transcriptPath;
     const agentId = resolveAgentIdFromSessionKey(sessionKey);
-    void sessionFile;
+    void transcriptLocator;
     return createSqliteSessionTranscriptLocator({ agentId, sessionId });
   } catch {
     return undefined;
@@ -257,7 +258,7 @@ function resolveSqliteSessionTranscriptPath(params: {
   if (candidates.length === 0) {
     return undefined;
   }
-  const explicit = normalizeOptionalString(params.sessionEntry?.sessionFile);
+  const explicit = normalizeOptionalString(params.sessionEntry?.transcriptLocator);
   if (explicit) {
     const matched = candidates.find((entry) => entry.locator === explicit);
     if (matched) {
@@ -331,7 +332,7 @@ async function readSessionLogSnapshot(params: {
   const scope = resolveSqliteSessionTranscriptScope({
     agentId: params.sessionKey ? resolveAgentIdFromSessionKey(params.sessionKey) : undefined,
     sessionId,
-    transcriptPath: params.sessionEntry?.sessionFile,
+    transcriptPath: params.sessionEntry?.transcriptLocator,
   });
   if (!scope) {
     return snapshot;
@@ -381,17 +382,17 @@ async function estimatePromptTokensFromSessionTranscript(params: {
   sessionId?: string;
   sessionEntry?: SessionEntry;
   sessionKey?: string;
-  sessionFile?: string;
+  transcriptLocator?: string;
 }): Promise<TranscriptTokenEstimate | undefined> {
   const sessionId = normalizeOptionalString(params.sessionId);
   if (!sessionId) {
     return undefined;
   }
-  const fallbackTranscriptLocator = normalizeOptionalString(params.sessionFile);
+  const fallbackTranscriptLocator = normalizeOptionalString(params.transcriptLocator);
   const sessionEntryForTranscript =
-    params.sessionEntry?.sessionFile || !fallbackTranscriptLocator
+    params.sessionEntry?.transcriptLocator || !fallbackTranscriptLocator
       ? params.sessionEntry
-      : ({ ...params.sessionEntry, sessionFile: fallbackTranscriptLocator } as SessionEntry);
+      : ({ ...params.sessionEntry, transcriptLocator: fallbackTranscriptLocator } as SessionEntry);
   try {
     const snapshot = await readSessionLogSnapshot({
       sessionId,
@@ -420,7 +421,7 @@ async function estimatePromptTokensFromSessionTranscript(params: {
     }
     const messages = (await readSessionMessagesAsync(
       sessionId,
-      sessionEntryForTranscript?.sessionFile,
+      sessionEntryForTranscript?.transcriptLocator,
       {
         agentId: resolveAgentIdFromSessionKey(params.sessionKey),
         mode: "recent",
@@ -497,9 +498,9 @@ export async function runPreflightCompactionIfNeeded(params: {
     ? await readSessionLogSnapshot({
         sessionId: entry.sessionId,
         sessionEntry:
-          entry.sessionFile || !params.followupRun.run.sessionFile
+          entry.transcriptLocator || !params.followupRun.run.transcriptLocator
             ? entry
-            : { ...entry, sessionFile: params.followupRun.run.sessionFile },
+            : { ...entry, transcriptLocator: params.followupRun.run.transcriptLocator },
         sessionKey: params.sessionKey ?? params.followupRun.run.sessionKey,
         includeByteSize: true,
         includeUsage: false,
@@ -524,7 +525,7 @@ export async function runPreflightCompactionIfNeeded(params: {
           sessionId: entry.sessionId,
           sessionEntry: entry,
           sessionKey: params.sessionKey ?? params.followupRun.run.sessionKey,
-          sessionFile: entry.sessionFile ?? params.followupRun.run.sessionFile,
+          transcriptLocator: entry.transcriptLocator ?? params.followupRun.run.transcriptLocator,
         });
   const stalePersistedPromptTokens = hasPersistedTotalTokens
     ? Math.floor(persistedTotalTokens)
@@ -590,18 +591,20 @@ export async function runPreflightCompactionIfNeeded(params: {
   );
 
   params.replyOperation.setPhase("preflight_compacting");
-  const sessionFile =
+  const transcriptLocator =
     resolveSqliteSessionTranscriptPath({
       sessionId: entry.sessionId,
       sessionEntry:
-        entry.sessionFile || !params.followupRun.run.sessionFile
+        entry.transcriptLocator || !params.followupRun.run.transcriptLocator
           ? entry
-          : { ...entry, sessionFile: params.followupRun.run.sessionFile },
+          : { ...entry, transcriptLocator: params.followupRun.run.transcriptLocator },
       sessionKey: params.sessionKey ?? params.followupRun.run.sessionKey,
     }) ??
     resolveSessionLogPath(
       entry.sessionId,
-      entry.sessionFile ? entry : { ...entry, sessionFile: params.followupRun.run.sessionFile },
+      entry.transcriptLocator
+        ? entry
+        : { ...entry, transcriptLocator: params.followupRun.run.transcriptLocator },
       params.sessionKey ?? params.followupRun.run.sessionKey,
     );
   const result = await memoryDeps.compactEmbeddedPiSession({
@@ -617,7 +620,7 @@ export async function runPreflightCompactionIfNeeded(params: {
     senderName: params.followupRun.run.senderName,
     senderUsername: params.followupRun.run.senderUsername,
     senderE164: params.followupRun.run.senderE164,
-    sessionFile: sessionFile ?? params.followupRun.run.sessionFile,
+    transcriptLocator: transcriptLocator ?? params.followupRun.run.transcriptLocator,
     workspaceDir: params.followupRun.run.workspaceDir,
     agentDir: params.followupRun.run.agentDir,
     config: params.cfg,
@@ -649,7 +652,7 @@ export async function runPreflightCompactionIfNeeded(params: {
     sessionKey: params.sessionKey,
     tokensAfter: result.result?.tokensAfter,
     newSessionId: result.result?.sessionId,
-    newSessionFile: result.result?.sessionFile,
+    newTranscriptLocator: result.result?.transcriptLocator,
   });
   await appendPostCompactionRefreshPrompt({
     cfg: params.cfg,
@@ -660,8 +663,8 @@ export async function runPreflightCompactionIfNeeded(params: {
     const previousSessionId = params.followupRun.run.sessionId;
     params.followupRun.run.sessionId = entry.sessionId;
     params.replyOperation.updateSessionId(entry.sessionId);
-    if (entry.sessionFile) {
-      params.followupRun.run.sessionFile = entry.sessionFile;
+    if (result.result?.transcriptLocator) {
+      params.followupRun.run.transcriptLocator = result.result.transcriptLocator;
     }
     const queueKey = params.followupRun.run.sessionKey ?? params.sessionKey;
     if (queueKey) {
@@ -669,7 +672,7 @@ export async function runPreflightCompactionIfNeeded(params: {
         key: queueKey,
         previousSessionId,
         nextSessionId: entry.sessionId,
-        nextSessionFile: entry.sessionFile,
+        nextTranscriptLocator: result.result?.transcriptLocator,
       });
     }
   }
@@ -910,7 +913,7 @@ export async function runMemoryFlushIfNeeded(params: {
     .filter(Boolean)
     .join("\n\n");
   let postCompactionSessionId: string | undefined;
-  let postCompactionSessionFile: string | undefined;
+  let postCompactionTranscriptLocator: string | undefined;
   try {
     await memoryDeps.runWithModelFallback({
       ...resolveMemoryFlushModelFallbackOptions(
@@ -963,9 +966,15 @@ export async function runMemoryFlushIfNeeded(params: {
         }
         if (result.meta?.agentMeta?.sessionId) {
           postCompactionSessionId = result.meta.agentMeta.sessionId;
+          postCompactionTranscriptLocator =
+            result.meta.agentMeta.transcriptLocator ??
+            createSqliteSessionTranscriptLocator({
+              agentId: params.followupRun.run.agentId,
+              sessionId: result.meta.agentMeta.sessionId,
+            });
         }
-        if (result.meta?.agentMeta?.sessionFile) {
-          postCompactionSessionFile = result.meta.agentMeta.sessionFile;
+        if (result.meta?.agentMeta?.transcriptLocator) {
+          postCompactionTranscriptLocator = result.meta.agentMeta.transcriptLocator;
         }
         bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
           result.meta?.systemPromptReport,
@@ -985,15 +994,15 @@ export async function runMemoryFlushIfNeeded(params: {
         sessionStore: activeSessionStore,
         sessionKey: params.sessionKey,
         newSessionId: postCompactionSessionId,
-        newSessionFile: postCompactionSessionFile,
+        newTranscriptLocator: postCompactionTranscriptLocator,
       });
       const updatedEntry = params.sessionKey ? activeSessionStore?.[params.sessionKey] : undefined;
       if (updatedEntry) {
         activeSessionEntry = updatedEntry;
         params.followupRun.run.sessionId = updatedEntry.sessionId;
         params.replyOperation.updateSessionId(updatedEntry.sessionId);
-        if (updatedEntry.sessionFile) {
-          params.followupRun.run.sessionFile = updatedEntry.sessionFile;
+        if (postCompactionTranscriptLocator) {
+          params.followupRun.run.transcriptLocator = postCompactionTranscriptLocator;
         }
         const queueKey = params.followupRun.run.sessionKey ?? params.sessionKey;
         if (queueKey) {
@@ -1001,7 +1010,7 @@ export async function runMemoryFlushIfNeeded(params: {
             key: queueKey,
             previousSessionId,
             nextSessionId: updatedEntry.sessionId,
-            nextSessionFile: updatedEntry.sessionFile,
+            nextTranscriptLocator: postCompactionTranscriptLocator,
           });
         }
       }
@@ -1021,8 +1030,8 @@ export async function runMemoryFlushIfNeeded(params: {
           activeSessionEntry = updatedEntry;
           params.followupRun.run.sessionId = updatedEntry.sessionId;
           params.replyOperation.updateSessionId(updatedEntry.sessionId);
-          if (updatedEntry.sessionFile) {
-            params.followupRun.run.sessionFile = updatedEntry.sessionFile;
+          if (postCompactionTranscriptLocator) {
+            params.followupRun.run.transcriptLocator = postCompactionTranscriptLocator;
           }
         }
       } catch (err) {
