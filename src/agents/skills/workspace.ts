@@ -143,20 +143,6 @@ type LoadedSkillRecord = {
   frontmatter?: ParsedSkillFrontmatter;
 };
 
-type WorkspaceSkillEntriesCacheKey = {
-  key: string;
-  snapshotVersion: number;
-};
-
-type WorkspaceSkillEntriesCacheRecord = {
-  snapshotVersion: number;
-  entries: SkillEntry[];
-};
-
-const workspaceSkillEntriesCache = new Map<string, WorkspaceSkillEntriesCacheRecord>();
-let pluginSkillDirsCacheByConfig = new WeakMap<OpenClawConfig, Map<string, string[]>>();
-let pluginSkillDirsCacheWithoutConfig = new Map<string, string[]>();
-
 type CandidateSkillDir = {
   skillDir: string;
   name: string;
@@ -225,121 +211,6 @@ function resolveRawEntryScanLimit(maxCandidateDirs: number | undefined): number 
     DEFAULT_MAX_RAW_ENTRIES_PER_DIRECTORY_SCAN,
     Math.max(DEFAULT_MIN_RAW_ENTRIES_PER_DIRECTORY_SCAN, normalized * 10),
   );
-}
-
-function cloneSkillEntries(entries: SkillEntry[]): SkillEntry[] {
-  return structuredClone(entries);
-}
-
-function resolveWorkspaceSkillEntriesCacheKey(params: {
-  workspaceDir: string;
-  snapshotVersion?: number;
-  managedSkillsDir: string;
-  bundledSkillsDir?: string;
-  extraDirs: string[];
-  pluginSkillDirs: string[];
-  limits: ResolvedSkillsLimits;
-}): WorkspaceSkillEntriesCacheKey | undefined {
-  if (params.snapshotVersion === undefined) {
-    return undefined;
-  }
-  return {
-    snapshotVersion: params.snapshotVersion,
-    key: JSON.stringify({
-      workspaceDir: path.resolve(params.workspaceDir),
-      managedSkillsDir: path.resolve(params.managedSkillsDir),
-      bundledSkillsDir: params.bundledSkillsDir ? path.resolve(params.bundledSkillsDir) : "",
-      extraDirs: params.extraDirs.map((dir) => path.resolve(dir)),
-      pluginSkillDirs: params.pluginSkillDirs.map((dir) => path.resolve(dir)),
-      limits: {
-        maxCandidatesPerRoot: params.limits.maxCandidatesPerRoot,
-        maxSkillsLoadedPerSource: params.limits.maxSkillsLoadedPerSource,
-        maxSkillFileBytes: params.limits.maxSkillFileBytes,
-      },
-    }),
-  };
-}
-
-function readCachedWorkspaceSkillEntries(
-  cacheKey: WorkspaceSkillEntriesCacheKey | undefined,
-  opts?: { clone?: boolean },
-): SkillEntry[] | undefined {
-  if (!cacheKey) {
-    return undefined;
-  }
-  const cached = workspaceSkillEntriesCache.get(cacheKey.key);
-  if (!cached || cached.snapshotVersion !== cacheKey.snapshotVersion) {
-    return undefined;
-  }
-  return opts?.clone === false ? cached.entries : cloneSkillEntries(cached.entries);
-}
-
-function rememberWorkspaceSkillEntries(params: {
-  cacheKey: WorkspaceSkillEntriesCacheKey | undefined;
-  entries: SkillEntry[];
-}): SkillEntry[] {
-  if (!params.cacheKey) {
-    return params.entries;
-  }
-  workspaceSkillEntriesCache.set(params.cacheKey.key, {
-    snapshotVersion: params.cacheKey.snapshotVersion,
-    entries: cloneSkillEntries(params.entries),
-  });
-  return params.entries;
-}
-
-function resolvePluginSkillDirsCacheKey(params: {
-  workspaceDir: string;
-  config?: OpenClawConfig;
-  snapshotVersion?: number;
-}): string | undefined {
-  if (params.snapshotVersion === undefined) {
-    return undefined;
-  }
-  return JSON.stringify({
-    workspaceDir: path.resolve(params.workspaceDir),
-    snapshotVersion: params.snapshotVersion,
-    plugins: params.config?.plugins ?? null,
-    acp: params.config?.acp ?? null,
-  });
-}
-
-function resolveVersionedPluginSkillDirs(params: {
-  workspaceDir: string;
-  config?: OpenClawConfig;
-  snapshotVersion?: number;
-}): string[] {
-  const cacheKey = resolvePluginSkillDirsCacheKey(params);
-  if (!cacheKey) {
-    return resolvePluginSkillDirs({
-      workspaceDir: params.workspaceDir,
-      config: params.config,
-    });
-  }
-  const cache = params.config
-    ? (pluginSkillDirsCacheByConfig.get(params.config) ??
-      (() => {
-        const next = new Map<string, string[]>();
-        pluginSkillDirsCacheByConfig.set(params.config!, next);
-        return next;
-      })())
-    : pluginSkillDirsCacheWithoutConfig;
-  const cached = cache.get(cacheKey);
-  if (cached) {
-    return cached.slice();
-  }
-  const resolved = resolvePluginSkillDirs({
-    workspaceDir: params.workspaceDir,
-    config: params.config,
-  });
-  cache.set(cacheKey, resolved.slice());
-  return resolved;
-}
-
-export function resetWorkspaceSkillDiscoveryCacheForTest(): void {
-  workspaceSkillEntriesCache.clear();
-  pluginSkillDirsCacheByConfig = new WeakMap();
-  pluginSkillDirsCacheWithoutConfig = new Map();
 }
 
 function tryRealpath(filePath: string): string | null {
@@ -637,7 +508,6 @@ function loadSkillEntries(
     bundledSkillsDir?: string;
     pluginSkillsDir?: string;
     snapshotVersion?: number;
-    cloneCachedEntries?: boolean;
   },
 ): SkillEntry[] {
   const limits = resolveSkillsLimits(opts?.config, opts?.agentId);
@@ -870,27 +740,12 @@ function loadSkillEntries(
     .map((d) => normalizeOptionalString(d) ?? "")
     .filter(Boolean)
     .map((dir) => resolveUserPath(dir));
-  const pluginSkillDirs = resolveVersionedPluginSkillDirs({
+  const pluginSkillDirs = resolvePluginSkillDirs({
     workspaceDir,
     config: opts?.config,
-    snapshotVersion: opts?.snapshotVersion,
+    pluginSkillsDir,
   });
   const mergedExtraDirs = [...extraDirs, ...pluginSkillDirs];
-  const cacheKey = resolveWorkspaceSkillEntriesCacheKey({
-    workspaceDir,
-    snapshotVersion: opts?.snapshotVersion,
-    managedSkillsDir,
-    bundledSkillsDir,
-    extraDirs,
-    pluginSkillDirs,
-    limits,
-  });
-  const cachedEntries = readCachedWorkspaceSkillEntries(cacheKey, {
-    clone: opts?.cloneCachedEntries !== false,
-  });
-  if (cachedEntries) {
-    return cachedEntries;
-  }
 
   const bundledSkills = bundledSkillsDir
     ? loadSkills({
@@ -983,7 +838,7 @@ function loadSkillEntries(
         },
       };
     });
-  return rememberWorkspaceSkillEntries({ cacheKey, entries: skillEntries });
+  return skillEntries;
 }
 
 function escapeXml(str: string): string {
@@ -1132,12 +987,7 @@ function resolveWorkspaceSkillPromptState(
   prompt: string;
   resolvedSkills: Skill[];
 } {
-  const skillEntries =
-    opts?.entries ??
-    loadSkillEntries(workspaceDir, {
-      ...opts,
-      cloneCachedEntries: false,
-    });
+  const skillEntries = opts?.entries ?? loadSkillEntries(workspaceDir, opts);
   const effectiveSkillFilter = resolveEffectiveWorkspaceSkillFilter(opts);
   const eligible = filterSkillEntries(
     skillEntries,

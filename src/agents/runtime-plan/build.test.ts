@@ -7,10 +7,14 @@ import {
   resolveProviderFollowupFallbackRoute,
   type ProviderRuntimePluginHandle,
 } from "../../plugins/provider-hook-runtime.js";
+import type { RuntimeWebToolsMetadata } from "../../secrets/runtime-web-tools.types.js";
 import { buildAgentRuntimeDeliveryPlan, buildAgentRuntimePlan } from "./build.js";
 
 const manifestMocks = vi.hoisted(() => ({
   loadManifestMetadataSnapshot: vi.fn(() => ({}) as never),
+}));
+const runtimeMocks = vi.hoisted(() => ({
+  getActiveRuntimeWebToolsMetadata: vi.fn<() => RuntimeWebToolsMetadata | null>(() => null),
 }));
 
 vi.mock("../../plugins/manifest-contract-eligibility.js", () => ({
@@ -30,6 +34,10 @@ vi.mock("../../plugins/provider-hook-runtime.js", () => ({
   resolveProviderRuntimePlugin: vi.fn(() => undefined),
   resolveProviderRuntimePluginHandle: vi.fn(() => ({ provider: "openai" })),
   wrapProviderStreamFn: vi.fn(() => undefined),
+}));
+
+vi.mock("../../secrets/runtime.js", () => ({
+  getActiveRuntimeWebToolsMetadata: runtimeMocks.getActiveRuntimeWebToolsMetadata,
 }));
 
 const gpt54Model = {
@@ -86,6 +94,8 @@ describe("AgentRuntimePlan", () => {
   afterEach(() => {
     resetConfigRuntimeState();
     manifestMocks.loadManifestMetadataSnapshot.mockClear();
+    runtimeMocks.getActiveRuntimeWebToolsMetadata.mockReset();
+    runtimeMocks.getActiveRuntimeWebToolsMetadata.mockReturnValue(null);
     vi.mocked(resolveProviderRuntimePluginHandle).mockClear();
   });
 
@@ -389,5 +399,34 @@ describe("AgentRuntimePlan", () => {
       workspaceDir: "/tmp/openclaw-runtime-plan",
       env: process.env,
     });
+  });
+
+  it("captures active web tool metadata in prepared tool planning", () => {
+    const runtimeWebTools = {
+      search: {
+        providerConfigured: "brave",
+        providerSource: "configured",
+        selectedProvider: "brave",
+        selectedProviderKeySource: "config",
+        diagnostics: [],
+      },
+      fetch: {
+        providerConfigured: "firecrawl",
+        providerSource: "configured",
+        selectedProvider: "firecrawl",
+        diagnostics: [],
+      },
+      diagnostics: [],
+    } satisfies RuntimeWebToolsMetadata;
+    runtimeMocks.getActiveRuntimeWebToolsMetadata.mockReturnValue(runtimeWebTools);
+
+    const plan = buildAgentRuntimePlan({
+      provider: "openai",
+      modelId: "gpt-5.4",
+      config: {},
+      workspaceDir: "/tmp/openclaw-runtime-plan",
+    });
+
+    expect(plan.tools.preparedPlanning?.runtimeWebTools).toBe(runtimeWebTools);
   });
 });

@@ -286,10 +286,10 @@ describe("loadEnabledBundleMcpConfig", () => {
     );
   });
 
-  it("returns isolated cached bundle MCP and LSP config results", async () => {
+  it("returns isolated bundle MCP and LSP config results", async () => {
     await withBundleHomeEnv(
       tempHarness,
-      "openclaw-bundle-config-cache",
+      "openclaw-bundle-config-isolation",
       async ({ homeDir, workspaceDir }) => {
         const pluginRoot = await writeClaudeBundleManifest({
           homeDir,

@@ -479,7 +479,7 @@ describe("loadEnabledBundlePiSettingsSnapshot", () => {
     expect(snapshot).toStrictEqual({});
   });
 
-  it("reuses bundle settings for the same config snapshot but reloads a new config snapshot", async () => {
+  it("reloads bundle settings without retaining caller mutations", async () => {
     const workspaceDir = await tempDirs.make("openclaw-workspace-");
     const pluginRoot = await createWorkspaceBundle({ workspaceDir });
     const settingsPath = path.join(pluginRoot, "settings.json");
@@ -503,18 +503,6 @@ describe("loadEnabledBundlePiSettingsSnapshot", () => {
       loadEnabledBundlePiSettingsSnapshot({
         cwd: workspaceDir,
         cfg,
-      }).hideThinkingBlock,
-    ).toBe(true);
-    expect(
-      loadEnabledBundlePiSettingsSnapshot({
-        cwd: workspaceDir,
-        cfg: {
-          plugins: {
-            entries: {
-              "claude-bundle": { enabled: true },
-            },
-          },
-        },
       }).hideThinkingBlock,
     ).toBe(false);
   });

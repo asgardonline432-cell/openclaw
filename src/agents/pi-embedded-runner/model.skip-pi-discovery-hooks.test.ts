@@ -96,7 +96,7 @@ describe("resolveModelAsync skipPiDiscovery runtime hooks", () => {
     expect(mocks.normalizeProviderTransportWithPlugin).not.toHaveBeenCalled();
   });
 
-  it("reuses successful target-provider dynamic model resolution", async () => {
+  it("resolves each target-provider dynamic model request without broad discovery", async () => {
     const options = { skipPiDiscovery: true } as const;
 
     const first = await resolveModelAsync(
@@ -115,11 +115,11 @@ describe("resolveModelAsync skipPiDiscovery runtime hooks", () => {
     );
 
     expect(first.model).toMatchObject({ provider: "ollama", id: "llama3.2:cache" });
-    expect(second.model).toBe(first.model);
+    expect(second.model).toMatchObject({ provider: "ollama", id: "llama3.2:cache" });
     expect(mocks.discoverAuthStorage).not.toHaveBeenCalled();
     expect(mocks.discoverModels).not.toHaveBeenCalled();
-    expect(mocks.prepareProviderDynamicModel).toHaveBeenCalledTimes(1);
-    expect(mocks.runProviderDynamicModel).toHaveBeenCalledTimes(1);
+    expect(mocks.prepareProviderDynamicModel).toHaveBeenCalledTimes(2);
+    expect(mocks.runProviderDynamicModel).toHaveBeenCalledTimes(2);
   });
 
   it("passes a prepared provider runtime handle through skipPiDiscovery hooks", async () => {

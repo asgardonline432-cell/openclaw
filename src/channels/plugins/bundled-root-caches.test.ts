@@ -75,7 +75,7 @@ describe("bundled root-aware plugin lookups", () => {
 
     const bundledIds = await importFreshModule<typeof import("./bundled-ids.js")>(
       import.meta.url,
-      "./bundled-ids.js?scope=root-aware-id-cache",
+      "./bundled-ids.js?scope=root-aware-id-lookup",
     );
 
     process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = rootA.pluginsDir;

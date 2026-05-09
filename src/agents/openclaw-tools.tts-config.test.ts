@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { RuntimeWebToolsMetadata } from "../secrets/runtime-web-tools.types.js";
 import { __testing, createOpenClawTools } from "./openclaw-tools.js";
 import type { AnyAgentTool } from "./tools/common.js";
 
@@ -175,6 +176,41 @@ describe("createOpenClawTools TTS config wiring", () => {
     expect(mocks.createVideoGenerateTool).not.toHaveBeenCalled();
     expect(mocks.createWebFetchTool).not.toHaveBeenCalled();
     expect(mocks.createWebSearchTool).not.toHaveBeenCalled();
+    expect(mocks.getActiveRuntimeWebToolsMetadata).not.toHaveBeenCalled();
+  });
+
+  it("passes prepared web runtime metadata into web tool factories", async () => {
+    const { createOpenClawTools } = await import("./openclaw-tools.js");
+    const runtimeWebTools = {
+      search: {
+        providerConfigured: "brave",
+        providerSource: "configured",
+        selectedProvider: "brave",
+        selectedProviderKeySource: "config",
+        diagnostics: [],
+      },
+      fetch: {
+        providerConfigured: "firecrawl",
+        providerSource: "configured",
+        selectedProvider: "firecrawl",
+        diagnostics: [],
+      },
+      diagnostics: [],
+    } satisfies RuntimeWebToolsMetadata;
+
+    createOpenClawTools({
+      coreToolAllowlist: ["web_search", "web_fetch"],
+      disableMessageTool: true,
+      disablePluginTools: true,
+      preparedToolPlanning: { runtimeWebTools },
+    });
+
+    expect(mocks.createWebSearchTool).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeWebSearch: runtimeWebTools.search }),
+    );
+    expect(mocks.createWebFetchTool).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeWebFetch: runtimeWebTools.fetch }),
+    );
     expect(mocks.getActiveRuntimeWebToolsMetadata).not.toHaveBeenCalled();
   });
 

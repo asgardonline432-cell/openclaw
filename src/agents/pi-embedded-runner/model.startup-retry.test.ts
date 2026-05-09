@@ -83,7 +83,6 @@ describe("resolveModelAsync startup retry", () => {
   };
 
   beforeEach(() => {
-    const modelTesting = vi.importActual<typeof import("./model.js")>("./model.js");
     dynamicAttempts = 0;
     prepareProviderDynamicModelMock.mockClear();
     prepareProviderDynamicModelMock.mockImplementation(async () => {
@@ -93,9 +92,6 @@ describe("resolveModelAsync startup retry", () => {
     discoverAuthStorageMock.mockClear();
     discoverModelsMock.mockClear();
     ensureOpenClawModelsJsonMock.mockClear();
-    return modelTesting.then(({ __testing }) => {
-      __testing.clearSkipPiDiscoveryModelCacheForTest();
-    });
   });
 
   it("retries once after a transient provider-runtime miss", async () => {

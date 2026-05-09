@@ -14,11 +14,7 @@ import {
   bumpSkillsSnapshotVersion,
   resetSkillsRefreshStateForTest,
 } from "./skills/refresh-state.js";
-import {
-  buildWorkspaceSkillSnapshot,
-  buildWorkspaceSkillsPrompt,
-  resetWorkspaceSkillDiscoveryCacheForTest,
-} from "./skills/workspace.js";
+import { buildWorkspaceSkillSnapshot, buildWorkspaceSkillsPrompt } from "./skills/workspace.js";
 
 const pluginSkillsMocks = vi.hoisted(() => ({
   resolvePluginSkillDirs: vi.fn(() => []),
@@ -74,7 +70,6 @@ afterAll(async () => {
 });
 
 afterEach(() => {
-  resetWorkspaceSkillDiscoveryCacheForTest();
   resetSkillsRefreshStateForTest();
   pluginSkillsMocks.resolvePluginSkillDirs.mockClear();
 });
@@ -193,7 +188,7 @@ describe("buildWorkspaceSkillSnapshot", () => {
     expect(snapshot.prompt).toBe(prompt);
   });
 
-  it("reuses discovery only for versioned skill snapshots", async () => {
+  it("keeps versioned skill snapshots fresh when discovery changes", async () => {
     const workspaceDir = await fixtureSuite.createCaseDir("workspace");
     await writeSkill({
       dir: path.join(workspaceDir, "skills", "alpha"),
@@ -212,11 +207,11 @@ describe("buildWorkspaceSkillSnapshot", () => {
     const refreshed = buildSnapshot(workspaceDir, { snapshotVersion: nextVersion });
 
     expectSnapshotNamesAndPrompt(first, { contains: ["alpha"], omits: ["beta"] });
-    expectSnapshotNamesAndPrompt(sameVersion, { contains: ["alpha"], omits: ["beta"] });
+    expectSnapshotNamesAndPrompt(sameVersion, { contains: ["alpha", "beta"] });
     expectSnapshotNamesAndPrompt(refreshed, { contains: ["alpha", "beta"] });
   });
 
-  it("reuses plugin skill directory discovery for versioned snapshots", async () => {
+  it("resolves plugin skill directories for each snapshot build", async () => {
     const workspaceDir = await fixtureSuite.createCaseDir("workspace");
     await writeSkill({
       dir: path.join(workspaceDir, "skills", "alpha"),
@@ -230,10 +225,10 @@ describe("buildWorkspaceSkillSnapshot", () => {
     const nextVersion = bumpSkillsSnapshotVersion({ workspaceDir, reason: "watch" });
     buildSnapshot(workspaceDir, { snapshotVersion: nextVersion });
 
-    expect(pluginSkillsMocks.resolvePluginSkillDirs).toHaveBeenCalledTimes(2);
+    expect(pluginSkillsMocks.resolvePluginSkillDirs).toHaveBeenCalledTimes(3);
   });
 
-  it("keeps resolved skills isolated when reusing versioned discovery", async () => {
+  it("keeps resolved skills isolated between snapshot builds", async () => {
     const workspaceDir = await fixtureSuite.createCaseDir("workspace");
     await writeSkill({
       dir: path.join(workspaceDir, "skills", "alpha"),

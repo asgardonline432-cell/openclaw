@@ -18,6 +18,7 @@ import {
   resolveProviderTextTransforms,
   transformProviderSystemPrompt,
 } from "../../plugins/provider-runtime.js";
+import { getActiveRuntimeWebToolsMetadata } from "../../secrets/runtime.js";
 import { resolvePreparedExtraParams } from "../pi-embedded-runner/extra-params.js";
 import { classifyEmbeddedPiRunResultForModelFallback } from "../pi-embedded-runner/result-fallback-classifier.js";
 import {
@@ -239,6 +240,7 @@ export function buildAgentRuntimePlan(params: BuildAgentRuntimePlanParams): Agen
     env: process.env,
     runtimeHandle: providerRuntimeHandleForPlugins,
   });
+  const runtimeWebTools = getActiveRuntimeWebToolsMetadata() ?? undefined;
 
   return {
     resolvedRef,
@@ -275,6 +277,7 @@ export function buildAgentRuntimePlan(params: BuildAgentRuntimePlanParams): Agen
     },
     tools: {
       preparedPlanning: {
+        ...(runtimeWebTools ? { runtimeWebTools } : {}),
         loadMetadataSnapshot: loadToolPlanningMetadataSnapshot,
       },
       normalize<TSchemaType extends TSchema = TSchema, TResult = unknown>(
