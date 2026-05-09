@@ -4847,7 +4847,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     };
     const dispatcher = createDispatcher();
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
-      expect(opts?.sourceReplyDeliveryMode).toBe("message_tool_only");
+      expect(opts?.sourceReplyDeliveryMode).toBe("automatic");
       return { text: "final reply" } satisfies ReplyPayload;
     });
 
@@ -4863,8 +4863,61 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     });
 
     expect(replyResolver).toHaveBeenCalledTimes(1);
-    expect(result.queuedFinal).toBe(false);
-    expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
+    expect(result.queuedFinal).toBe(true);
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "final reply" }),
+    );
+  });
+
+  it("keeps Codex direct source delivery automatic before harness runtime registration", async () => {
+    setNoAbort();
+    sessionStoreMocks.currentEntry = {
+      sessionId: "s1",
+      updatedAt: 0,
+      modelProvider: "openai",
+      model: "gpt-5.4",
+      sendPolicy: "allow",
+    };
+    const modes: Array<GetReplyOptions["sourceReplyDeliveryMode"]> = [];
+    const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
+      modes.push(opts?.sourceReplyDeliveryMode);
+      return { text: "final reply" } satisfies ReplyPayload;
+    });
+
+    const first = await dispatchReplyFromConfig({
+      ctx: buildTestCtx({
+        ChatType: "direct",
+        CommandSource: undefined,
+        SessionKey: "agent:main:main",
+      }),
+      cfg: emptyConfig,
+      dispatcher: createDispatcher(),
+      replyResolver,
+    });
+
+    registerAgentHarness({
+      id: "codex",
+      label: "Codex",
+      deliveryDefaults: { sourceVisibleReplies: "message_tool" },
+      supports: () => ({ supported: true, priority: 100 }),
+      runAttempt: vi.fn(async () => ({}) as never),
+    });
+
+    const second = await dispatchReplyFromConfig({
+      ctx: buildTestCtx({
+        ChatType: "direct",
+        CommandSource: undefined,
+        SessionKey: "agent:main:main",
+      }),
+      cfg: emptyConfig,
+      dispatcher: createDispatcher(),
+      replyResolver,
+    });
+
+    expect(replyResolver).toHaveBeenCalledTimes(2);
+    expect(modes).toEqual(["automatic", "automatic"]);
+    expect(first.queuedFinal).toBe(true);
+    expect(second.queuedFinal).toBe(true);
   });
 
   it("falls back to automatic group/channel delivery when the message tool is unavailable", async () => {

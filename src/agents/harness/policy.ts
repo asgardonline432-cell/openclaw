@@ -8,11 +8,24 @@ import {
   normalizeEmbeddedAgentRuntime,
   type EmbeddedAgentRuntime,
 } from "../pi-embedded-runner/runtime.js";
+import type { AgentHarnessDeliveryDefaults } from "./types.js";
 
 export type AgentHarnessPolicy = {
   runtime: EmbeddedAgentRuntime;
   runtimeSource?: "model" | "provider" | "implicit";
 };
+
+const CODEX_DELIVERY_DEFAULTS = Object.freeze({
+  sourceVisibleReplies: "automatic",
+} satisfies AgentHarnessDeliveryDefaults);
+
+function normalizeExplicitRuntime(value: unknown): EmbeddedAgentRuntime | undefined {
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+  const runtime = normalizeEmbeddedAgentRuntime(value);
+  return runtime === "auto" || runtime === "default" ? undefined : runtime;
+}
 
 export function resolveAgentHarnessPolicy(params: {
   provider?: string;
@@ -53,4 +66,20 @@ export function resolveAgentHarnessPolicy(params: {
     runtime,
     runtimeSource,
   };
+}
+
+export function resolveAgentHarnessDeliveryDefaults(params: {
+  provider?: string;
+  modelId?: string;
+  config?: OpenClawConfig;
+  agentId?: string;
+  sessionKey?: string;
+  agentHarnessId?: string;
+}): AgentHarnessDeliveryDefaults | undefined {
+  const runtime =
+    normalizeExplicitRuntime(params.agentHarnessId) ?? resolveAgentHarnessPolicy(params).runtime;
+  if (runtime === "codex") {
+    return CODEX_DELIVERY_DEFAULTS;
+  }
+  return undefined;
 }

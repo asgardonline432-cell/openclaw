@@ -5,7 +5,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveSessionAgentId,
 } from "../../agents/agent-scope.js";
-import { selectAgentHarness } from "../../agents/harness/selection.js";
+import { resolveAgentHarnessDeliveryDefaults } from "../../agents/harness/policy.js";
 import {
   isToolAllowedByPolicies,
   resolveEffectiveToolPolicy,
@@ -301,26 +301,19 @@ const resolveHarnessSourceVisibleRepliesDefault = (params: {
   if (params.ctx.CommandSource === "native") {
     return undefined;
   }
-  try {
-    const provider =
-      normalizeOptionalString(params.entry?.modelProvider) ??
-      normalizeOptionalString(params.ctx.Provider) ??
-      normalizeOptionalString(params.ctx.Surface) ??
-      "";
-    const harness = selectAgentHarness({
-      provider,
-      modelId: normalizeOptionalString(params.entry?.model),
-      config: params.cfg,
-      agentId: params.sessionAgentId,
-      sessionKey: params.sessionKey,
-    });
-    return harness.deliveryDefaults?.sourceVisibleReplies;
-  } catch (error) {
-    logVerbose(
-      `dispatch-from-config: could not resolve harness visible-reply defaults: ${formatErrorMessage(error)}`,
-    );
-    return undefined;
-  }
+  const provider =
+    normalizeOptionalString(params.entry?.modelProvider) ??
+    normalizeOptionalString(params.ctx.Provider) ??
+    normalizeOptionalString(params.ctx.Surface) ??
+    "";
+  return resolveAgentHarnessDeliveryDefaults({
+    provider,
+    modelId: normalizeOptionalString(params.entry?.model),
+    config: params.cfg,
+    agentId: params.sessionAgentId,
+    sessionKey: params.sessionKey,
+    agentHarnessId: normalizeOptionalString(params.entry?.agentHarnessId),
+  })?.sourceVisibleReplies;
 };
 
 async function clearPendingFinalDeliveryAfterSuccess(params: {
