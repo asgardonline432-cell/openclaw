@@ -2045,7 +2045,7 @@ describe("dispatchReplyFromConfig", () => {
     ]);
     let currentAcpEntry = {
       sessionKey: "agent:codex-acp:session-1",
-      storeSessionKey: "agent:codex-acp:session-1",
+      rowSessionKey: "agent:codex-acp:session-1",
       cfg: {},
       entry: {},
       acp: {
@@ -2125,7 +2125,7 @@ describe("dispatchReplyFromConfig", () => {
     const runtime = createAcpRuntime([{ type: "text_delta", text: "done" }, { type: "done" }]);
     acpMocks.readAcpSessionEntry.mockReturnValue({
       sessionKey: "agent:codex-acp:session-1",
-      storeSessionKey: "agent:codex-acp:session-1",
+      rowSessionKey: "agent:codex-acp:session-1",
       cfg: {},
       entry: {},
       acp: {
@@ -2190,7 +2190,7 @@ describe("dispatchReplyFromConfig", () => {
     });
     acpMocks.readAcpSessionEntry.mockReturnValue({
       sessionKey: "agent:codex-acp:session-1",
-      storeSessionKey: "agent:codex-acp:session-1",
+      rowSessionKey: "agent:codex-acp:session-1",
       cfg: {},
       entry: {},
       acp: {
@@ -2277,7 +2277,7 @@ describe("dispatchReplyFromConfig", () => {
       const runTurnStarted = runtime.runTurn.mock.calls.length > 0;
       return {
         sessionKey: "agent:codex-acp:session-1",
-        storeSessionKey: "agent:codex-acp:session-1",
+        rowSessionKey: "agent:codex-acp:session-1",
         cfg: {},
         entry: {},
         acp: runTurnStarted ? resolvedAcp : pendingAcp,
@@ -2344,7 +2344,7 @@ describe("dispatchReplyFromConfig", () => {
       const runTurnStarted = runtime.runTurn.mock.calls.length > 0;
       return {
         sessionKey: "agent:codex-acp:session-1",
-        storeSessionKey: "agent:codex-acp:session-1",
+        rowSessionKey: "agent:codex-acp:session-1",
         cfg: {},
         entry: {},
         acp: runTurnStarted ? resolvedAcp : pendingAcp,
@@ -2465,7 +2465,7 @@ describe("dispatchReplyFromConfig", () => {
         params.sessionKey === boundSessionKey
           ? {
               sessionKey: boundSessionKey,
-              storeSessionKey: boundSessionKey,
+              rowSessionKey: boundSessionKey,
               cfg: {},
               entry: {},
               acp: {
@@ -2557,7 +2557,7 @@ describe("dispatchReplyFromConfig", () => {
     ]);
     acpMocks.readAcpSessionEntry.mockReturnValue({
       sessionKey: "agent:codex-acp:session-1",
-      storeSessionKey: "agent:codex-acp:session-1",
+      rowSessionKey: "agent:codex-acp:session-1",
       cfg: {},
       entry: {},
       acp: {
@@ -2614,7 +2614,7 @@ describe("dispatchReplyFromConfig", () => {
     ]);
     acpMocks.readAcpSessionEntry.mockReturnValue({
       sessionKey: "agent:codex-acp:session-1",
-      storeSessionKey: "agent:codex-acp:session-1",
+      rowSessionKey: "agent:codex-acp:session-1",
       cfg: {},
       entry: {},
       acp: {
@@ -2697,7 +2697,7 @@ describe("dispatchReplyFromConfig", () => {
     const runtime = createAcpRuntime([{ type: "done" }]);
     acpMocks.readAcpSessionEntry.mockReturnValue({
       sessionKey: "agent:codex-acp:oneshot-1",
-      storeSessionKey: "agent:codex-acp:oneshot-1",
+      rowSessionKey: "agent:codex-acp:oneshot-1",
       cfg: {},
       entry: {},
       acp: {
