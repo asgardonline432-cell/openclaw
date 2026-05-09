@@ -106,16 +106,10 @@ export function createCronPromptExecutor(params: {
       Partial<Omit<CronAgentExecutionPhaseUpdate, "jobId" | "phase">>,
   ) => void;
 }) {
-  const sessionFile =
-    params.cronSession.sessionEntry.sessionFile?.trim() ||
-    createSqliteSessionTranscriptLocator({
-      sessionId: params.cronSession.sessionEntry.sessionId,
-      agentId: params.agentId,
-    });
-  // Fallback for callers that bypass prepareCronRunContext before persisting retries.
-  if (!params.cronSession.sessionEntry.sessionFile?.trim()) {
-    params.cronSession.sessionEntry.sessionFile = sessionFile;
-  }
+  const transcriptLocator = createSqliteSessionTranscriptLocator({
+    sessionId: params.cronSession.sessionEntry.sessionId,
+    agentId: params.agentId,
+  });
   const cronFallbacksOverride = resolveCronFallbacksOverride({
     cfg: params.cfg,
     job: params.job,
@@ -162,7 +156,7 @@ export function createCronPromptExecutor(params: {
             agentId: params.agentId,
             trigger: "cron",
             jobId: params.job.id,
-            sessionFile,
+            transcriptLocator,
             workspaceDir: params.workspaceDir,
             config: params.cfgWithAgentDefaults,
             prompt: promptText,
@@ -210,7 +204,7 @@ export function createCronPromptExecutor(params: {
           messageTo: params.resolvedDelivery.to,
           messageThreadId: params.resolvedDelivery.threadId,
           currentChannelId,
-          sessionFile,
+          transcriptLocator,
           agentDir: params.agentDir,
           workspaceDir: params.workspaceDir,
           config: params.cfgWithAgentDefaults,
