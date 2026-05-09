@@ -53,7 +53,7 @@ describe("collectCodexRouteWarnings", () => {
     mocks.resolveProfileUnusableUntilForDisplay.mockReturnValue(null);
   });
 
-  it("warns when openai-codex primary models still use the legacy route", () => {
+  it("warns when openai-codex primary models still use the compatibility route", () => {
     const warnings = collectCodexRouteWarnings({
       cfg: {
         agents: {
@@ -64,13 +64,15 @@ describe("collectCodexRouteWarnings", () => {
       } as OpenClawConfig,
     });
 
-    expect(warnings).toEqual([expect.stringContaining("Legacy `openai-codex/*`")]);
+    expect(warnings).toEqual([expect.stringContaining("Compatibility `openai-codex/*`")]);
     expect(warnings[0]).toContain("agents.defaults.model");
-    expect(warnings[0]).toContain("openai/gpt-5.5");
+    expect(warnings[0]).toContain(
+      "openai-codex/gpt-5.5 is accepted as a compatibility alias for openai/gpt-5.5",
+    );
     expect(warnings[0]).not.toContain("agentRuntime.id");
   });
 
-  it("still warns when the native Codex runtime is selected with a legacy model ref", () => {
+  it("still warns when the native Codex runtime is selected with a compatibility model ref", () => {
     const warnings = collectCodexRouteWarnings({
       cfg: {
         agents: {
@@ -88,7 +90,7 @@ describe("collectCodexRouteWarnings", () => {
     expect(warnings[0]).toContain('runtime is "codex"');
   });
 
-  it("still warns when OPENCLAW_AGENT_RUNTIME selects native Codex with a legacy model ref", () => {
+  it("still warns when OPENCLAW_AGENT_RUNTIME selects native Codex with a compatibility model ref", () => {
     const warnings = collectCodexRouteWarnings({
       cfg: {
         agents: {
@@ -119,110 +121,88 @@ describe("collectCodexRouteWarnings", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("repairs configured Codex model refs to canonical OpenAI refs without pinning runtime", () => {
-    const result = maybeRepairCodexRoutes({
-      cfg: {
-        agents: {
-          defaults: {
-            model: {
-              primary: "openai-codex/gpt-5.5",
-              fallbacks: ["openai-codex/gpt-5.4", "anthropic/claude-sonnet-4-6"],
-            },
-            heartbeat: {
-              model: "openai-codex/gpt-5.4-mini",
-            },
-            subagents: {
-              model: {
-                primary: "openai-codex/gpt-5.5",
-                fallbacks: ["openai-codex/gpt-5.4"],
-              },
-            },
-            compaction: {
-              model: "openai-codex/gpt-5.4",
-              memoryFlush: {
-                model: "openai-codex/gpt-5.4-mini",
-              },
-            },
-            models: {
-              "openai-codex/gpt-5.5": { alias: "codex" },
-            },
+  it("preserves configured Codex compatibility model refs without pinning runtime", () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          model: {
+            primary: "openai-codex/gpt-5.5",
+            fallbacks: ["openai-codex/gpt-5.4", "anthropic/claude-sonnet-4-6"],
           },
-          list: [
-            {
-              id: "worker",
-              model: "openai-codex/gpt-5.4",
-              agentRuntime: { id: "codex" },
-            },
-          ],
-        },
-        channels: {
-          modelByChannel: {
-            telegram: {
-              default: "openai-codex/gpt-5.4",
-            },
+          heartbeat: {
+            model: "openai-codex/gpt-5.4-mini",
           },
-        },
-        hooks: {
-          mappings: [
-            {
-              model: "openai-codex/gpt-5.4-mini",
-            },
-          ],
-          gmail: {
-            model: "openai-codex/gpt-5.4",
-          },
-        },
-        tools: {
           subagents: {
             model: {
-              primary: "openai-codex/gpt-5.4",
-              fallbacks: ["openai-codex/gpt-5.4-mini"],
+              primary: "openai-codex/gpt-5.5",
+              fallbacks: ["openai-codex/gpt-5.4"],
             },
           },
-        },
-        messages: {
-          tts: {
-            summaryModel: "openai-codex/gpt-5.4-mini",
+          compaction: {
+            model: "openai-codex/gpt-5.4",
+            memoryFlush: {
+              model: "openai-codex/gpt-5.4-mini",
+            },
+          },
+          models: {
+            "openai-codex/gpt-5.5": { alias: "codex" },
           },
         },
-      } as OpenClawConfig,
+        list: [
+          {
+            id: "worker",
+            model: "openai-codex/gpt-5.4",
+            agentRuntime: { id: "codex" },
+          },
+        ],
+      },
+      channels: {
+        modelByChannel: {
+          telegram: {
+            default: "openai-codex/gpt-5.4",
+          },
+        },
+      },
+      hooks: {
+        mappings: [
+          {
+            model: "openai-codex/gpt-5.4-mini",
+          },
+        ],
+        gmail: {
+          model: "openai-codex/gpt-5.4",
+        },
+      },
+      tools: {
+        subagents: {
+          model: {
+            primary: "openai-codex/gpt-5.4",
+            fallbacks: ["openai-codex/gpt-5.4-mini"],
+          },
+        },
+      },
+      messages: {
+        tts: {
+          summaryModel: "openai-codex/gpt-5.4-mini",
+        },
+      },
+    } as OpenClawConfig;
+
+    const result = maybeRepairCodexRoutes({
+      cfg,
       shouldRepair: true,
       codexRuntimeReady: true,
     });
 
-    expect(result.warnings).toEqual([]);
-    expect(result.changes).toEqual([expect.stringContaining("Repaired Codex model routes")]);
-    expect(result.cfg.agents?.defaults?.model).toEqual({
-      primary: "openai/gpt-5.5",
-      fallbacks: ["openai/gpt-5.4", "anthropic/claude-sonnet-4-6"],
-    });
-    expect(result.cfg.agents?.defaults?.heartbeat?.model).toBe("openai/gpt-5.4-mini");
-    expect(result.cfg.agents?.defaults?.subagents?.model).toEqual({
-      primary: "openai/gpt-5.5",
-      fallbacks: ["openai/gpt-5.4"],
-    });
-    expect(result.cfg.agents?.defaults?.compaction?.model).toBe("openai/gpt-5.4");
-    expect(result.cfg.agents?.defaults?.compaction?.memoryFlush?.model).toBe("openai/gpt-5.4-mini");
-    expect(result.cfg.agents?.defaults?.agentRuntime).toBeUndefined();
-    expect(result.cfg.agents?.defaults?.models).toEqual({
-      "openai/gpt-5.5": { alias: "codex" },
-    });
-    expect(result.cfg.agents?.list?.[0]).toMatchObject({
-      id: "worker",
-      model: "openai/gpt-5.4",
-      agentRuntime: { id: "codex" },
-    });
-    expect(result.cfg.channels?.modelByChannel?.telegram?.default).toBe("openai/gpt-5.4");
-    expect(result.cfg.hooks?.mappings?.[0]?.model).toBe("openai/gpt-5.4-mini");
-    expect(result.cfg.hooks?.gmail?.model).toBe("openai/gpt-5.4");
-    expect(result.cfg.tools?.subagents?.model).toEqual({
-      primary: "openai/gpt-5.4",
-      fallbacks: ["openai/gpt-5.4-mini"],
-    });
-    expect(result.cfg.messages?.tts?.summaryModel).toBe("openai/gpt-5.4-mini");
+    expect(result.cfg).toBe(cfg);
+    expect(result.warnings).toEqual([
+      expect.stringContaining("Preserved Codex compatibility model aliases"),
+    ]);
+    expect(result.changes).toEqual([]);
+    expect(result.cfg).toEqual(cfg);
   });
 
-  it("repairs legacy routes without requiring OAuth readiness", () => {
+  it("preserves compatibility routes without requiring OAuth readiness", () => {
     const result = maybeRepairCodexRoutes({
       cfg: {
         agents: {
@@ -234,12 +214,12 @@ describe("collectCodexRouteWarnings", () => {
       shouldRepair: true,
     });
 
-    expect(result.cfg.agents?.defaults?.model).toBe("openai/gpt-5.5");
+    expect(result.cfg.agents?.defaults?.model).toBe("openai-codex/gpt-5.5");
     expect(result.cfg.agents?.defaults?.agentRuntime).toBeUndefined();
     expect(result.changes.join("\n")).not.toContain("agentRuntime.id");
   });
 
-  it("repairs persisted session route refs, clears runtime pins, and preserves auth pins", () => {
+  it("clears persisted session runtime pins while preserving compatibility route and auth pins", () => {
     const store: Record<string, SessionEntry> = {
       main: {
         sessionId: "s1",
@@ -273,10 +253,10 @@ describe("collectCodexRouteWarnings", () => {
     expect(result).toEqual({ changed: true, sessionKeys: ["main"] });
     expect(store.main).toMatchObject({
       updatedAt: 123,
-      modelProvider: "openai",
+      modelProvider: "openai-codex",
       model: "gpt-5.5",
-      providerOverride: "openai",
-      modelOverride: "gpt-5.4",
+      providerOverride: "openai-codex",
+      modelOverride: "openai-codex/gpt-5.4",
       modelOverrideSource: "auto",
       authProfileOverride: "openai-codex:default",
       authProfileOverrideSource: "auto",
@@ -310,10 +290,10 @@ describe("collectCodexRouteWarnings", () => {
       now: 123,
     });
 
-    expect(result).toEqual({ changed: true, sessionKeys: ["main"] });
+    expect(result).toEqual({ changed: false, sessionKeys: [] });
     expect(store.main).toMatchObject({
-      updatedAt: 123,
-      providerOverride: "openai",
+      updatedAt: 1,
+      providerOverride: "openai-codex",
       modelOverride: "gpt-5.5",
       authProfileOverride: "openai-codex:default",
       authProfileOverrideSource: "auto",
@@ -351,7 +331,7 @@ describe("collectCodexRouteWarnings", () => {
     });
   });
 
-  it("repairs legacy routes without probing OAuth readiness", () => {
+  it("preserves compatibility routes without probing OAuth readiness", () => {
     const store = {
       profiles: {
         "openai-codex:default": {
@@ -400,11 +380,11 @@ describe("collectCodexRouteWarnings", () => {
     expect(mocks.loadInstalledPluginIndex).not.toHaveBeenCalled();
     expect(mocks.isInstalledPluginEnabled).not.toHaveBeenCalled();
     expect(mocks.resolveAuthProfileOrder).not.toHaveBeenCalled();
-    expect(result.cfg.agents?.defaults?.model).toBe("openai/gpt-5.5");
+    expect(result.cfg.agents?.defaults?.model).toBe("openai-codex/gpt-5.5");
     expect(result.cfg.agents?.defaults?.agentRuntime).toBeUndefined();
   });
 
-  it("still repairs routes when installed plugin metadata is unavailable", () => {
+  it("still preserves routes when installed plugin metadata is unavailable", () => {
     const store = {
       profiles: {
         "openai-codex:default": {
@@ -443,7 +423,7 @@ describe("collectCodexRouteWarnings", () => {
       shouldRepair: true,
     });
 
-    expect(result.cfg.agents?.defaults?.model).toBe("openai/gpt-5.5");
+    expect(result.cfg.agents?.defaults?.model).toBe("openai-codex/gpt-5.5");
     expect(result.cfg.agents?.defaults?.agentRuntime).toBeUndefined();
   });
 });

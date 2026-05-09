@@ -21,8 +21,9 @@ surfaces such as images, embeddings, speech, and realtime.
   `openai-codex` API-key profile when you intentionally want API-key auth.
 - **Non-agent OpenAI APIs** - direct OpenAI Platform access with usage-based
   billing through `OPENAI_API_KEY` or OpenAI API-key onboarding.
-- **Legacy config** - `openai-codex/*` model refs are repaired by
-  `openclaw doctor --fix` to `openai/*` plus the Codex runtime.
+- **Legacy config** - existing `openai-codex/*` model refs are accepted as
+  compatibility aliases. `openclaw doctor --fix` preserves them and cleans stale
+  runtime/session pins; new config should use `openai/*`.
 
 OpenAI explicitly supports subscription OAuth usage in external tools and workflows like OpenClaw.
 
@@ -56,8 +57,9 @@ The names are similar but not interchangeable:
 | `runtime: "acp", agentId: "codex"`      | ACP session route   | Explicit fallback path that runs Codex through ACP/acpx.                                          |
 
 This means a config can intentionally contain both `openai/*` model refs and
-`openai-codex` auth profiles. `openclaw doctor --fix` rewrites legacy
-`openai-codex/*` model refs to the canonical OpenAI model route.
+`openai-codex` auth profiles. Existing `openai-codex/*` model refs are accepted
+as compatibility aliases, but new config should use the canonical OpenAI model
+route.
 
 <Note>
 GPT-5.5 is available through both direct OpenAI Platform API-key access and
@@ -72,27 +74,26 @@ OpenAI agent model turns require the bundled Codex app-server plugin. Explicit
 PI runtime config remains available as an opt-in compatibility route. When PI is
 explicitly selected with an `openai-codex` auth profile, OpenClaw keeps the
 public model ref as `openai/*` and routes PI internally through the legacy
-Codex-auth transport. Run `openclaw doctor --fix` to repair stale
-`openai-codex/*` model refs or old PI session pins that do not come from
-explicit runtime config.
+Codex-auth transport. Run `openclaw doctor --fix` to clean old PI session pins
+that do not come from explicit runtime config.
 </Note>
 
 ## OpenClaw feature coverage
 
-| OpenAI capability         | OpenClaw surface                                                                 | Status                                                 |
-| ------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Chat / Responses          | `openai/<model>` model provider                                                  | Yes                                                    |
-| Codex subscription models | `openai/<model>` with `openai-codex` OAuth                                       | Yes                                                    |
-| Legacy Codex model refs   | `openai-codex/<model>`                                                           | Repaired by doctor to `openai/<model>`                 |
-| Codex app-server harness  | `openai/<model>` with omitted runtime or provider/model `agentRuntime.id: codex` | Yes                                                    |
-| Server-side web search    | Native OpenAI Responses tool                                                     | Yes, when web search is enabled and no provider pinned |
-| Images                    | `image_generate`                                                                 | Yes                                                    |
-| Videos                    | `video_generate`                                                                 | Yes                                                    |
-| Text-to-speech            | `messages.tts.provider: "openai"` / `tts`                                        | Yes                                                    |
-| Batch speech-to-text      | `tools.media.audio` / media understanding                                        | Yes                                                    |
-| Streaming speech-to-text  | Voice Call `streaming.provider: "openai"`                                        | Yes                                                    |
-| Realtime voice            | Voice Call `realtime.provider: "openai"` / Control UI Talk                       | Yes                                                    |
-| Embeddings                | memory embedding provider                                                        | Yes                                                    |
+| OpenAI capability         | OpenClaw surface                                                                 | Status                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Chat / Responses          | `openai/<model>` model provider                                                  | Yes                                                                    |
+| Codex subscription models | `openai/<model>` with `openai-codex` OAuth                                       | Yes                                                                    |
+| Legacy Codex model refs   | `openai-codex/<model>`                                                           | Accepted as compatibility aliases; use `openai/<model>` for new config |
+| Codex app-server harness  | `openai/<model>` with omitted runtime or provider/model `agentRuntime.id: codex` | Yes                                                                    |
+| Server-side web search    | Native OpenAI Responses tool                                                     | Yes, when web search is enabled and no provider pinned                 |
+| Images                    | `image_generate`                                                                 | Yes                                                                    |
+| Videos                    | `video_generate`                                                                 | Yes                                                                    |
+| Text-to-speech            | `messages.tts.provider: "openai"` / `tts`                                        | Yes                                                                    |
+| Batch speech-to-text      | `tools.media.audio` / media understanding                                        | Yes                                                                    |
+| Streaming speech-to-text  | Voice Call `streaming.provider: "openai"`                                        | Yes                                                                    |
+| Realtime voice            | Voice Call `realtime.provider: "openai"` / Control UI Talk                       | Yes                                                                    |
+| Embeddings                | memory embedding provider                                                        | Yes                                                                    |
 
 ## Memory embeddings
 
@@ -241,7 +242,7 @@ Choose your preferred auth method and follow the setup steps.
     |-----------|----------------|-------|------|
     | `openai/gpt-5.5` | omitted / provider/model `agentRuntime.id: "codex"` | Native Codex app-server harness | Codex sign-in or selected `openai-codex` profile |
     | `openai/gpt-5.5` | provider/model `agentRuntime.id: "pi"` | PI embedded runtime with internal Codex-auth transport | Selected `openai-codex` profile |
-    | `openai-codex/gpt-5.5` | repaired by doctor | Legacy route rewritten to `openai/gpt-5.5` | Existing `openai-codex` profile |
+    | `openai-codex/gpt-5.5` | alias-routed compatibility config | Preserved by doctor; runtime resolution normalizes through the alias router | Existing `openai-codex` profile |
 
     <Warning>
     Do not configure older `openai-codex/gpt-5.1*`, `openai-codex/gpt-5.2*`, or
@@ -252,9 +253,9 @@ Choose your preferred auth method and follow the setup steps.
 
     <Note>
     Keep using the `openai-codex` provider id for auth/profile commands. The
-    `openai-codex/*` model prefix is legacy config repaired by doctor. For the
-    common subscription plus native runtime setup, sign in with `openai-codex`
-    but keep the model ref as `openai/gpt-5.5`.
+    `openai-codex/*` model prefix is compatibility config accepted by the alias
+    router. For the common subscription plus native runtime setup, sign in with
+    `openai-codex` but keep new model refs as `openai/gpt-5.5`.
     </Note>
 
     ### Config example
@@ -294,7 +295,7 @@ Choose your preferred auth method and follow the setup steps.
     ```
 
     If an older config still has `openai-codex/gpt-*` or a stale OpenAI PI
-    session pin without explicit runtime config, repair it:
+    session pin without explicit runtime config, check and clean it:
 
     ```bash
     openclaw doctor --fix
@@ -322,8 +323,9 @@ Choose your preferred auth method and follow the setup steps.
     ### Doctor warning
 
     If `openai-codex/*` routes or stale OpenAI PI pins remain in config or
-    session state, `openclaw doctor --fix` rewrites them to `openai/*` with the
-    Codex runtime unless PI is explicitly configured.
+    session state, `openclaw doctor --fix` preserves configured compatibility
+    aliases and clears stale session/runtime pins unless PI is explicitly
+    configured.
 
     ### Context window cap
 
@@ -501,7 +503,7 @@ See [Video Generation](/tools/video-generation) for shared tool parameters, prov
 
 ## GPT-5 prompt contribution
 
-OpenClaw adds a shared GPT-5 prompt contribution for GPT-5-family runs across providers. It applies by model id, so `openai/gpt-5.5`, legacy pre-repair refs such as `openai-codex/gpt-5.5`, `openrouter/openai/gpt-5.5`, `opencode/gpt-5.5`, and other compatible GPT-5 refs receive the same overlay. Older GPT-4.x models do not.
+OpenClaw adds a shared GPT-5 prompt contribution for GPT-5-family runs across providers. It applies by model id, so `openai/gpt-5.5`, compatibility aliases such as `openai-codex/gpt-5.5`, `openrouter/openai/gpt-5.5`, `opencode/gpt-5.5`, and other compatible GPT-5 refs receive the same overlay. Older GPT-4.x models do not.
 
 The bundled native Codex harness uses the same GPT-5 behavior and heartbeat overlay through Codex app-server developer instructions, so `openai/gpt-5.x` sessions routed through Codex keep the same follow-through and proactive heartbeat guidance even though Codex owns the rest of the harness prompt.
 

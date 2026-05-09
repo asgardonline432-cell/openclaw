@@ -27,7 +27,8 @@ implements the `codex` runtime. Public config uses `agentRuntime.id` on
 provider or model entries; whole-agent runtime keys are legacy and ignored.
 `openclaw doctor --fix` removes old whole-agent runtime pins and rewrites
 legacy runtime model refs to canonical provider/model refs plus model-scoped
-runtime policy where needed.
+runtime policy where needed. Existing `openai-codex/*` model refs are a
+separate compatibility alias and are preserved.
 
 There are two runtime families:
 
@@ -53,8 +54,8 @@ Most confusion comes from several different surfaces sharing the Codex name:
 | OpenAI Platform API route for non-agent surfaces | `openai/*` plus API-key auth         | Used for direct OpenAI APIs such as images, embeddings, speech, and realtime.                                  |
 
 Those surfaces are intentionally independent. Enabling the `codex` plugin makes
-the native app-server features available; `openclaw doctor --fix` owns legacy
-`openai-codex/*` route repair and stale session pin cleanup. Selecting
+the native app-server features available; the alias router accepts existing
+`openai-codex/*` model refs while new config should use `openai/*`. Selecting
 `openai/*` for an agent model now means "run this through Codex" unless a
 non-agent OpenAI API surface is being used.
 
@@ -93,8 +94,8 @@ This is the agent-facing decision tree:
    as `openai/<model>` and set provider/model runtime policy to
    `agentRuntime.id: "pi"`. A selected `openai-codex` auth profile is routed
    internally through PI's legacy Codex-auth transport.
-4. If legacy config still contains **`openai-codex/*` model refs**, repair it to
-   `openai/<model>` with `openclaw doctor --fix`.
+4. If legacy config still contains **`openai-codex/*` model refs**, keep it
+   working through the alias router. Use `openai/<model>` for new config.
 5. If the user explicitly says **ACP**, **acpx**, or **Codex ACP adapter**, use
    ACP with `runtime: "acp"` and `agentId: "codex"`.
 6. If the request is for **Claude Code, Gemini CLI, OpenCode, Cursor, Droid, or
@@ -187,8 +188,9 @@ keeping the public model ref as `openai/*`. Stale OpenAI PI session pins are
 ignored by runtime selection and can be cleaned with `openclaw doctor --fix`.
 
 If `openclaw doctor` warns that the `codex` plugin is enabled while
-`openai-codex/*` remains in config, treat that as legacy route state. Run
-`openclaw doctor --fix` to rewrite it to `openai/*` with the Codex runtime.
+`openai-codex/*` remains in config, treat that as compatibility route state.
+New config should use `openai/*`; `doctor --fix` preserves existing aliases and
+can clean stale session runtime pins.
 
 ## Compatibility contract
 

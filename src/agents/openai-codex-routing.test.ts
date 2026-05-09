@@ -16,6 +16,12 @@ describe("OpenAI Codex routing policy", () => {
         config: {} as OpenClawConfig,
       }),
     ).toBe(true);
+    expect(
+      modelSelectionShouldEnsureCodexPlugin({
+        model: "openai-codex/gpt-5.5",
+        config: {} as OpenClawConfig,
+      }),
+    ).toBe(true);
   });
 
   it("does not force Codex for custom OpenAI-compatible base URLs", () => {

@@ -209,6 +209,21 @@ describe("runAgentHarnessAttempt", () => {
     expect(piRunAttempt).not.toHaveBeenCalled();
   });
 
+  it("uses the Codex harness by default for openai-codex compatibility model runs", async () => {
+    registerSuccessfulCodexHarness();
+
+    await expect(
+      runAgentHarnessAttempt({
+        ...createAttemptParams(),
+        provider: "openai-codex",
+        modelId: "gpt-5.5",
+      }),
+    ).resolves.toMatchObject({
+      sessionIdUsed: "codex",
+    });
+    expect(piRunAttempt).not.toHaveBeenCalled();
+  });
+
   it("honors explicit PI runtime for OpenAI agent model runs", async () => {
     await expect(
       runAgentHarnessAttempt({

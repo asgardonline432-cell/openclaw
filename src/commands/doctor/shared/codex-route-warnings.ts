@@ -48,14 +48,6 @@ function toCanonicalOpenAIModelRef(model: string): string | undefined {
   return modelId ? `openai/${modelId}` : undefined;
 }
 
-function toOpenAIModelId(model: string): string | undefined {
-  if (!isOpenAICodexModelRef(model)) {
-    return undefined;
-  }
-  const modelId = model.slice("openai-codex/".length).trim();
-  return modelId || undefined;
-}
-
 function resolveRuntime(params: {
   env?: NodeJS.ProcessEnv;
   agentRuntime?: AgentRuntimePolicyConfig;
@@ -290,242 +282,10 @@ function collectConfigModelRefs(cfg: OpenClawConfig, env?: NodeJS.ProcessEnv): C
   return hits;
 }
 
-function rewriteStringModelSlot(params: {
-  hits: CodexRouteHit[];
-  container: MutableRecord | undefined;
-  key: string;
-  path: string;
-  runtime?: string;
-}): boolean {
-  if (!params.container) {
-    return false;
-  }
-  const value = params.container[params.key];
-  const model = typeof value === "string" ? value.trim() : "";
-  if (!model || !isOpenAICodexModelRef(model)) {
-    return false;
-  }
-  const canonicalModel = recordCodexModelHit({
-    hits: params.hits,
-    path: params.path,
-    model,
-    runtime: params.runtime,
-  });
-  if (!canonicalModel) {
-    return false;
-  }
-  params.container[params.key] = canonicalModel;
-  return true;
-}
-
-function rewriteModelConfigSlot(params: {
-  hits: CodexRouteHit[];
-  container: MutableRecord | undefined;
-  key: string;
-  path: string;
-  runtime?: string;
-}): boolean {
-  if (!params.container) {
-    return false;
-  }
-  const value = params.container[params.key];
-  if (typeof value === "string") {
-    return rewriteStringModelSlot({
-      hits: params.hits,
-      container: params.container,
-      key: params.key,
-      path: params.path,
-      runtime: params.runtime,
-    });
-  }
-  const record = asMutableRecord(value);
-  if (!record) {
-    return false;
-  }
-  const rewrotePrimary = rewriteStringModelSlot({
-    hits: params.hits,
-    container: record,
-    key: "primary",
-    path: `${params.path}.primary`,
-    runtime: params.runtime,
-  });
-  if (Array.isArray(record.fallbacks)) {
-    record.fallbacks = record.fallbacks.map((entry, index) => {
-      if (typeof entry !== "string") {
-        return entry;
-      }
-      const model = entry.trim();
-      const canonicalModel = recordCodexModelHit({
-        hits: params.hits,
-        path: `${params.path}.fallbacks.${index}`,
-        model,
-      });
-      return canonicalModel ?? entry;
-    });
-  }
-  return rewrotePrimary;
-}
-
-function rewriteModelsMap(params: {
-  hits: CodexRouteHit[];
-  models: MutableRecord | undefined;
-  path: string;
-}): void {
-  if (!params.models) {
-    return;
-  }
-  for (const legacyRef of Object.keys(params.models)) {
-    const canonicalModel = toCanonicalOpenAIModelRef(legacyRef);
-    if (!canonicalModel) {
-      continue;
-    }
-    recordCodexModelHit({
-      hits: params.hits,
-      path: `${params.path}.${legacyRef}`,
-      model: legacyRef,
-    });
-    params.models[canonicalModel] ??= params.models[legacyRef] ?? {};
-    delete params.models[legacyRef];
-  }
-}
-
-function rewriteAgentModelRefs(params: {
-  hits: CodexRouteHit[];
-  agent: MutableRecord | undefined;
-  path: string;
-  currentRuntime?: string;
-  rewriteModelsMap?: boolean;
-}): void {
-  if (!params.agent) {
-    return;
-  }
-  for (const key of AGENT_MODEL_CONFIG_KEYS) {
-    rewriteModelConfigSlot({
-      hits: params.hits,
-      container: params.agent,
-      key,
-      path: `${params.path}.${key}`,
-      runtime: key === "model" ? params.currentRuntime : undefined,
-    });
-  }
-  rewriteStringModelSlot({
-    hits: params.hits,
-    container: asMutableRecord(params.agent.heartbeat),
-    key: "model",
-    path: `${params.path}.heartbeat.model`,
-  });
-  rewriteModelConfigSlot({
-    hits: params.hits,
-    container: asMutableRecord(params.agent.subagents),
-    key: "model",
-    path: `${params.path}.subagents.model`,
-  });
-  const compaction = asMutableRecord(params.agent.compaction);
-  rewriteStringModelSlot({
-    hits: params.hits,
-    container: compaction,
-    key: "model",
-    path: `${params.path}.compaction.model`,
-  });
-  rewriteStringModelSlot({
-    hits: params.hits,
-    container: asMutableRecord(compaction?.memoryFlush),
-    key: "model",
-    path: `${params.path}.compaction.memoryFlush.model`,
-  });
-  if (params.rewriteModelsMap) {
-    rewriteModelsMap({
-      hits: params.hits,
-      models: asMutableRecord(params.agent.models),
-      path: `${params.path}.models`,
-    });
-  }
-}
-
-function rewriteConfigModelRefs(params: { cfg: OpenClawConfig; env?: NodeJS.ProcessEnv }): {
-  cfg: OpenClawConfig;
-  changes: CodexRouteHit[];
-} {
-  const nextConfig = structuredClone(params.cfg);
-  const hits: CodexRouteHit[] = [];
-  const defaultsRuntime = nextConfig.agents?.defaults?.agentRuntime;
-  rewriteAgentModelRefs({
-    hits,
-    agent: asMutableRecord(nextConfig.agents?.defaults),
-    path: "agents.defaults",
-    currentRuntime: resolveRuntime({ env: params.env, defaultsRuntime }),
-    rewriteModelsMap: true,
-  });
-  for (const [index, agent] of (nextConfig.agents?.list ?? []).entries()) {
-    const id = typeof agent.id === "string" && agent.id.trim() ? agent.id.trim() : String(index);
-    rewriteAgentModelRefs({
-      hits,
-      agent: agent as MutableRecord,
-      path: `agents.list.${id}`,
-      currentRuntime: resolveRuntime({
-        env: params.env,
-        agentRuntime: agent.agentRuntime,
-        defaultsRuntime,
-      }),
-    });
-  }
-  const channelsModelByChannel = asMutableRecord(nextConfig.channels?.modelByChannel);
-  if (channelsModelByChannel) {
-    for (const [channelId, channelMap] of Object.entries(channelsModelByChannel)) {
-      const targets = asMutableRecord(channelMap);
-      if (!targets) {
-        continue;
-      }
-      for (const targetId of Object.keys(targets)) {
-        rewriteStringModelSlot({
-          hits,
-          container: targets,
-          key: targetId,
-          path: `channels.modelByChannel.${channelId}.${targetId}`,
-        });
-      }
-    }
-  }
-  for (const [index, mapping] of (nextConfig.hooks?.mappings ?? []).entries()) {
-    rewriteStringModelSlot({
-      hits,
-      container: mapping as MutableRecord,
-      key: "model",
-      path: `hooks.mappings.${index}.model`,
-    });
-  }
-  rewriteStringModelSlot({
-    hits,
-    container: asMutableRecord(nextConfig.hooks?.gmail),
-    key: "model",
-    path: "hooks.gmail.model",
-  });
-  rewriteModelConfigSlot({
-    hits,
-    container: asMutableRecord(nextConfig.tools?.subagents),
-    key: "model",
-    path: "tools.subagents.model",
-  });
-  rewriteStringModelSlot({
-    hits,
-    container: asMutableRecord(nextConfig.messages?.tts),
-    key: "summaryModel",
-    path: "messages.tts.summaryModel",
-  });
-  rewriteStringModelSlot({
-    hits,
-    container: asMutableRecord(asMutableRecord(nextConfig.channels?.discord)?.voice),
-    key: "model",
-    path: "channels.discord.voice.model",
-  });
-  return {
-    cfg: hits.length > 0 ? nextConfig : params.cfg,
-    changes: hits,
-  };
-}
-
-function formatCodexRouteChange(hit: CodexRouteHit): string {
-  return `${hit.path}: ${hit.model} -> ${hit.canonicalModel}.`;
+function formatCodexRoutePreservation(hit: CodexRouteHit): string {
+  return `${hit.path}: ${hit.model} is accepted as a compatibility alias for ${hit.canonicalModel}${
+    hit.runtime ? `; current runtime is "${hit.runtime}"` : ""
+  }.`;
 }
 
 export function collectCodexRouteWarnings(params: {
@@ -538,14 +298,9 @@ export function collectCodexRouteWarnings(params: {
   }
   return [
     [
-      "- Legacy `openai-codex/*` model refs should be rewritten to `openai/*`.",
-      ...hits.map(
-        (hit) =>
-          `- ${hit.path}: ${hit.model} should become ${hit.canonicalModel}${
-            hit.runtime ? `; current runtime is "${hit.runtime}"` : ""
-          }.`,
-      ),
-      "- Run `openclaw doctor --fix`: it rewrites configured model refs and stale sessions to `openai/*` without changing explicit runtime policy.",
+      "- Compatibility `openai-codex/*` model refs are present.",
+      ...hits.map((hit) => `- ${formatCodexRoutePreservation(hit)}`),
+      "- New config should use `openai/*`; existing `openai-codex/*` refs are routed through the alias router and are preserved by `openclaw doctor --fix`.",
     ].join("\n"),
   ];
 }
@@ -567,49 +322,29 @@ export function maybeRepairCodexRoutes(params: {
       changes: [],
     };
   }
-  const repaired = rewriteConfigModelRefs({
-    cfg: params.cfg,
-    env: params.env,
-  });
   return {
-    cfg: repaired.cfg,
-    warnings: [],
-    changes: [
-      `Repaired Codex model routes:\n${repaired.changes
-        .map((hit) => `- ${formatCodexRouteChange(hit)}`)
+    cfg: params.cfg,
+    warnings: [
+      `Preserved Codex compatibility model aliases:\n${hits
+        .map((hit) => `- ${formatCodexRoutePreservation(hit)}`)
         .join("\n")}`,
     ],
+    changes: [],
   };
 }
 
-function rewriteSessionModelPair(params: {
+function sessionModelPairHasCodexAlias(params: {
   entry: SessionEntry;
   providerKey: "modelProvider" | "providerOverride";
   modelKey: "model" | "modelOverride";
 }): boolean {
-  let changed = false;
   const provider = normalizeString(params.entry[params.providerKey]);
   const model =
     typeof params.entry[params.modelKey] === "string" ? params.entry[params.modelKey] : undefined;
   if (provider === "openai-codex") {
-    params.entry[params.providerKey] = "openai";
-    changed = true;
-    if (model) {
-      const modelId = toOpenAIModelId(model);
-      if (modelId) {
-        params.entry[params.modelKey] = modelId;
-      }
-    }
     return true;
   }
-  if (model && isOpenAICodexModelRef(model)) {
-    const canonicalModel = toCanonicalOpenAIModelRef(model);
-    if (canonicalModel) {
-      params.entry[params.modelKey] = canonicalModel;
-      changed = true;
-    }
-  }
-  return changed;
+  return !!model && isOpenAICodexModelRef(model);
 }
 
 function clearStaleCodexFallbackNotice(entry: SessionEntry): boolean {
@@ -648,21 +383,21 @@ export function repairCodexSessionStoreRoutes(params: {
     if (!entry) {
       continue;
     }
-    const changedRuntimeModelRoute = rewriteSessionModelPair({
+    const hasRuntimeModelRoute = sessionModelPairHasCodexAlias({
       entry,
       providerKey: "modelProvider",
       modelKey: "model",
     });
-    const changedOverrideModelRoute = rewriteSessionModelPair({
+    const hasOverrideModelRoute = sessionModelPairHasCodexAlias({
       entry,
       providerKey: "providerOverride",
       modelKey: "modelOverride",
     });
-    const changedModelRoute = changedRuntimeModelRoute || changedOverrideModelRoute;
+    const hasCodexRoute = hasRuntimeModelRoute || hasOverrideModelRoute;
     const changedFallbackNotice = clearStaleCodexFallbackNotice(entry);
     const changedRuntimePins =
-      changedModelRoute || changedFallbackNotice ? clearStaleSessionRuntimePins(entry) : false;
-    if (!changedModelRoute && !changedFallbackNotice && !changedRuntimePins) {
+      hasCodexRoute || changedFallbackNotice ? clearStaleSessionRuntimePins(entry) : false;
+    if (!changedFallbackNotice && !changedRuntimePins) {
       continue;
     }
     entry.updatedAt = now;
@@ -679,14 +414,17 @@ function scanCodexSessionStoreRoutes(store: Record<string, SessionEntry>): strin
     if (!entry) {
       return [];
     }
-    const hasLegacyRoute =
+    const hasCodexRoute =
       normalizeString(entry.modelProvider) === "openai-codex" ||
       normalizeString(entry.providerOverride) === "openai-codex" ||
       isOpenAICodexModelRef(entry.model) ||
-      isOpenAICodexModelRef(entry.modelOverride) ||
+      isOpenAICodexModelRef(entry.modelOverride);
+    const hasStaleFallbackNotice =
       isOpenAICodexModelRef(entry.fallbackNoticeSelectedModel) ||
       isOpenAICodexModelRef(entry.fallbackNoticeActiveModel);
-    return hasLegacyRoute ? [sessionKey] : [];
+    const hasRuntimePin =
+      entry.agentHarnessId !== undefined || entry.agentRuntimeOverride !== undefined;
+    return hasStaleFallbackNotice || (hasCodexRoute && hasRuntimePin) ? [sessionKey] : [];
   });
 }
 
@@ -721,9 +459,9 @@ export async function maybeRepairCodexSessionRoutes(params: {
         stale.length > 0
           ? [
               [
-                "- Legacy `openai-codex/*` session route state detected.",
+                "- Stale Codex session runtime/fallback state detected.",
                 `- Affected sessions: ${stale.length}.`,
-                "- Run `openclaw doctor --fix` to rewrite stale session model/provider pins across all agent session stores.",
+                "- Run `openclaw doctor --fix` to clear stale session runtime/fallback pins while preserving compatibility provider/model aliases.",
               ].join("\n"),
             ]
           : [],
@@ -758,7 +496,7 @@ export async function maybeRepairCodexSessionRoutes(params: {
         ? [
             `Repaired Codex session routes: moved ${repairedSessions} session${
               repairedSessions === 1 ? "" : "s"
-            } across ${repairedStores} store${repairedStores === 1 ? "" : "s"} to openai/* while preserving runtime policy.`,
+            } across ${repairedStores} store${repairedStores === 1 ? "" : "s"} by clearing stale runtime/fallback pins while preserving compatibility provider/model aliases.`,
           ]
         : [],
   };
