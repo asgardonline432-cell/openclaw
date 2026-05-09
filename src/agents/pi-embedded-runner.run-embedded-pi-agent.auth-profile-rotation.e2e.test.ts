@@ -513,6 +513,10 @@ async function runAutoPinnedPromptErrorRotationCase(params: {
     });
 
     expect(runEmbeddedAttemptMock).toHaveBeenCalledTimes(2);
+    await vi.waitFor(async () => {
+      const usageStats = await readUsageStats(agentDir);
+      expect(typeof usageStats["openai:p1"]?.cooldownUntil).toBe("number");
+    });
     const usageStats = await readUsageStats(agentDir);
     return { usageStats };
   });
@@ -881,19 +885,22 @@ describe("runEmbeddedPiAgent auth profile rotation", () => {
         }),
       ]),
     );
-    expect(logCapture.records).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          message: "auth profile failure state updated",
-          attributes: expect.objectContaining({
-            event: "auth_profile_failure_state_updated",
-            runId: "run:overloaded-logging",
-            profileId: safeProfileId,
-            reason: "overloaded",
+    await vi.waitFor(async () => {
+      await logCapture.flush();
+      expect(logCapture.records).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "auth profile failure state updated",
+            attributes: expect.objectContaining({
+              event: "auth_profile_failure_state_updated",
+              runId: "run:overloaded-logging",
+              profileId: safeProfileId,
+              reason: "overloaded",
+            }),
           }),
-        }),
-      ]),
-    );
+        ]),
+      );
+    });
   });
 
   it("rotates for overloaded prompt failures across auto-pinned profiles", async () => {
