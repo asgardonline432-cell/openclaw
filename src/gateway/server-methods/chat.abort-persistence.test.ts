@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CURRENT_SESSION_VERSION } from "../../agents/transcript/session-transcript-contract.js";
-import { createSqliteSessionTranscriptLocator } from "../../config/sessions/test-helpers/transcript-locator.js";
 import {
   loadSqliteSessionTranscriptEvents,
   replaceSqliteSessionTranscriptEvents,
@@ -21,7 +20,6 @@ type TranscriptLine = {
 
 const sessionEntryState = vi.hoisted(() => ({
   sessionId: "",
-  transcriptPath: "",
 }));
 
 vi.mock("../session-utils.js", async () => {
@@ -41,7 +39,7 @@ vi.mock("../session-utils.js", async () => {
 
 const { chatHandlers } = await import("./chat.js");
 
-async function writeTranscriptHeader(transcriptPath: string, sessionId: string) {
+async function writeTranscriptHeader(sessionId: string) {
   const header = {
     type: "session",
     version: CURRENT_SESSION_VERSION,
@@ -56,7 +54,7 @@ async function writeTranscriptHeader(transcriptPath: string, sessionId: string) 
   });
 }
 
-async function readTranscriptLines(_transcriptPath: string): Promise<TranscriptLine[]> {
+async function readTranscriptLines(): Promise<TranscriptLine[]> {
   const sessionId = sessionEntryState.sessionId;
   if (!sessionId) {
     return [];
@@ -136,8 +134,7 @@ function expectPersistedAbortMessage(
   expect(abort.runId).toBe(expected.runId);
 }
 
-function setMockSessionEntry(transcriptPath: string, sessionId: string) {
-  sessionEntryState.transcriptPath = transcriptPath;
+function setMockSessionEntry(sessionId: string) {
   sessionEntryState.sessionId = sessionId;
 }
 
@@ -145,10 +142,9 @@ async function createTranscriptFixture(prefix: string) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   vi.stubEnv("OPENCLAW_STATE_DIR", dir);
   const sessionId = "sess-main";
-  const transcriptPath = createSqliteSessionTranscriptLocator({ agentId: "main", sessionId });
-  await writeTranscriptHeader(transcriptPath, sessionId);
-  setMockSessionEntry(transcriptPath, sessionId);
-  return { transcriptPath, sessionId };
+  await writeTranscriptHeader(sessionId);
+  setMockSessionEntry(sessionId);
+  return { sessionId };
 }
 
 afterEach(() => {
@@ -159,7 +155,7 @@ afterEach(() => {
 
 describe("chat abort transcript persistence", () => {
   it("persists run-scoped abort partial with rpc metadata and idempotency", async () => {
-    const { transcriptPath, sessionId } = await createTranscriptFixture("openclaw-chat-abort-run-");
+    const { sessionId } = await createTranscriptFixture("openclaw-chat-abort-run-");
     const runId = "idem-abort-run-1";
     const respond = vi.fn();
     const context = createChatAbortContext({
@@ -200,7 +196,7 @@ describe("chat abort transcript persistence", () => {
       respond,
     });
 
-    const lines = await readTranscriptLines(transcriptPath);
+    const lines = await readTranscriptLines();
     const persisted = collectMessagesWithIdempotencyKey(lines, `${runId}:assistant`);
 
     expect(persisted).toHaveLength(1);
@@ -213,9 +209,7 @@ describe("chat abort transcript persistence", () => {
   });
 
   it("persists session-scoped abort partials with rpc metadata", async () => {
-    const { transcriptPath, sessionId } = await createTranscriptFixture(
-      "openclaw-chat-abort-session-",
-    );
+    const { sessionId } = await createTranscriptFixture("openclaw-chat-abort-session-");
     const respond = vi.fn();
     const context = createChatAbortContext({
       chatAbortControllers: new Map([
@@ -243,7 +237,7 @@ describe("chat abort transcript persistence", () => {
     expect(ok).toBe(true);
     expectAbortPayloadContainsRunIds(payload, ["run-a", "run-b"]);
 
-    const lines = await readTranscriptLines(transcriptPath);
+    const lines = await readTranscriptLines();
     const runAPersisted = findMessageWithIdempotencyKey(lines, "run-a:assistant");
     const runBPersisted = findMessageWithIdempotencyKey(lines, "run-b:assistant");
 
@@ -256,7 +250,7 @@ describe("chat abort transcript persistence", () => {
   });
 
   it("persists /stop partials with stop-command metadata", async () => {
-    const { transcriptPath, sessionId } = await createTranscriptFixture("openclaw-chat-stop-");
+    const { sessionId } = await createTranscriptFixture("openclaw-chat-stop-");
     const respond = vi.fn();
     const context = createChatAbortContext({
       chatAbortControllers: new Map([["run-stop-1", createActiveRun("main", { sessionId })]]),
@@ -286,7 +280,7 @@ describe("chat abort transcript persistence", () => {
     expect(ok).toBe(true);
     expectAbortPayload(payload, { runIds: ["run-stop-1"] });
 
-    const lines = await readTranscriptLines(transcriptPath);
+    const lines = await readTranscriptLines();
     const persisted = findMessageWithIdempotencyKey(lines, "run-stop-1:assistant");
 
     expectPersistedAbortMessage(persisted, {
@@ -297,9 +291,7 @@ describe("chat abort transcript persistence", () => {
   });
 
   it("skips run-scoped transcript persistence when partial text is blank", async () => {
-    const { transcriptPath, sessionId } = await createTranscriptFixture(
-      "openclaw-chat-abort-run-blank-",
-    );
+    const { sessionId } = await createTranscriptFixture("openclaw-chat-abort-run-blank-");
     const runId = "idem-abort-run-blank";
     const respond = vi.fn();
     const context = createChatAbortContext({
@@ -319,7 +311,7 @@ describe("chat abort transcript persistence", () => {
     expect(ok).toBe(true);
     expectAbortPayload(payload, { runIds: [runId] });
 
-    const lines = await readTranscriptLines(transcriptPath);
+    const lines = await readTranscriptLines();
     const persisted = findMessageWithIdempotencyKey(lines, `${runId}:assistant`);
     expect(persisted).toBeUndefined();
   });
