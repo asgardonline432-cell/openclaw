@@ -334,7 +334,7 @@ describe("runReplyAgent auto-compaction token update", () => {
         sessionId: "session",
         sessionKey: "main",
         messageProvider: "whatsapp",
-        sessionFile: params.sessionFile ?? "/tmp/session.jsonl",
+        sessionFile: params.sessionFile ?? createTestTranscriptLocator(),
         workspaceDir: params.workspaceDir ?? "/tmp",
         config: params.config ?? {},
         skillsSnapshot: {},
