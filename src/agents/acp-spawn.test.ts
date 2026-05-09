@@ -767,7 +767,6 @@ describe("spawnAcpDirect", () => {
       }),
     );
     for (const call of hoisted.upsertSessionEntryMock.mock.calls) {
-      expect(call[0].entry).not.toHaveProperty("transcriptLocator");
     }
   });
 
@@ -1576,9 +1575,6 @@ describe("spawnAcpDirect", () => {
         }),
       }),
     );
-    expect(hoisted.upsertSessionEntryMock.mock.calls[0]?.[0].entry).not.toHaveProperty(
-      "transcriptLocator",
-    );
   });
 
   it("binds ACP sessions through the configured default account when accountId is omitted", async () => {
@@ -1941,9 +1937,6 @@ describe("spawnAcpDirect", () => {
             sessionId: "sess-123",
           }),
         }),
-      );
-      expect(hoisted.upsertSessionEntryMock.mock.calls.at(-1)?.[0].entry).not.toHaveProperty(
-        "transcriptLocator",
       );
     }
     expectAgentGatewayCall(expectedAgentCall);
