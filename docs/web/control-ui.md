@@ -99,6 +99,7 @@ Imported themes are stored only in the current browser profile. They are not wri
     - Chat history refreshes request a bounded recent window with per-message text caps so large sessions do not force the browser to render a full transcript payload before the chat becomes usable.
     - Talk through browser realtime sessions. OpenAI uses direct WebRTC, Google Live uses a constrained one-use browser token over WebSocket, and backend-only realtime voice plugins use the Gateway relay transport. Client-owned provider sessions start with `talk.client.create`; Gateway relay sessions start with `talk.session.create`. The relay keeps provider credentials on the Gateway while the browser streams microphone PCM through `talk.session.appendAudio` and forwards `openclaw_agent_consult` provider tool calls through `talk.client.toolCall` for Gateway policy and the larger configured OpenClaw model.
     - Stream tool calls + live tool output cards in Chat (agent events).
+    - Native Codex runs show a compact safe activity indicator for plan, item, tool, and lifecycle progress. The Control UI does not render raw private reasoning text from Codex app-server events; when reasoning visibility is enabled, the indicator only shows approved progress summaries.
 
   </Accordion>
   <Accordion title="Channels, instances, sessions, dreams">

@@ -3,7 +3,11 @@ import { ifDefined } from "lit/directives/if-defined.js";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
 import { t } from "../../i18n/index.ts";
-import type { CompactionStatus, FallbackStatus } from "../app-tool-stream.ts";
+import type {
+  CompactionStatus,
+  FallbackStatus,
+  RuntimeActivityStatus,
+} from "../app-tool-stream.ts";
 import {
   getChatAttachmentPreviewUrl,
   registerChatAttachmentPayload,
@@ -41,7 +45,11 @@ import {
   type SlashCommandCategory,
   type SlashCommandDef,
 } from "../chat/slash-commands.ts";
-import { renderCompactionIndicator, renderFallbackIndicator } from "../chat/status-indicators.ts";
+import {
+  renderCompactionIndicator,
+  renderFallbackIndicator,
+  renderRuntimeActivityIndicator,
+} from "../chat/status-indicators.ts";
 import { getExpandedToolCards, syncToolCardExpansionState } from "../chat/tool-expansion-state.ts";
 import type { EmbedSandboxMode } from "../embed-sandbox.ts";
 import { icons } from "../icons.ts";
@@ -64,6 +72,7 @@ export type ChatProps = {
   canAbort?: boolean;
   compactionStatus?: CompactionStatus | null;
   fallbackStatus?: FallbackStatus | null;
+  runtimeActivityStatus?: RuntimeActivityStatus | null;
   messages: unknown[];
   sideResult?: ChatSideResult | null;
   toolMessages: unknown[];
@@ -915,6 +924,11 @@ export function renderChat(props: ChatProps) {
   const activeSession = props.sessions?.sessions?.find((row) => row.key === props.sessionKey);
   const reasoningLevel = activeSession?.reasoningLevel ?? "off";
   const showReasoning = props.showThinking && reasoningLevel !== "off";
+  const runtimeId = activeSession?.agentRuntime?.id?.toLowerCase() ?? "";
+  const runtimeActivityIsCodex =
+    runtimeId === "codex" ||
+    runtimeId === "codex-app-server" ||
+    props.runtimeActivityStatus?.source === "codex-app-server";
   const assistantIdentity = {
     name: props.assistantName,
     avatar: resolveAssistantDisplayAvatar(props),
@@ -1338,6 +1352,10 @@ export function renderChat(props: ChatProps) {
       ${renderSideResult(props.sideResult, props.onDismissSideResult)}
       ${renderFallbackIndicator(props.fallbackStatus)}
       ${renderCompactionIndicator(props.compactionStatus)}
+      ${renderRuntimeActivityIndicator(
+        runtimeActivityIsCodex ? props.runtimeActivityStatus : null,
+        { visibleReasoningUnavailable: showReasoning },
+      )}
       ${renderContextNotice(activeSession, props.sessions?.defaults?.contextTokens ?? null, {
         compactBusy,
         compactDisabled: !props.connected || isBusy || Boolean(props.canAbort),

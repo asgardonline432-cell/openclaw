@@ -10,7 +10,11 @@ import {
 } from "./context-notice.ts";
 import { renderChatRunControls, type ChatRunControlsProps } from "./run-controls.ts";
 import { renderSideResult } from "./side-result-render.ts";
-import { renderCompactionIndicator, renderFallbackIndicator } from "./status-indicators.ts";
+import {
+  renderCompactionIndicator,
+  renderFallbackIndicator,
+  renderRuntimeActivityIndicator,
+} from "./status-indicators.ts";
 
 vi.mock("../icons.ts", () => ({
   icons: {},
@@ -222,6 +226,72 @@ describe("chat status indicators", () => {
       );
       expect(container.querySelector(".compaction-indicator--fallback")).toBeNull();
       expect(container.querySelector(".compaction-indicator--complete")).toBeNull();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("renders native Codex runtime activity fallback and privacy title", () => {
+    const container = document.createElement("div");
+    render(
+      renderRuntimeActivityIndicator(
+        {
+          runId: "run-1",
+          sessionKey: "main",
+          phase: "active",
+          lines: [],
+          startedAt: 1_000,
+          updatedAt: 1_000,
+          source: "codex-app-server",
+        },
+        { visibleReasoningUnavailable: true },
+      ),
+      container,
+    );
+
+    const indicator = container.querySelector(".compaction-indicator--runtime");
+    expect(indicator?.getAttribute("role")).toBe("status");
+    expect(indicator?.textContent).toContain("Codex running: waiting for safe progress");
+    expect(indicator?.getAttribute("title")).toContain("Private reasoning text is not shown");
+  });
+
+  it("renders runtime activity lines and hides stale completed activity", () => {
+    const container = document.createElement("div");
+    const nowSpy = vi.spyOn(Date, "now");
+    try {
+      nowSpy.mockReturnValue(10_000);
+      render(
+        renderRuntimeActivityIndicator({
+          runId: "run-1",
+          sessionKey: "main",
+          phase: "active",
+          lines: ["Plan: patch chat", "Tool: bash checking syntax"],
+          startedAt: 9_000,
+          updatedAt: 9_500,
+          source: "codex-app-server",
+        }),
+        container,
+      );
+
+      let indicator = container.querySelector(".compaction-indicator--runtime");
+      expect(indicator?.getAttribute("role")).toBe("status");
+      expect(indicator?.textContent).toContain("Codex: Tool: bash checking syntax");
+      expect(indicator?.getAttribute("title")).toContain("Plan: patch chat");
+
+      nowSpy.mockReturnValue(20_000);
+      render(
+        renderRuntimeActivityIndicator({
+          runId: "run-1",
+          phase: "complete",
+          lines: ["Plan: patch chat"],
+          startedAt: 1_000,
+          updatedAt: 10_000,
+          completedAt: 10_000,
+          source: "codex-app-server",
+        }),
+        container,
+      );
+      expect(container.querySelector(".compaction-indicator--runtime-complete")).toBeNull();
     } finally {
       nowSpy.mockRestore();
     }

@@ -63,6 +63,7 @@ import {
   type ToolStreamEntry,
   type CompactionStatus,
   type FallbackStatus,
+  type RuntimeActivityStatus,
 } from "./app-tool-stream.ts";
 import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
@@ -214,6 +215,7 @@ export class OpenClawApp extends LitElement {
   @state() chatSideResult: ChatSideResult | null = null;
   @state() compactionStatus: CompactionStatus | null = null;
   @state() fallbackStatus: FallbackStatus | null = null;
+  @state() runtimeActivityStatus: RuntimeActivityStatus | null = null;
   @state() chatAvatarUrl: string | null = null;
   @state() chatAvatarSource: string | null = null;
   @state() chatAvatarStatus: "none" | "local" | "remote" | "data" | null = null;

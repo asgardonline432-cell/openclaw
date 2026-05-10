@@ -6,6 +6,9 @@ import { normalizeLowercaseStringOrEmpty } from "./string-coerce.ts";
 const TOOL_STREAM_LIMIT = 50;
 const TOOL_STREAM_THROTTLE_MS = 80;
 const TOOL_OUTPUT_CHAR_LIMIT = 120_000;
+const RUNTIME_ACTIVITY_LINE_LIMIT = 5;
+const RUNTIME_ACTIVITY_LINE_CHAR_LIMIT = 160;
+const RUNTIME_ACTIVITY_TOAST_DURATION_MS = 8000;
 
 export type AgentEventPayload = {
   runId: string;
@@ -28,6 +31,18 @@ export type ToolStreamEntry = {
   message: Record<string, unknown>;
 };
 
+export type RuntimeActivityStatus = {
+  runId: string;
+  sessionKey?: string;
+  phase: "active" | "complete" | "error";
+  lines: string[];
+  startedAt: number;
+  updatedAt: number;
+  completedAt?: number;
+  error?: string;
+  source?: string;
+};
+
 type ToolStreamHost = {
   sessionKey: string;
   chatRunId: string | null;
@@ -38,6 +53,8 @@ type ToolStreamHost = {
   toolStreamOrder: string[];
   chatToolMessages: Record<string, unknown>[];
   toolStreamSyncTimer: number | null;
+  runtimeActivityStatus?: RuntimeActivityStatus | null;
+  runtimeActivityClearTimer?: number | null;
   chatModelOverrides?: Record<string, ChatModelOverride | null>;
 };
 
@@ -259,6 +276,200 @@ function syncToolStreamMessages(host: ToolStreamHost) {
     .filter((msg): msg is Record<string, unknown> => Boolean(msg));
 }
 
+function clearRuntimeActivityTimer(host: ToolStreamHost) {
+  if (host.runtimeActivityClearTimer != null) {
+    window.clearTimeout(host.runtimeActivityClearTimer);
+    host.runtimeActivityClearTimer = null;
+  }
+}
+
+function clearRuntimeActivity(host: ToolStreamHost) {
+  clearRuntimeActivityTimer(host);
+  host.runtimeActivityStatus = null;
+}
+
+function scheduleRuntimeActivityClear(host: ToolStreamHost) {
+  clearRuntimeActivityTimer(host);
+  host.runtimeActivityClearTimer = window.setTimeout(() => {
+    host.runtimeActivityStatus = null;
+    host.runtimeActivityClearTimer = null;
+  }, RUNTIME_ACTIVITY_TOAST_DURATION_MS);
+}
+
+function eventIsForVisibleSession(host: ToolStreamHost, payload: AgentEventPayload): boolean {
+  const sessionKey = toTrimmedString(payload.sessionKey);
+  if (sessionKey) {
+    return sessionKey === host.sessionKey;
+  }
+  return Boolean(host.chatRunId && payload.runId === host.chatRunId);
+}
+
+function runtimeActivitySource(data: Record<string, unknown>): string | undefined {
+  return (
+    toTrimmedString(data.source) ??
+    toTrimmedString(data.backend) ??
+    toTrimmedString(data.runtime) ??
+    undefined
+  );
+}
+
+function normalizeActivityLine(value: unknown): string | null {
+  const text = toTrimmedString(value);
+  if (!text) {
+    return null;
+  }
+  const compact = text.replace(/\s+/g, " ");
+  const truncated = truncateText(compact, RUNTIME_ACTIVITY_LINE_CHAR_LIMIT);
+  return truncated.truncated ? `${truncated.text}…` : truncated.text;
+}
+
+function appendRuntimeActivityLine(host: ToolStreamHost, line: string | null) {
+  const safeLine = normalizeActivityLine(line);
+  if (!safeLine || !host.runtimeActivityStatus) {
+    return;
+  }
+  const current = host.runtimeActivityStatus.lines;
+  if (current.at(-1) === safeLine) {
+    host.runtimeActivityStatus = {
+      ...host.runtimeActivityStatus,
+      updatedAt: Date.now(),
+    };
+    return;
+  }
+  host.runtimeActivityStatus = {
+    ...host.runtimeActivityStatus,
+    lines: [...current, safeLine].slice(-RUNTIME_ACTIVITY_LINE_LIMIT),
+    updatedAt: Date.now(),
+  };
+}
+
+function ensureRuntimeActivity(host: ToolStreamHost, payload: AgentEventPayload) {
+  if (!eventIsForVisibleSession(host, payload)) {
+    return false;
+  }
+  clearRuntimeActivityTimer(host);
+  const data = payload.data ?? {};
+  const source = runtimeActivitySource(data);
+  const sessionKey = toTrimmedString(payload.sessionKey) ?? host.sessionKey;
+  const now = Date.now();
+  const existing = host.runtimeActivityStatus;
+  if (!existing || existing.runId !== payload.runId || existing.phase !== "active") {
+    host.runtimeActivityStatus = {
+      runId: payload.runId,
+      sessionKey,
+      phase: "active",
+      lines: [],
+      startedAt: now,
+      updatedAt: now,
+      ...(source ? { source } : {}),
+    };
+    return true;
+  }
+  host.runtimeActivityStatus = {
+    ...existing,
+    sessionKey: existing.sessionKey ?? sessionKey,
+    updatedAt: now,
+    ...(source && !existing.source ? { source } : {}),
+  };
+  return true;
+}
+
+function handleRuntimeLifecycleEvent(host: ToolStreamHost, payload: AgentEventPayload) {
+  const data = payload.data ?? {};
+  const phase = toTrimmedString(data.phase);
+  if (phase === "start") {
+    ensureRuntimeActivity(host, payload);
+    return;
+  }
+  if (phase !== "end" && phase !== "error") {
+    return;
+  }
+  const status = host.runtimeActivityStatus;
+  if (!status || status.runId !== payload.runId) {
+    return;
+  }
+  const now = Date.now();
+  const error =
+    phase === "error"
+      ? (normalizeActivityLine(data.error) ??
+        normalizeActivityLine(data.message) ??
+        "Runtime error")
+      : undefined;
+  host.runtimeActivityStatus = {
+    ...status,
+    phase: phase === "error" ? "error" : "complete",
+    updatedAt: now,
+    completedAt: now,
+    ...(error ? { error } : {}),
+  };
+  scheduleRuntimeActivityClear(host);
+}
+
+function firstStringValue(value: unknown): string | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  for (const entry of value) {
+    const text = toTrimmedString(entry);
+    if (text) {
+      return text;
+    }
+  }
+  return null;
+}
+
+function handleRuntimePlanEvent(host: ToolStreamHost, payload: AgentEventPayload) {
+  if (!ensureRuntimeActivity(host, payload)) {
+    return;
+  }
+  const data = payload.data ?? {};
+  const phase = toTrimmedString(data.phase);
+  if (phase && phase !== "update") {
+    return;
+  }
+  const detail =
+    normalizeActivityLine(data.explanation) ??
+    normalizeActivityLine(firstStringValue(data.steps)) ??
+    normalizeActivityLine(data.title) ??
+    "planning";
+  appendRuntimeActivityLine(host, detail ? `Plan: ${detail}` : null);
+}
+
+function handleRuntimeItemEvent(host: ToolStreamHost, payload: AgentEventPayload) {
+  if (!ensureRuntimeActivity(host, payload)) {
+    return;
+  }
+  const data = payload.data ?? {};
+  const title = normalizeActivityLine(data.title);
+  const name = normalizeActivityLine(data.name);
+  const meta = normalizeActivityLine(data.meta);
+  const status = normalizeActivityLine(data.status);
+  const kind = normalizeLowercaseStringOrEmpty(toTrimmedString(data.kind) ?? "");
+  const isReasoningItem =
+    normalizeLowercaseStringOrEmpty(title ?? "") === "reasoning" ||
+    normalizeLowercaseStringOrEmpty(name ?? "") === "reasoning" ||
+    kind === "reasoning";
+  if (isReasoningItem) {
+    appendRuntimeActivityLine(host, status ? `Reasoning (${status})` : "Reasoning");
+    return;
+  }
+  const label = name ?? title ?? (kind || "Activity");
+  const details = [meta, status ? `(${status})` : null].filter(Boolean).join(" ");
+  appendRuntimeActivityLine(host, normalizeActivityLine(details ? `${label}: ${details}` : label));
+}
+
+function handleRuntimeToolEvent(host: ToolStreamHost, payload: AgentEventPayload) {
+  if (!ensureRuntimeActivity(host, payload)) {
+    return;
+  }
+  const data = payload.data ?? {};
+  const name = normalizeActivityLine(data.name) ?? "tool";
+  const meta = normalizeActivityLine(data.meta);
+  const phase = normalizeActivityLine(data.phase);
+  const suffix = meta ?? (phase && !name ? phase : null);
+  appendRuntimeActivityLine(host, suffix ? `Tool: ${name} ${suffix}` : `Tool: ${name}`);
+}
+
 export function flushToolStreamSync(host: ToolStreamHost) {
   if (host.toolStreamSyncTimer != null) {
     clearTimeout(host.toolStreamSyncTimer);
@@ -290,6 +501,7 @@ export function resetToolStream(host: ToolStreamHost) {
   host.toolStreamOrder = [];
   host.chatToolMessages = [];
   host.chatStreamSegments = [];
+  clearRuntimeActivity(host);
 }
 
 export type CompactionStatus = {
@@ -503,6 +715,7 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
   }
 
   if (payload.stream === "lifecycle") {
+    handleRuntimeLifecycleEvent(host, payload);
     handleLifecycleCompactionEvent(host as CompactionHost, payload);
     handleLifecycleFallbackEvent(host as CompactionHost, payload);
     return;
@@ -510,6 +723,16 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
 
   if (payload.stream === "fallback") {
     handleLifecycleFallbackEvent(host as CompactionHost, payload);
+    return;
+  }
+
+  if (payload.stream === "plan") {
+    handleRuntimePlanEvent(host, payload);
+    return;
+  }
+
+  if (payload.stream === "item") {
+    handleRuntimeItemEvent(host, payload);
     return;
   }
 
@@ -526,6 +749,7 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
   }
 
   const data = payload.data ?? {};
+  handleRuntimeToolEvent(host, payload);
   const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : "";
   if (!toolCallId) {
     return;

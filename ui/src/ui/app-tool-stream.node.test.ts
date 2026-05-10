@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleAgentEvent, type FallbackStatus, type ToolStreamEntry } from "./app-tool-stream.ts";
+import {
+  handleAgentEvent,
+  type FallbackStatus,
+  type RuntimeActivityStatus,
+  type ToolStreamEntry,
+} from "./app-tool-stream.ts";
 
 type ToolStreamHost = Parameters<typeof handleAgentEvent>[0];
 type AgentEvent = NonNullable<Parameters<typeof handleAgentEvent>[1]>;
@@ -9,6 +14,8 @@ type MutableHost = ToolStreamHost & {
   compactionClearTimer?: number | null;
   fallbackStatus?: FallbackStatus | null;
   fallbackClearTimer?: number | null;
+  runtimeActivityStatus?: RuntimeActivityStatus | null;
+  runtimeActivityClearTimer?: number | null;
 };
 const TOOL_STREAM_TEST_NOW = new Date("2026-05-09T00:00:00.000Z").getTime();
 
@@ -28,6 +35,8 @@ function createHost(overrides?: Partial<MutableHost>): MutableHost {
     compactionClearTimer: null,
     fallbackStatus: null,
     fallbackClearTimer: null,
+    runtimeActivityStatus: null,
+    runtimeActivityClearTimer: null,
     ...overrides,
   };
 }
@@ -75,6 +84,13 @@ function requireFallbackStatus(host: MutableHost): FallbackStatus {
     throw new Error("expected fallback status");
   }
   return host.fallbackStatus;
+}
+
+function requireRuntimeActivity(host: MutableHost): RuntimeActivityStatus {
+  if (!host.runtimeActivityStatus) {
+    throw new Error("expected runtime activity");
+  }
+  return host.runtimeActivityStatus;
 }
 
 function useToolStreamFakeTimers(): void {
@@ -378,5 +394,138 @@ describe("app-tool-stream fallback lifecycle handling", () => {
     expect(host.compactionClearTimer).toBeNull();
 
     vi.useRealTimers();
+  });
+});
+
+describe("app-tool-stream runtime activity handling", () => {
+  beforeAll(() => {
+    const globalWithWindow = globalThis as typeof globalThis & {
+      window?: Window & typeof globalThis;
+    };
+    if (!globalWithWindow.window) {
+      globalWithWindow.window = globalThis as unknown as Window & typeof globalThis;
+    }
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("surfaces safe plan updates as runtime activity", () => {
+    useToolStreamFakeTimers();
+    const host = createHost();
+
+    handleAgentEvent(host, agentEvent("run-1", 1, "lifecycle", { phase: "start" }));
+    handleAgentEvent(
+      host,
+      agentEvent("run-1", 2, "plan", {
+        phase: "update",
+        source: "codex-app-server",
+        explanation: "Inspect the Control UI event path\nwithout raw reasoning.",
+      }),
+    );
+
+    expect(requireRuntimeActivity(host)).toMatchObject({
+      runId: "run-1",
+      sessionKey: "main",
+      phase: "active",
+      source: "codex-app-server",
+      lines: ["Plan: Inspect the Control UI event path without raw reasoning."],
+    });
+  });
+
+  it("does not expose raw reasoning item content", () => {
+    useToolStreamFakeTimers();
+    const host = createHost();
+
+    handleAgentEvent(
+      host,
+      agentEvent("run-1", 1, "item", {
+        phase: "start",
+        kind: "analysis",
+        title: "Reasoning",
+        status: "running",
+        meta: "private chain of thought",
+        progressText: "private chain of thought",
+      }),
+    );
+
+    const activity = requireRuntimeActivity(host);
+    expect(activity.lines).toEqual(["Reasoning (running)"]);
+    expect(activity.lines.join("\n")).not.toContain("private chain of thought");
+  });
+
+  it("ignores runtime activity for other sessions", () => {
+    useToolStreamFakeTimers();
+    const host = createHost();
+
+    handleAgentEvent(
+      host,
+      agentEvent(
+        "run-1",
+        1,
+        "plan",
+        {
+          phase: "update",
+          source: "codex-app-server",
+          steps: ["patch chat"],
+        },
+        "other",
+      ),
+    );
+
+    expect(host.runtimeActivityStatus).toBeNull();
+  });
+
+  it("only completes matching runtime activity lifecycle runs", () => {
+    useToolStreamFakeTimers();
+    const host = createHost();
+
+    handleAgentEvent(host, agentEvent("run-1", 1, "lifecycle", { phase: "start" }));
+    handleAgentEvent(
+      host,
+      agentEvent("run-1", 2, "plan", {
+        phase: "update",
+        source: "codex-app-server",
+        steps: ["patch chat"],
+      }),
+    );
+
+    handleAgentEvent(host, agentEvent("run-2", 3, "lifecycle", { phase: "end" }));
+    expect(requireRuntimeActivity(host).phase).toBe("active");
+
+    handleAgentEvent(host, agentEvent("run-1", 4, "lifecycle", { phase: "end" }));
+    expect(requireRuntimeActivity(host)).toMatchObject({
+      phase: "complete",
+      completedAt: TOOL_STREAM_TEST_NOW,
+    });
+
+    vi.advanceTimersByTime(8_000);
+    expect(host.runtimeActivityStatus).toBeNull();
+    expect(host.runtimeActivityClearTimer).toBeNull();
+  });
+
+  it("uses tool name and metadata without args or results for runtime activity", () => {
+    useToolStreamFakeTimers();
+    const host = createHost();
+    const longMeta = `${"checking syntax ".repeat(20)}secret-token`;
+
+    handleAgentEvent(
+      host,
+      agentEvent("run-1", 1, "tool", {
+        phase: "start",
+        name: "bash",
+        toolCallId: "tool-1",
+        meta: longMeta,
+        args: { command: "cat secret-token" },
+        result: { text: "secret output" },
+      }),
+    );
+
+    const line = requireRuntimeActivity(host).lines.at(-1) ?? "";
+    expect(line).toContain("Tool: bash checking syntax");
+    expect(line.length).toBeLessThanOrEqual(167);
+    expect(line).not.toContain("cat secret-token");
+    expect(line).not.toContain("secret output");
   });
 });

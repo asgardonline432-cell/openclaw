@@ -1,6 +1,6 @@
 import type { ChatSendOptions } from "./app-chat.ts";
 import type { EventLogEntry } from "./app-events.ts";
-import type { CompactionStatus, FallbackStatus } from "./app-tool-stream.ts";
+import type { CompactionStatus, FallbackStatus, RuntimeActivityStatus } from "./app-tool-stream.ts";
 import type { ChatInputHistoryKeyInput, ChatInputHistoryKeyResult } from "./chat/input-history.ts";
 import type { RealtimeTalkStatus } from "./chat/realtime-talk.ts";
 import type { ChatSideResult } from "./chat/side-result.ts";
@@ -100,6 +100,7 @@ export type AppViewState = {
   chatSideResultTerminalRuns: Set<string>;
   compactionStatus: CompactionStatus | null;
   fallbackStatus: FallbackStatus | null;
+  runtimeActivityStatus: RuntimeActivityStatus | null;
   chatAvatarUrl: string | null;
   chatAvatarSource?: string | null;
   chatAvatarStatus?: "none" | "local" | "remote" | "data" | null;
