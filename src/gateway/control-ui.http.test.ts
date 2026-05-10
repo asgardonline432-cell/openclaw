@@ -1097,10 +1097,39 @@ describe("handleControlUiHttpRequest", () => {
     });
   });
 
+  it("serves public root assets under the internal namespace when the SPA is routed there", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        await fs.writeFile(path.join(tmp, "favicon.svg"), "<svg/>");
+        await fs.writeFile(path.join(tmp, "manifest.webmanifest"), "{}");
+        await fs.writeFile(path.join(tmp, "apple-touch-icon.png"), "png-bytes");
+        await fs.writeFile(path.join(tmp, "sw.js"), "self.addEventListener('push', () => {});");
+
+        for (const [url, expectedType] of [
+          ["/__openclaw__/favicon.svg", "image/svg+xml"],
+          ["/__openclaw__/manifest.webmanifest", "application/manifest+json; charset=utf-8"],
+          ["/__openclaw__/apple-touch-icon.png", "image/png"],
+          ["/__openclaw__/sw.js", "application/javascript; charset=utf-8"],
+        ] as const) {
+          const { res, end, handled } = await runControlUiRequest({
+            url,
+            method: "GET",
+            rootPath: tmp,
+          });
+
+          expect(handled, `expected ${url} to be handled`).toBe(true);
+          expect(res.statusCode, `expected ${url} to be served`).toBe(200);
+          expect(res.setHeader).toHaveBeenCalledWith("Content-Type", expectedType);
+          expect(end, `expected ${url} to write a body`).toHaveBeenCalled();
+        }
+      },
+    });
+  });
+
   it("does not handle POST to root-mounted paths (plugin webhook passthrough)", async () => {
     await withControlUiRoot({
       fn: async (tmp) => {
-        for (const webhookPath of ["/bluebubbles-webhook", "/custom-webhook", "/callback"]) {
+        for (const webhookPath of ["/imessage-webhook", "/custom-webhook", "/callback"]) {
           const { res } = makeMockHttpResponse();
           const handled = await handleControlUiHttpRequest(
             { url: webhookPath, method: "POST" } as IncomingMessage,
@@ -1120,7 +1149,7 @@ describe("handleControlUiHttpRequest", () => {
       fn: async (tmp) => {
         const { res } = makeMockHttpResponse();
         const handled = await handleControlUiHttpRequest(
-          { url: "/bluebubbles-webhook", method: "POST" } as IncomingMessage,
+          { url: "/imessage-webhook", method: "POST" } as IncomingMessage,
           res,
           { basePath: "/openclaw", root: { kind: "resolved", path: tmp } },
         );
@@ -1163,7 +1192,7 @@ describe("handleControlUiHttpRequest", () => {
     await withControlUiRoot({
       fn: async (tmp) => {
         const { handled, end } = await runControlUiRequest({
-          url: "/webhook/bluebubbles",
+          url: "/webhook/imessage",
           method: "POST",
           rootPath: tmp,
         });

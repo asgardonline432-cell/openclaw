@@ -353,10 +353,10 @@ describe("plugin index install records store", () => {
       loadInstalledPluginIndexInstallRecordsSync({
         stateDir,
       }),
-    ).toEqual({});
+    ).toStrictEqual({});
   });
 
-  it("updates and removes records without mutating caller state", async () => {
+  it("updates and removes records without mutating caller state", () => {
     const records: Record<string, PluginInstallRecord> = {
       keep: {
         source: "npm" as const,
@@ -418,6 +418,6 @@ describe("plugin index install records store", () => {
       loadInstalledPluginIndexInstallRecords({
         stateDir,
       }),
-    ).resolves.toEqual({});
+    ).resolves.toStrictEqual({});
   });
 });

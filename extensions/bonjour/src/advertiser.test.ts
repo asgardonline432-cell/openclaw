@@ -282,16 +282,18 @@ describe("gateway bonjour advertiser", () => {
       const started = await startAdvertiser({ gatewayPort: 18789 });
       childProcessModule.exec('arp -a | findstr /C:"---"', () => {});
 
-      expect(execMock).toHaveBeenCalledWith(
-        'arp -a | findstr /C:"---"',
-        { windowsHide: true },
-        expect.any(Function),
-      );
+      const execCall = execMock.mock.calls[0];
+      expect(execCall?.[0]).toBe('arp -a | findstr /C:"---"');
+      expect(execCall?.[1]).toEqual({ windowsHide: true });
+      expect(execCall?.[2]).toBeTypeOf("function");
 
       await started.stop();
       childProcessModule.exec('arp -a | findstr /C:"---"', () => {});
-      const afterStopOptions = execMock.mock.calls.at(-1)?.[1];
-      expect(afterStopOptions).toEqual(expect.any(Function));
+      const afterStopCallback = execMock.mock.calls.at(-1)?.[1];
+      if (typeof afterStopCallback !== "function") {
+        throw new Error("expected restored exec callback overload");
+      }
+      afterStopCallback(null, "", "");
     } finally {
       childProcessModule.exec = originalExec;
     }
@@ -336,8 +338,11 @@ describe("gateway bonjour advertiser", () => {
       { logger },
     );
 
-    expect(processOn).toHaveBeenCalledWith("unhandledRejection", expect.any(Function));
-    expect(processOn).not.toHaveBeenCalledWith("uncaughtException", expect.any(Function));
+    const unhandledRejectionRegistration = processOn.mock.calls.find(
+      ([event]) => event === "unhandledRejection",
+    );
+    expect(unhandledRejectionRegistration?.[1]).toBeTypeOf("function");
+    expect(processOn.mock.calls.some(([event]) => event === "uncaughtException")).toBe(false);
 
     await started.stop();
   });
@@ -775,8 +780,10 @@ describe("gateway bonjour advertiser", () => {
     const disableLog = logger.warn.mock.calls.find(
       (call) => typeof call[0] === "string" && call[0].includes("disabling advertiser after"),
     );
-    expect(disableLog).toBeDefined();
-    expect(String(disableLog?.[0])).toMatch(/restarts within \d+ minutes/);
+    if (!disableLog) {
+      throw new Error("expected advertiser disable warning after repeated restarts");
+    }
+    expect(String(disableLog[0])).toMatch(/restarts within \d+ minutes/);
 
     const advertiseCallsAtDisable = advertise.mock.calls.length;
     const createServiceCallsAtDisable = createService.mock.calls.length;

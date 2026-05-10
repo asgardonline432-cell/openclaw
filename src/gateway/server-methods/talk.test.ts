@@ -498,6 +498,7 @@ describe("talk.session unified handlers", () => {
               realtime: {
                 provider: "openai",
                 providers: { openai: { apiKey: "openai-key" } },
+                instructions: "Speak warmly.",
               },
             },
           }) as OpenClawConfig,
@@ -513,6 +514,7 @@ describe("talk.session unified handlers", () => {
           model: "gpt-realtime",
           voice: "alloy",
         }),
+        instructions: expect.stringContaining("Additional realtime instructions:\nSpeak warmly."),
       }),
     );
     expect(createRespond).toHaveBeenCalledWith(
@@ -561,7 +563,12 @@ describe("talk.session unified handlers", () => {
     const toolRespond = vi.fn();
     await talkHandlers["talk.session.submitToolResult"]({
       req: { type: "req", id: "4", method: "talk.session.submitToolResult" },
-      params: { sessionId: "relay-unified-1", callId: "call-1", result: { ok: true } },
+      params: {
+        sessionId: "relay-unified-1",
+        callId: "call-1",
+        result: { status: "working" },
+        options: { suppressResponse: true, willContinue: true },
+      },
       client: { connId: "conn-1" } as never,
       isWebchatConnect: () => false,
       respond: toolRespond as never,
@@ -571,7 +578,8 @@ describe("talk.session unified handlers", () => {
       relaySessionId: "relay-unified-1",
       connId: "conn-1",
       callId: "call-1",
-      result: { ok: true },
+      result: { status: "working" },
+      options: { suppressResponse: true, willContinue: true },
     });
 
     const closeRespond = vi.fn();
@@ -1082,6 +1090,46 @@ describe("talk.client.toolCall handler", () => {
     );
   });
 
+  it("passes configured consult thinking and fast-mode overrides to chat.send", async () => {
+    const respond = vi.fn();
+
+    await talkHandlers["talk.client.toolCall"]({
+      req: { type: "req", id: "1", method: "talk.client.toolCall" },
+      params: {
+        sessionKey: "main",
+        callId: "call-1",
+        name: "openclaw_agent_consult",
+        args: { question: "Are the basement lights off?" },
+      },
+      client: { connId: "conn-1" } as never,
+      isWebchatConnect: () => false,
+      respond: respond as never,
+      context: {
+        getRuntimeConfig: () =>
+          ({
+            talk: {
+              consultThinkingLevel: "low",
+              consultFastMode: true,
+            },
+          }) as OpenClawConfig,
+      } as never,
+    });
+
+    expect(mocks.chatSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          thinking: "low",
+          fastMode: true,
+        }),
+      }),
+    );
+    expect(respond).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({ runId: "run-voice-1" }),
+      undefined,
+    );
+  });
+
   it("links relay-owned agent consult runs so relay cancellation can abort them", async () => {
     const respond = vi.fn();
 
@@ -1150,8 +1198,8 @@ describe("talk.client.create handler", () => {
     vi.clearAllMocks();
   });
 
-  it("uses talk.realtime provider, model, and voice without reading speech provider config", async () => {
-    const createBrowserSession = vi.fn(async () => ({
+  it("uses talk.realtime provider, model, voice, and instructions without reading speech provider config", async () => {
+    const createBrowserSession = vi.fn(async (_input: unknown) => ({
       provider: "openai",
       transport: "webrtc" as const,
       clientSecret: "secret",
@@ -1171,7 +1219,13 @@ describe("talk.client.create handler", () => {
     const respond = vi.fn();
     await talkHandlers["talk.client.create"]({
       req: { type: "req", id: "1", method: "talk.client.create" },
-      params: { sessionKey: "main" },
+      params: {
+        sessionKey: "main",
+        vadThreshold: 0.45,
+        silenceDurationMs: 650,
+        prefixPaddingMs: 250,
+        reasoningEffort: "low",
+      },
       client: { connId: "conn-1" } as never,
       isWebchatConnect: () => false,
       respond: respond as never,
@@ -1186,6 +1240,7 @@ describe("talk.client.create handler", () => {
                 providers: { openai: { apiKey: "openai-key" } },
                 model: "gpt-realtime",
                 voice: "alloy",
+                instructions: "Speak warmly.",
               },
             },
           }) as OpenClawConfig,
@@ -1202,8 +1257,17 @@ describe("talk.client.create handler", () => {
       expect.objectContaining({
         model: "gpt-realtime",
         voice: "alloy",
+        instructions: expect.stringContaining("Additional realtime instructions:\nSpeak warmly."),
+        vadThreshold: 0.45,
+        silenceDurationMs: 650,
+        prefixPaddingMs: 250,
+        reasoningEffort: "low",
       }),
     );
+    const createInput = createBrowserSession.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(createInput).not.toHaveProperty("provider");
+    expect(createInput).not.toHaveProperty("providers");
+    expect(createInput).not.toHaveProperty("transport");
     expect(respond).toHaveBeenCalledWith(
       true,
       expect.objectContaining({ provider: "openai", transport: "webrtc" }),

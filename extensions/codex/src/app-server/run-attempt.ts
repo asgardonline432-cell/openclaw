@@ -41,9 +41,16 @@ import {
 import { resolveAgentDir } from "openclaw/plugin-sdk/agent-runtime";
 import { emitTrustedDiagnosticEvent } from "openclaw/plugin-sdk/diagnostic-runtime";
 import { pathExists } from "openclaw/plugin-sdk/security-runtime";
+import {
+  buildCodexAppInventoryCacheKey,
+  defaultCodexAppInventoryCache,
+} from "./app-inventory-cache.js";
 import { handleCodexAppServerApprovalRequest } from "./approval-bridge.js";
 import {
   refreshCodexAppServerAuthTokens,
+  resolveCodexAppServerAuthAccountCacheKey,
+  resolveCodexAppServerEnvApiKeyCacheKey,
+  resolveCodexAppServerHomeDir,
   resolveCodexAppServerAuthProfileId,
   resolveCodexAppServerAuthProfileIdForAgent,
 } from "./auth-bridge.js";
@@ -59,15 +66,14 @@ import {
 import { ensureCodexComputerUse } from "./computer-use.js";
 import {
   readCodexPluginConfig,
+  resolveCodexPluginsPolicy,
   resolveCodexAppServerRuntimeOptions,
+  withMcpElicitationsApprovalPolicy,
   type CodexAppServerRuntimeOptions,
   type CodexPluginConfig,
 } from "./config.js";
 import { projectContextEngineAssemblyForCodex } from "./context-engine-projection.js";
-import {
-  applyCodexDynamicToolProfile,
-  normalizeCodexDynamicToolName,
-} from "./dynamic-tool-profile.js";
+import { filterCodexDynamicTools, normalizeCodexDynamicToolName } from "./dynamic-tool-profile.js";
 import { createCodexDynamicToolBridge, type CodexDynamicToolBridge } from "./dynamic-tools.js";
 import { handleCodexAppServerElicitationRequest } from "./elicitation-bridge.js";
 import { CodexAppServerEventProjector } from "./event-projector.js";
@@ -76,6 +82,11 @@ import {
   buildCodexNativeHookRelayConfig,
   CODEX_NATIVE_HOOK_RELAY_EVENTS,
 } from "./native-hook-relay.js";
+import {
+  buildCodexPluginThreadConfig,
+  buildCodexPluginThreadConfigInputFingerprint,
+  shouldBuildCodexPluginThreadConfig,
+} from "./plugin-thread-config.js";
 import {
   assertCodexTurnStartResponse,
   readCodexDynamicToolCallParams,
@@ -119,9 +130,14 @@ import { createCodexUserInputBridge } from "./user-input-bridge.js";
 import { filterToolsForVisionInputs } from "./vision-tools.js";
 
 const CODEX_DYNAMIC_TOOL_TIMEOUT_MS = 30_000;
+const CODEX_DYNAMIC_TOOL_MAX_TIMEOUT_MS = 600_000;
+const CODEX_DYNAMIC_IMAGE_TOOL_TIMEOUT_MS = 60_000;
 const CODEX_APP_SERVER_STARTUP_CONNECTION_CLOSE_MAX_ATTEMPTS = 3;
+const CODEX_APP_SERVER_STARTUP_TIMEOUT_FLOOR_MS = 100;
 const CODEX_TURN_COMPLETION_IDLE_TIMEOUT_MS = 60_000;
 const CODEX_TURN_TERMINAL_IDLE_TIMEOUT_MS = 30 * 60_000;
+const CODEX_NATIVE_HOOK_RELAY_MIN_TTL_MS = 30 * 60_000;
+const CODEX_NATIVE_HOOK_RELAY_TTL_GRACE_MS = 5 * 60_000;
 const CODEX_STEER_ALL_DEBOUNCE_MS = 500;
 const LOG_FIELD_MAX_LENGTH = 160;
 const CODEX_NATIVE_PROJECT_DOC_BASENAMES = new Set(["agents.md"]);
@@ -356,6 +372,50 @@ function toCodexTextInput(text: string): CodexUserInput {
   return { type: "text", text, text_elements: [] };
 }
 
+function resolveCodexPluginAppCacheEndpoint(appServer: CodexAppServerRuntimeOptions): string {
+  return JSON.stringify({
+    transport: appServer.start.transport,
+    command: appServer.start.command,
+    args: appServer.start.args,
+    url: appServer.start.url ?? null,
+    credentialFingerprint: fingerprintCodexPluginAppCacheCredentials(appServer.start),
+  });
+}
+
+function fingerprintCodexPluginAppCacheCredentials(
+  startOptions: CodexAppServerRuntimeOptions["start"],
+): string | null {
+  const authToken = startOptions.authToken ?? "";
+  const headers = Object.entries(startOptions.headers)
+    .map(([key, value]) => [key.toLowerCase(), value] as const)
+    .toSorted(([left], [right]) => left.localeCompare(right));
+  if (!authToken && headers.length === 0) {
+    return null;
+  }
+  const hash = createHash("sha256");
+  hash.update("openclaw:codex:plugin-app-cache-credentials:v1");
+  hash.update("\0");
+  hash.update(authToken);
+  for (const [key, value] of headers) {
+    hash.update("\0");
+    hash.update(key);
+    hash.update("\0");
+    hash.update(value);
+  }
+  return `sha256:${hash.digest("hex")}`;
+}
+
+function resolveCodexPluginAppCacheCodexHome(
+  appServer: CodexAppServerRuntimeOptions,
+  agentDir: string,
+): string | undefined {
+  const configuredCodexHome = appServer.start.env?.CODEX_HOME?.trim();
+  if (configuredCodexHome) {
+    return configuredCodexHome;
+  }
+  return appServer.start.transport === "stdio" ? resolveCodexAppServerHomeDir(agentDir) : undefined;
+}
+
 export async function runCodexAppServerAttempt(
   params: EmbeddedRunAttemptParams,
   options: {
@@ -376,6 +436,7 @@ export async function runCodexAppServerAttempt(
   const attemptClientFactory = resolveCodexAppServerClientFactory();
   const pluginConfig = readCodexPluginConfig(options.pluginConfig);
   const appServer = resolveCodexAppServerRuntimeOptions({ pluginConfig });
+  let pluginAppServer: CodexAppServerRuntimeOptions = appServer;
   const nativeHookRelayEvents = resolveCodexNativeHookRelayEvents({
     configuredEvents: options.nativeHookRelay?.events,
     appServer,
@@ -433,6 +494,17 @@ export async function runCodexAppServerAttempt(
     sessionKey: sandboxSessionKey,
     ...(startupAuthProfileId ? { authProfileId: startupAuthProfileId } : {}),
   };
+  const startupAuthAccountCacheKey = await resolveCodexAppServerAuthAccountCacheKey({
+    authProfileId: startupAuthProfileId,
+    authProfileStore: params.authProfileStore,
+    agentDir,
+    config: params.config,
+  });
+  const startupEnvApiKeyCacheKey = startupAuthProfileId
+    ? undefined
+    : resolveCodexAppServerEnvApiKeyCacheKey({
+        startOptions: appServer.start,
+      });
   const activeContextEngine = isActiveHarnessContextEngine(params.contextEngine)
     ? params.contextEngine
     : undefined;
@@ -453,6 +525,8 @@ export async function runCodexAppServerAttempt(
   const toolBridge = createCodexDynamicToolBridge({
     tools,
     signal: runAbortController.signal,
+    loading: pluginConfig.codexDynamicToolsLoading ?? "searchable",
+    directToolNames: shouldForceMessageTool(params) ? ["message"] : [],
     hookContext: {
       agentId: sessionAgentId,
       config: params.config,
@@ -577,6 +651,10 @@ export async function runCodexAppServerAttempt(
   let trajectoryEndRecorded = false;
   let nativeHookRelay: NativeHookRelayRegistrationHandle | undefined;
   let startupClientForCleanup: CodexAppServerClient | undefined;
+  const startupTimeoutMs = resolveCodexStartupTimeoutMs({
+    timeoutMs: params.timeoutMs,
+    timeoutFloorMs: options.startupTimeoutFloorMs,
+  });
   try {
     emitCodexAppServerEvent(params, {
       stream: "codex_app_server.lifecycle",
@@ -590,6 +668,9 @@ export async function runCodexAppServerAttempt(
       sessionKey: sandboxSessionKey,
       config: params.config,
       runId: params.runId,
+      attemptTimeoutMs: params.timeoutMs,
+      startupTimeoutMs,
+      turnStartTimeoutMs: params.timeoutMs,
       signal: runAbortController.signal,
     });
     const nativeHookRelayConfig = nativeHookRelay
@@ -602,9 +683,38 @@ export async function runCodexAppServerAttempt(
         ? buildCodexNativeHookRelayDisabledConfig()
         : undefined;
     const threadConfig = nativeHookRelayConfig;
+    const pluginThreadConfigEnabled = shouldBuildCodexPluginThreadConfig(pluginConfig);
+    const pluginAppCacheKey = buildCodexAppInventoryCacheKey({
+      codexHome: resolveCodexPluginAppCacheCodexHome(appServer, agentDir),
+      endpoint: resolveCodexPluginAppCacheEndpoint(appServer),
+      authProfileId: startupAuthProfileId,
+      accountId: startupAuthAccountCacheKey,
+      envApiKeyFingerprint: startupEnvApiKeyCacheKey,
+    });
+    const pluginThreadConfigInputFingerprint = pluginThreadConfigEnabled
+      ? buildCodexPluginThreadConfigInputFingerprint({
+          pluginConfig,
+          appCacheKey: pluginAppCacheKey,
+        })
+      : undefined;
+    const resolvedPluginPolicy = pluginThreadConfigEnabled
+      ? resolveCodexPluginsPolicy(pluginConfig)
+      : undefined;
+    const enabledPluginConfigKeys = resolvedPluginPolicy
+      ? resolvedPluginPolicy.pluginPolicies
+          .filter((plugin) => plugin.enabled)
+          .map((plugin) => plugin.configKey)
+          .toSorted()
+      : undefined;
+    pluginAppServer =
+      resolvedPluginPolicy?.enabled === true
+        ? {
+            ...appServer,
+            approvalPolicy: withMcpElicitationsApprovalPolicy(appServer.approvalPolicy),
+          }
+        : appServer;
     ({ client, thread } = await withCodexStartupTimeout({
-      timeoutMs: params.timeoutMs,
-      timeoutFloorMs: options.startupTimeoutFloorMs,
+      timeoutMs: startupTimeoutMs,
       signal: runAbortController.signal,
       operation: async () => {
         let attemptedClient: CodexAppServerClient | undefined;
@@ -628,9 +738,27 @@ export async function runCodexAppServerAttempt(
             params: runtimeParams,
             cwd: effectiveWorkspace,
             dynamicTools: toolBridge.specs,
-            appServer,
+            appServer: pluginAppServer,
             developerInstructions: promptBuild.developerInstructions,
             config: threadConfig,
+            pluginThreadConfig: pluginThreadConfigEnabled
+              ? {
+                  enabled: true,
+                  inputFingerprint: pluginThreadConfigInputFingerprint,
+                  enabledPluginConfigKeys,
+                  build: () =>
+                    buildCodexPluginThreadConfig({
+                      pluginConfig,
+                      request: (method, requestParams) =>
+                        startupClient.request(method, requestParams, {
+                          timeoutMs: appServer.requestTimeoutMs,
+                          signal: runAbortController.signal,
+                        }),
+                      appCache: defaultCodexAppInventoryCache,
+                      appCacheKey: pluginAppCacheKey,
+                    }),
+                }
+              : undefined,
           });
           return { client: startupClient, thread: startupThread };
         };
@@ -919,9 +1047,6 @@ export async function runCodexAppServerAttempt(
   };
 
   const handleNotification = async (notification: CodexServerNotification) => {
-    touchTurnCompletionActivity(`notification:${notification.method}`, {
-      details: describeNotificationActivity(notification),
-    });
     userInputBridge?.handleNotification(notification);
     if (!projector || !turnId) {
       pendingNotifications.push(notification);
@@ -932,6 +1057,11 @@ export async function runCodexAppServerAttempt(
       thread.threadId,
       turnId,
     );
+    if (isCurrentTurnNotification) {
+      touchTurnCompletionActivity(`notification:${notification.method}`, {
+        details: describeNotificationActivity(notification),
+      });
+    }
     if (isCurrentTurnNotification && notification.method === "error") {
       if (isRetryableErrorNotification(notification.params)) {
         disarmTurnCompletionIdleWatch();
@@ -1005,6 +1135,7 @@ export async function runCodexAppServerAttempt(
           paramsForRun: params,
           threadId: thread.threadId,
           turnId,
+          pluginAppPolicyContext: thread.pluginAppPolicyContext,
           signal: runAbortController.signal,
         });
       }
@@ -1041,6 +1172,11 @@ export async function runCodexAppServerAttempt(
         name: call.tool,
         arguments: call.arguments,
       });
+      projector?.recordDynamicToolCall({
+        callId: call.callId,
+        tool: call.tool,
+        arguments: call.arguments,
+      });
       const toolProgressDetailMode = resolveCodexToolProgressDetailMode(params.toolProgressDetail);
       const toolMeta = inferCodexDynamicToolMeta(call, toolProgressDetailMode);
       const toolArgs = sanitizeCodexToolArguments(call.arguments);
@@ -1054,18 +1190,22 @@ export async function runCodexAppServerAttempt(
           ...(toolArgs ? { args: toolArgs } : {}),
         },
       });
+      const dynamicToolTimeoutMs = resolveDynamicToolCallTimeoutMs({
+        call,
+        config: params.config,
+      });
       const response = await handleDynamicToolCallWithTimeout({
         call,
         toolBridge,
         signal: runAbortController.signal,
-        timeoutMs: CODEX_DYNAMIC_TOOL_TIMEOUT_MS,
+        timeoutMs: dynamicToolTimeoutMs,
         onTimeout: () => {
           trajectoryRecorder?.recordEvent("tool.timeout", {
             threadId: call.threadId,
             turnId: call.turnId,
             toolCallId: call.callId,
             name: call.tool,
-            timeoutMs: CODEX_DYNAMIC_TOOL_TIMEOUT_MS,
+            timeoutMs: dynamicToolTimeoutMs,
           });
         },
       });
@@ -1074,6 +1214,12 @@ export async function runCodexAppServerAttempt(
         turnId: call.turnId,
         toolCallId: call.callId,
         name: call.tool,
+        success: response.success,
+        contentItems: response.contentItems,
+      });
+      projector?.recordDynamicToolResult({
+        callId: call.callId,
+        tool: call.tool,
         success: response.success,
         contentItems: response.contentItems,
       });
@@ -1131,7 +1277,7 @@ export async function runCodexAppServerAttempt(
         buildTurnStartParams(params, {
           threadId: thread.threadId,
           cwd: effectiveWorkspace,
-          appServer,
+          appServer: pluginAppServer,
           promptText: promptBuild.prompt,
         }),
         { timeoutMs: params.timeoutMs, signal: runAbortController.signal },
@@ -1447,7 +1593,7 @@ async function handleDynamicToolCallWithTimeout(params: {
     resolveAbort = resolve;
   });
   const timeoutPromise = new Promise<CodexDynamicToolCallResponse>((resolve) => {
-    const timeoutMs = Math.max(1, Math.min(CODEX_DYNAMIC_TOOL_TIMEOUT_MS, params.timeoutMs));
+    const timeoutMs = clampDynamicToolTimeoutMs(params.timeoutMs);
     timeout = setTimeout(() => {
       timedOut = true;
       const timeoutDetails = formatDynamicToolTimeoutDetails({ call: params.call, timeoutMs });
@@ -1493,6 +1639,61 @@ function failedDynamicToolResponse(message: string): CodexDynamicToolCallRespons
   };
 }
 
+function resolveDynamicToolCallTimeoutMs(params: {
+  call: CodexDynamicToolCallParams;
+  config: EmbeddedRunAttemptParams["config"];
+}): number {
+  return clampDynamicToolTimeoutMs(
+    readDynamicToolCallTimeoutMs(params.call.arguments) ??
+      readConfiguredDynamicToolTimeoutMs(params.call.tool, params.config) ??
+      CODEX_DYNAMIC_TOOL_TIMEOUT_MS,
+  );
+}
+
+function readDynamicToolCallTimeoutMs(value: JsonValue | undefined): number | undefined {
+  if (!isJsonObject(value)) {
+    return undefined;
+  }
+  return readPositiveFiniteTimeoutMs(value.timeoutMs);
+}
+
+function readConfiguredDynamicToolTimeoutMs(
+  toolName: string,
+  config: EmbeddedRunAttemptParams["config"],
+): number | undefined {
+  if (toolName === "image_generate") {
+    const imageGenerationModel = config?.agents?.defaults?.imageGenerationModel;
+    if (!imageGenerationModel || typeof imageGenerationModel !== "object") {
+      return undefined;
+    }
+    return readPositiveFiniteTimeoutMs(imageGenerationModel.timeoutMs);
+  }
+
+  if (toolName === "image") {
+    return (
+      readTimeoutSecondsAsMs(config?.tools?.media?.image?.timeoutSeconds) ??
+      CODEX_DYNAMIC_IMAGE_TOOL_TIMEOUT_MS
+    );
+  }
+
+  return undefined;
+}
+
+function readTimeoutSecondsAsMs(value: unknown): number | undefined {
+  const seconds = readPositiveFiniteTimeoutMs(value);
+  return seconds === undefined ? undefined : seconds * 1000;
+}
+
+function readPositiveFiniteTimeoutMs(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : undefined;
+}
+
+function clampDynamicToolTimeoutMs(timeoutMs: number): number {
+  return Math.max(1, Math.min(CODEX_DYNAMIC_TOOL_MAX_TIMEOUT_MS, Math.floor(timeoutMs)));
+}
+
 function createCodexNativeHookRelay(params: {
   options:
     | {
@@ -1507,6 +1708,9 @@ function createCodexNativeHookRelay(params: {
   sessionKey: string | undefined;
   config: EmbeddedRunAttemptParams["config"];
   runId: string;
+  attemptTimeoutMs: number;
+  startupTimeoutMs: number;
+  turnStartTimeoutMs: number;
   signal: AbortSignal;
 }): NativeHookRelayRegistrationHandle | undefined {
   if (params.options?.enabled === false) {
@@ -1525,7 +1729,12 @@ function createCodexNativeHookRelay(params: {
     ...(params.config ? { config: params.config } : {}),
     runId: params.runId,
     allowedEvents: params.events,
-    ttlMs: params.options?.ttlMs,
+    ttlMs: resolveCodexNativeHookRelayTtlMs({
+      explicitTtlMs: params.options?.ttlMs,
+      attemptTimeoutMs: params.attemptTimeoutMs,
+      startupTimeoutMs: params.startupTimeoutMs,
+      turnStartTimeoutMs: params.turnStartTimeoutMs,
+    }),
     signal: params.signal,
     command: {
       timeoutMs: params.options?.gatewayTimeoutMs,
@@ -1547,6 +1756,23 @@ function resolveCodexNativeHookRelayEvents(params: {
   return params.appServer.approvalPolicy === "never"
     ? CODEX_NATIVE_HOOK_RELAY_EVENTS
     : CODEX_NATIVE_HOOK_RELAY_EVENTS_WITH_APP_SERVER_APPROVALS;
+}
+
+function resolveCodexNativeHookRelayTtlMs(params: {
+  explicitTtlMs: number | undefined;
+  attemptTimeoutMs: number;
+  startupTimeoutMs: number;
+  turnStartTimeoutMs: number;
+}): number {
+  if (params.explicitTtlMs !== undefined) {
+    return params.explicitTtlMs;
+  }
+  const relayBudgetMs =
+    params.attemptTimeoutMs +
+    params.startupTimeoutMs +
+    params.turnStartTimeoutMs +
+    CODEX_NATIVE_HOOK_RELAY_TTL_GRACE_MS;
+  return Math.max(CODEX_NATIVE_HOOK_RELAY_MIN_TTL_MS, Math.floor(relayBudgetMs));
 }
 
 function buildCodexNativeHookRelayId(params: {
@@ -1664,6 +1890,7 @@ async function buildDynamicTools(input: DynamicToolBuildParams) {
     modelHasVision,
     requireExplicitMessageTarget:
       params.requireExplicitMessageTarget ?? isSubagentSessionKey(params.sessionKey),
+    sourceReplyDeliveryMode: params.sourceReplyDeliveryMode,
     disableMessageTool: params.disableMessageTool,
     forceMessageTool: shouldForceMessageTool(params),
     enableHeartbeatTool: params.trigger === "heartbeat",
@@ -1677,8 +1904,8 @@ async function buildDynamicTools(input: DynamicToolBuildParams) {
       input.runAbortController.abort("sessions_yield");
     },
   });
-  const profiledTools = applyCodexDynamicToolProfile(allTools, input.pluginConfig);
-  const visionFilteredTools = filterToolsForVisionInputs(profiledTools, {
+  const codexFilteredTools = filterCodexDynamicTools(allTools, input.pluginConfig);
+  const visionFilteredTools = filterToolsForVisionInputs(codexFilteredTools, {
     modelHasVision,
     hasInboundImages: (params.images?.length ?? 0) > 0,
   });
@@ -1732,7 +1959,6 @@ function shouldProjectMirroredHistoryForCodexStart(params: {
 
 async function withCodexStartupTimeout<T>(params: {
   timeoutMs: number;
-  timeoutFloorMs?: number;
   signal: AbortSignal;
   operation: () => Promise<T>;
 }): Promise<T> {
@@ -1752,10 +1978,9 @@ async function withCodexStartupTimeout<T>(params: {
           }
           reject(error);
         };
-        const timeoutMs = Math.max(params.timeoutFloorMs ?? 100, params.timeoutMs);
         timeout = setTimeout(() => {
           rejectOnce(new Error("codex app-server startup timed out"));
-        }, timeoutMs);
+        }, params.timeoutMs);
         const abortListener = () => rejectOnce(new Error("codex app-server startup aborted"));
         params.signal.addEventListener("abort", abortListener, { once: true });
         abortCleanup = () => params.signal.removeEventListener("abort", abortListener);
@@ -1767,6 +1992,16 @@ async function withCodexStartupTimeout<T>(params: {
     }
     abortCleanup?.();
   }
+}
+
+function resolveCodexStartupTimeoutMs(params: {
+  timeoutMs: number;
+  timeoutFloorMs?: number;
+}): number {
+  return Math.max(
+    params.timeoutFloorMs ?? CODEX_APP_SERVER_STARTUP_TIMEOUT_FLOOR_MS,
+    params.timeoutMs,
+  );
 }
 
 function resolveCodexTurnCompletionIdleTimeoutMs(value: number | undefined): number {
@@ -2126,14 +2361,18 @@ function handleApprovalRequest(params: {
 
 export const __testing = {
   CODEX_DYNAMIC_TOOL_TIMEOUT_MS,
+  CODEX_DYNAMIC_TOOL_MAX_TIMEOUT_MS,
+  CODEX_DYNAMIC_IMAGE_TOOL_TIMEOUT_MS,
   CODEX_TURN_COMPLETION_IDLE_TIMEOUT_MS,
   CODEX_TURN_TERMINAL_IDLE_TIMEOUT_MS,
   buildCodexNativeHookRelayId,
-  applyCodexDynamicToolProfile,
+  filterCodexDynamicTools,
   buildDynamicTools,
   filterCodexDynamicToolsForAllowlist,
   filterToolsForVisionInputs,
   handleDynamicToolCallWithTimeout,
+  resolveDynamicToolCallTimeoutMs,
+  resolveCodexPluginAppCacheEndpoint,
   resolveOpenClawCodingToolsSessionKeys,
   shouldForceMessageTool,
   setOpenClawCodingToolsFactoryForTests(factory: OpenClawCodingToolsFactory): void {

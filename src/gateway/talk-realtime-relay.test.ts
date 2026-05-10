@@ -236,7 +236,21 @@ describe("talk realtime gateway relay", () => {
       relaySessionId: session.relaySessionId,
       connId: "conn-1",
       callId: "call-1",
+      result: { status: "working" },
+      options: { willContinue: true },
+    });
+    submitTalkRealtimeRelayToolResult({
+      relaySessionId: session.relaySessionId,
+      connId: "conn-1",
+      callId: "call-1",
       result: { ok: true },
+    });
+    submitTalkRealtimeRelayToolResult({
+      relaySessionId: session.relaySessionId,
+      connId: "conn-1",
+      callId: "call-2",
+      result: { status: "already_delivered" },
+      options: { suppressResponse: true },
     });
     cancelTalkRealtimeRelayTurn({
       relaySessionId: session.relaySessionId,
@@ -247,7 +261,19 @@ describe("talk realtime gateway relay", () => {
 
     expect(bridge.sendAudio).toHaveBeenCalledWith(Buffer.from("audio-in"));
     expect(bridge.setMediaTimestamp).toHaveBeenCalledWith(123);
-    expect(bridge.submitToolResult).toHaveBeenCalledWith("call-1", { ok: true }, undefined);
+    expect(bridge.submitToolResult).toHaveBeenNthCalledWith(
+      1,
+      "call-1",
+      { status: "working" },
+      { willContinue: true },
+    );
+    expect(bridge.submitToolResult).toHaveBeenNthCalledWith(2, "call-1", { ok: true }, undefined);
+    expect(bridge.submitToolResult).toHaveBeenNthCalledWith(
+      3,
+      "call-2",
+      { status: "already_delivered" },
+      { suppressResponse: true },
+    );
     expect(bridge.handleBargeIn).toHaveBeenCalledWith({ audioPlaybackActive: true });
     expect(bridge.close).toHaveBeenCalled();
     expect(events).toEqual(
@@ -268,6 +294,18 @@ describe("talk realtime gateway relay", () => {
               type: "turn.cancelled",
               payload: { reason: "barge-in" },
               final: true,
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            relaySessionId: session.relaySessionId,
+            type: "toolResult",
+            callId: "call-1",
+            talkEvent: expect.objectContaining({
+              type: "tool.result",
+              callId: "call-1",
+              final: false,
             }),
           }),
         }),
@@ -552,6 +590,13 @@ describe("talk realtime gateway relay", () => {
     expect(() => createSession("conn-1")).toThrow(
       "Too many active realtime relay sessions for this connection",
     );
-    expect(() => createSession("conn-2")).not.toThrow();
+    expect(createSession("conn-2")).toMatchObject({
+      provider: "relay-test",
+      transport: "gateway-relay",
+      audio: {
+        inputEncoding: "pcm16",
+        outputEncoding: "pcm16",
+      },
+    });
   });
 });

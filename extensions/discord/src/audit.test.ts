@@ -11,8 +11,10 @@ const fetchChannelPermissionsDiscordMock = vi.fn();
 
 function readDiscordGuilds(cfg: OpenClawConfig) {
   const guilds = cfg.channels?.discord?.guilds;
-  expect(guilds).toBeDefined();
-  return guilds ?? {};
+  if (!guilds) {
+    throw new Error("expected discord guilds config");
+  }
+  return guilds;
 }
 
 describe("discord audit", () => {
@@ -114,7 +116,7 @@ describe("discord audit", () => {
     } as unknown as OpenClawConfig;
 
     const collected = collectDiscordAuditChannelIdsForGuilds(readDiscordGuilds(cfg));
-    expect(collected.channelIds).toEqual([]);
+    expect(collected.channelIds).toStrictEqual([]);
     expect(collected.unresolvedChannels).toBe(0);
   });
 

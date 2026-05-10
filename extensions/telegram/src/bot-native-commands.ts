@@ -8,11 +8,7 @@ import {
   resolveThinkingDefault,
 } from "openclaw/plugin-sdk/agent-runtime";
 import { resolveChannelStreamingBlockEnabled } from "openclaw/plugin-sdk/channel-streaming";
-import {
-  resolveCommandAuthorization,
-  resolveCommandAuthorizedFromAuthorizers,
-  resolveNativeCommandSessionTargets,
-} from "openclaw/plugin-sdk/command-auth-native";
+import { resolveNativeCommandSessionTargets } from "openclaw/plugin-sdk/command-auth-native";
 import {
   buildCommandTextFromArgs,
   findCommandByNativeName,
@@ -54,7 +50,7 @@ import {
 import { expandTelegramAllowFromWithAccessGroups } from "./access-groups.js";
 import { resolveTelegramAccount } from "./accounts.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
-import { isSenderAllowed, normalizeDmAllowFromWithStore } from "./bot-access.js";
+import { normalizeDmAllowFromWithStore, resolveTelegramEffectiveDmPolicy } from "./bot-access.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import type { TelegramMediaRef } from "./bot-message-context.js";
 import type { TelegramMessageContextOptions } from "./bot-message-context.types.js";
@@ -75,6 +71,8 @@ import {
   buildSenderName,
   buildTelegramGroupFrom,
   extractTelegramForumFlag,
+  isTelegramCommandsAllowFromConfigured,
+  resolveTelegramCommandAuthorization,
   resolveTelegramForumFlag,
   resolveTelegramGroupAllowFromContext,
   resolveTelegramThreadSpec,
@@ -98,6 +96,7 @@ import {
   evaluateTelegramGroupPolicyAccess,
 } from "./group-access.js";
 import { resolveTelegramGroupPromptSettings } from "./group-config-helpers.js";
+import { resolveTelegramCommandIngressAuthorization } from "./ingress.js";
 import { buildInlineKeyboard } from "./inline-keyboard.js";
 import { recordSentMessage } from "./sent-message-cache.js";
 
@@ -406,6 +405,8 @@ export type RegisterTelegramHandlerParams = {
     storeAllowFrom: string[],
     options?: TelegramMessageContextOptions,
     replyMedia?: TelegramMediaRef[],
+    replyChain?: import("./message-cache.js").TelegramReplyChainEntry[],
+    promptContext?: import("./bot-message-context.types.js").TelegramPromptContextEntry[],
   ) => Promise<void>;
   logger: ReturnType<typeof getChildLogger>;
 };
@@ -514,54 +515,38 @@ async function resolveTelegramCommandAuth(params: {
     effectiveGroupAllow,
     hasGroupAllowOverride,
   } = groupAllowContext;
-  // Use direct config dmPolicy override if available for DMs
-  const effectiveDmPolicy =
-    !isGroup && groupConfig && "dmPolicy" in groupConfig
-      ? (groupConfig.dmPolicy ?? telegramCfg.dmPolicy ?? "pairing")
-      : (telegramCfg.dmPolicy ?? "pairing");
+  const effectiveDmPolicy = resolveTelegramEffectiveDmPolicy({
+    isGroup,
+    groupConfig,
+    dmPolicy: telegramCfg.dmPolicy,
+  });
   const requireTopic =
     !isGroup && groupConfig && "requireTopic" in groupConfig ? groupConfig.requireTopic : undefined;
   if (!isGroup && requireTopic === true && dmThreadId == null) {
     logVerbose(`Blocked telegram command in DM ${chatId}: requireTopic=true but no topic present`);
     return null;
   }
-  // For DMs, prefer per-DM/topic allowFrom (groupAllowOverride) over account-level allowFrom
   const dmAllowFrom = groupAllowOverride ?? allowFrom;
-  const commandsAllowFrom = cfg.commands?.allowFrom;
-  const commandsAllowFromConfigured =
-    commandsAllowFrom != null &&
-    typeof commandsAllowFrom === "object" &&
-    (Array.isArray(commandsAllowFrom.telegram) || Array.isArray(commandsAllowFrom["*"]));
+  const commandsAllowFromConfigured = isTelegramCommandsAllowFromConfigured(cfg);
   const commandsAllowFromAccess = commandsAllowFromConfigured
-    ? resolveCommandAuthorization({
-        ctx: {
-          Provider: "telegram",
-          Surface: "telegram",
-          OriginatingChannel: "telegram",
-          AccountId: accountId,
-          ChatType: isGroup ? "group" : "direct",
-          From: isGroup ? buildTelegramGroupFrom(chatId, resolvedThreadId) : `telegram:${chatId}`,
-          SenderId: senderId || undefined,
-          SenderUsername: senderUsername || undefined,
-        },
+    ? resolveTelegramCommandAuthorization({
         cfg,
-        // commands.allowFrom is the only auth source when configured.
-        commandAuthorized: false,
+        accountId,
+        chatId,
+        isGroup,
+        resolvedThreadId,
+        senderId,
+        senderUsername,
       })
     : null;
-  const ownerAccess = resolveCommandAuthorization({
-    ctx: {
-      Provider: "telegram",
-      Surface: "telegram",
-      OriginatingChannel: "telegram",
-      AccountId: accountId,
-      ChatType: isGroup ? "group" : "direct",
-      From: isGroup ? buildTelegramGroupFrom(chatId, resolvedThreadId) : `telegram:${chatId}`,
-      SenderId: senderId || undefined,
-      SenderUsername: senderUsername || undefined,
-    },
+  const ownerAccess = resolveTelegramCommandAuthorization({
     cfg,
-    commandAuthorized: false,
+    accountId,
+    chatId,
+    isGroup,
+    resolvedThreadId,
+    senderId,
+    senderUsername,
   });
 
   const sendAuthMessage = async (text: string) => {
@@ -640,31 +625,23 @@ async function resolveTelegramCommandAuth(params: {
     storeAllowFrom: isGroup ? [] : storeAllowFrom,
     dmPolicy: effectiveDmPolicy,
   });
-  const senderAllowed = isSenderAllowed({
-    allow: dmAllow,
-    senderId,
-    senderUsername,
-  });
-  const groupSenderAllowed = isGroup
-    ? isSenderAllowed({ allow: effectiveGroupAllow, senderId, senderUsername })
-    : false;
-  const ownerAuthorizerConfigured = ownerAccess.senderIsOwner || ownerAccess.ownerList.length > 0;
   const commandAuthorized = commandsAllowFromConfigured
     ? Boolean(commandsAllowFromAccess?.isAuthorizedSender)
-    : resolveCommandAuthorizedFromAuthorizers({
-        useAccessGroups,
-        authorizers: [
-          { configured: dmAllow.hasEntries, allowed: senderAllowed },
-          ...(isGroup
-            ? [{ configured: effectiveGroupAllow.hasEntries, allowed: groupSenderAllowed }]
-            : []),
-          {
-            configured: ownerAuthorizerConfigured,
-            allowed: ownerAccess.senderIsOwner,
-          },
-        ],
-        modeWhenAccessGroupsOff: "configured",
-      });
+    : (
+        await resolveTelegramCommandIngressAuthorization({
+          accountId,
+          cfg,
+          dmPolicy: effectiveDmPolicy,
+          isGroup,
+          chatId,
+          resolvedThreadId,
+          senderId,
+          effectiveDmAllow: dmAllow,
+          effectiveGroupAllow,
+          ownerAccess,
+          eventKind: "native-command",
+        })
+      ).authorized;
   if (requireAuth && !commandAuthorized) {
     return await rejectNotAuthorized();
   }

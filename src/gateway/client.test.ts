@@ -234,8 +234,7 @@ describe("GatewayClient security checks", () => {
       onConnectError,
     });
 
-    // Should not throw
-    expect(() => client.start()).not.toThrow();
+    expect(client.start()).toBeUndefined();
 
     expectSecurityConnectError(onConnectError);
     expect(wsInstances.length).toBe(0); // No WebSocket created
@@ -535,9 +534,7 @@ describe("GatewayClient close handling", () => {
     const client = createClientWithIdentity("dev-2", onClose);
 
     client.start();
-    expect(() => {
-      getLatestWs().emitClose(1008, "unauthorized: device token mismatch");
-    }).not.toThrow();
+    expect(getLatestWs().emitClose(1008, "unauthorized: device token mismatch")).toBeUndefined();
 
     expect(logDebugMock).toHaveBeenCalledWith(
       expect.stringContaining("failed clearing stale device-auth token"),
@@ -933,6 +930,29 @@ describe("GatewayClient connect auth payload", () => {
       deviceToken: "stored-device-token",
     });
     expect(connectScopesFrom(ws)).toEqual(["operator.read", "operator.write"]);
+    client.stop();
+  });
+
+  it("keeps requested scopes when reusing a stored device token", () => {
+    loadDeviceAuthTokenMock.mockReturnValue({
+      token: "stored-device-token",
+      scopes: ["operator.write"],
+    });
+    const client = new GatewayClient({
+      url: "ws://127.0.0.1:18789",
+      scopes: ["operator.admin"],
+    });
+
+    client.start();
+    const ws = getLatestWs();
+    ws.emitOpen();
+    emitConnectChallenge(ws);
+
+    expect(connectFrameFrom(ws)).toMatchObject({
+      token: "stored-device-token",
+      deviceToken: "stored-device-token",
+    });
+    expect(connectScopesFrom(ws)).toEqual(["operator.admin"]);
     client.stop();
   });
 

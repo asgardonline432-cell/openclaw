@@ -37,6 +37,11 @@ Telegraph style. Root rules only. Read scoped `AGENTS.md` before subtree work.
 - New seams: backwards-compatible, documented, versioned. Third-party plugins exist.
 - Channels: `src/channels/**` is implementation; plugin authors get SDK seams.
 - Providers: core owns generic loop; provider plugins own auth/catalog/runtime hooks.
+- Request-time runtime resolution: when a path already knows the provider id, model ref, channel id, outbound target, capability family, or attachment class, carry that as a prepared runtime fact instead of rediscovering it later.
+- Prepared runtime facts should be small typed values produced once near startup, reply dispatch, model selection, tool planning, or channel resolution, then passed through context to consumers. Prefer `AgentRuntimePlan`, `ProviderRuntimePluginHandle`, scoped model/catalog helpers, active/runtime registries, manifest/public-artifact lookups, single-provider resolvers, and lazy registry construction.
+- Avoid broad request-time rediscovery: hot reply/tool/outbound/media paths should not call broad plugin/provider/channel/capability loaders such as `loadOpenClawPlugins`, `resolveProviderPluginsForHooks`, `resolvePluginCapabilityProviders`, `resolvePluginDiscoveryProvidersRuntime`, `getChannelPlugin`, or broad model/tool/media registry builders just to answer a question the caller already knows. Do not build multimodal/provider registries for document-only or otherwise non-participating paths.
+- Compatibility fallbacks are allowed only for startup/setup/admin/standalone/legacy callers that genuinely lack prepared facts. Keep them explicit, tested, and outside migrated hot reply/tool/outbound paths.
+- Do not fix repeated request-time discovery by adding scattered cache layers. Move the canonical fact earlier, reuse the existing prepared-runtime object, and delete duplicate lookup branches when the last migrated caller stops needing them.
 - Gateway protocol changes: additive first; incompatible needs versioning/docs/client follow-through.
 - Config contract: exported types, schema/help, metadata, baselines, docs aligned. Retired public keys stay retired; compat in raw migration/doctor.
 - Direction: manifest-first control plane; targeted runtime loaders; no hidden contract bypasses; broad mutable registries transitional.
@@ -66,7 +71,8 @@ Telegraph style. Root rules only. Read scoped `AGENTS.md` before subtree work.
 ## GitHub / CI
 
 - Triage: list first, hydrate few. Use bounded `gh --json --jq`; avoid repeated full comment scans.
-- Automatic PR/issue discovery: skip maintainer-owned items unless directly relevant. Do not comment, close, label, retitle, rebase, fix up, or land them without Peter asking.
+- Bare GitHub issue/PR URL or number => `review <ref>`: load repo maintainer skill if available, inspect live with `gh`, report findings in chat. No comments/close/merge/fix unless explicitly asked.
+- Automatic PR/issue discovery: skip maintainer-owned items unless directly relevant. Do not comment, close, label, retitle, rebase, fix up, or land them without explicit maintainer request.
 - PR scan/triage: no unsolicited PR comments/reviews. Report in chat only unless explicitly asked, or a close/duplicate action needs a reason comment.
 - Search/dedupe: prefer `gh search issues 'repo:openclaw/openclaw is:open <terms>' --json number,title,state,updatedAt --limit 20`.
 - GitHub search boolean text is fussy. If `OR` queries return empty, split exact terms and search title/body/comments separately before concluding no hits.
@@ -152,8 +158,10 @@ Telegraph style. Root rules only. Read scoped `AGENTS.md` before subtree work.
 ## Docs / Changelog
 
 - Docs change with behavior/API. Use docs list/read_when hints; docs links per `docs/AGENTS.md`.
+- When upgrading the bundled Codex harness (`@openai/codex` in `extensions/codex/package.json`), refresh the model availability snapshot in `docs/plugins/codex-harness.md` from the new harness's `model/list` result.
 - Docs final answers: when doc files changed, end with the relevant full `https://docs.openclaw.ai/...` URL(s).
 - Changelog user-facing only; fixing an issue or landing/merging a PR needs one unless pure test/internal.
+- Missing changelog is not a PR review finding or merge blocker. If landing/fixing a user-visible change, add/update changelog automatically when practical; never ask or block solely on it.
 - Changelog placement: active version `### Changes`/`### Fixes`; contributor-facing added entries should include at least one `Thanks @author` attribution, using credited human GitHub username(s). Never add `Thanks @codex`, `Thanks @openclaw`, `Thanks @clawsweeper`, or `Thanks @steipete`; if the real credited human is unknown, leave attribution blank instead of guessing or adding a random person.
 - Changelog bullets are always single-line. No wrapping/continuation across multiple lines. Long entries stay on one long line so dedupe, PR-ref, and credit-audit tooling work and so the visual style stays uniform.
 

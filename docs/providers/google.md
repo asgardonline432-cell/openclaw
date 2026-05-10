@@ -13,7 +13,7 @@ Gemini Grounding.
 - Provider: `google`
 - Auth: `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 - API: Google Gemini API
-- Runtime option: `agents.defaults.agentRuntime.id: "google-gemini-cli"`
+- Runtime option: provider/model `agentRuntime.id: "google-gemini-cli"`
   reuses Gemini CLI OAuth while keeping model refs canonical as `google/*`.
 
 ## Getting started
@@ -44,7 +44,7 @@ Choose your preferred auth method and follow the setup steps.
         {
           agents: {
             defaults: {
-              model: { primary: "google/gemini-3.1-pro-preview" },
+              model: { primary: "google/gemini-2.5-flash" },
             },
           },
         }
@@ -398,9 +398,10 @@ Gateway relay transport, which keeps provider credentials on the Gateway.
 
 For maintainer live verification, run
 `OPENAI_API_KEY=... GEMINI_API_KEY=... node --import tsx scripts/dev/realtime-talk-live-smoke.ts`.
-The Google leg mints the same constrained Live API token shape used by Control
-UI Talk, opens the browser WebSocket endpoint, sends the initial setup payload,
-and waits for `setupComplete`.
+The smoke also covers OpenAI backend/WebRTC paths; the Google leg mints the same
+constrained Live API token shape used by Control UI Talk, opens the browser
+WebSocket endpoint, sends the initial setup payload, and waits for
+`setupComplete`.
 
 ## Advanced configuration
 

@@ -100,6 +100,14 @@ function shouldFlattenOpenAICompletionMessages(model: {
   return model.api === "openai-completions" && compat?.requiresStringContent === true;
 }
 
+function shouldStripOpenAICompletionTools(model: { api?: unknown; compat?: unknown }): boolean {
+  const compat =
+    model.compat && typeof model.compat === "object"
+      ? (model.compat as { supportsTools?: unknown })
+      : undefined;
+  return model.api === "openai-completions" && compat?.supportsTools === false;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -305,6 +313,22 @@ export function createOpenAIStringContentWrapper(baseStreamFn: StreamFn | undefi
   };
 }
 
+export function createOpenAICompletionsToolsCompatWrapper(
+  baseStreamFn: StreamFn | undefined,
+): StreamFn {
+  const underlying = baseStreamFn ?? streamSimple;
+  return (model, context, options) => {
+    if (!shouldStripOpenAICompletionTools(model)) {
+      return underlying(model, context, options);
+    }
+    return streamWithPayloadPatch(underlying, model, context, options, (payloadObj) => {
+      delete payloadObj.tools;
+      delete payloadObj.tool_choice;
+      delete payloadObj.parallel_tool_calls;
+    });
+  };
+}
+
 export function createOpenAIThinkingLevelWrapper(
   baseStreamFn: StreamFn | undefined,
   thinkingLevel?: ThinkLevel,
@@ -482,13 +506,9 @@ export function createCodexNativeWebSearchWrapper(
 export function createOpenAIDefaultTransportWrapper(baseStreamFn: StreamFn | undefined): StreamFn {
   const underlying = baseStreamFn ?? streamSimple;
   return (model, context, options) => {
-    const typedOptions = options as
-      | (SimpleStreamOptions & { openaiWsWarmup?: boolean })
-      | undefined;
     const mergedOptions = {
       ...options,
       transport: options?.transport ?? "auto",
-      openaiWsWarmup: typedOptions?.openaiWsWarmup ?? true,
     } as SimpleStreamOptions;
     return underlying(model, context, mergedOptions);
   };

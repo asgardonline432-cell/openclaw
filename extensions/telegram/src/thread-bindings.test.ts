@@ -237,7 +237,9 @@ describe("telegram thread bindings", () => {
       },
     });
     const original = manager.listBySessionKey("agent:main:subagent:child-1")[0];
-    expect(original).toBeDefined();
+    if (!original) {
+      throw new Error("expected original subagent thread binding");
+    }
 
     const idleUpdated = setTelegramThreadBindingIdleTimeoutBySessionKey({
       accountId: "work",
@@ -543,7 +545,7 @@ describe("telegram thread bindings", () => {
 
       await __testing.resetTelegramThreadBindingsForTests();
       await flushMicrotasks();
-      expect(unhandled).toEqual([]);
+      expect(unhandled).toStrictEqual([]);
     } finally {
       process.off("unhandledRejection", onUnhandledRejection);
     }

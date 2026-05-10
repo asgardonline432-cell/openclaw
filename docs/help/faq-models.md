@@ -150,7 +150,7 @@ troubleshooting, see the main [FAQ](/help/faq).
     - **Native Codex coding agent:** set `agents.defaults.model.primary` to `openai/gpt-5.5`. Sign in with `openclaw models auth login --provider openai-codex` when you want ChatGPT/Codex subscription auth.
     - **Direct OpenAI API tasks outside the agent loop:** configure `OPENAI_API_KEY` for images, embeddings, speech, realtime, and other non-agent OpenAI API surfaces.
     - **OpenAI agent API-key auth:** use `/model openai/gpt-5.5` with an ordered `openai-codex` API-key profile.
-    - **Sub-agents:** route coding tasks to a Codex-only agent with its own model and `agentRuntime` default.
+    - **Sub-agents:** route coding tasks to a Codex-focused agent with its own `openai/gpt-5.5` model.
 
     See [Models](/concepts/models) and [Slash commands](/tools/slash-commands).
 
@@ -195,9 +195,9 @@ troubleshooting, see the main [FAQ](/help/faq).
     Add it with: openclaw config set agents.defaults.models '{"provider/model":{}}' --strict-json --merge
     ```
 
-    That error is returned **instead of** a normal reply. Fix: add the model to
-    `agents.defaults.models`, remove the allowlist, or pick a model from `/model list`.
-    If the command also included `--runtime codex`, add the model first and then retry
+    That error is returned **instead of** a normal reply. Fix: add the exact model to
+    `agents.defaults.models`, add a provider wildcard such as `"provider/*": {}` for dynamic provider catalogs, remove the allowlist, or pick a model from `/model list`.
+    If the command also included `--runtime codex`, update the allowlist first and then retry
     the same `/model provider/model --runtime codex` command.
 
   </Accordion>
