@@ -163,7 +163,7 @@ async function writeDailyMemoryNotes(
   }
 }
 
-async function replaceSessionStore(
+async function replaceSessionRows(
   agentId: string,
   store: Record<string, SessionEntry>,
 ): Promise<void> {
@@ -175,14 +175,14 @@ async function replaceSessionStore(
   }
 }
 
-function readSessionStore(agentId: string): Record<string, SessionEntry> {
+function readSessionRows(agentId: string): Record<string, SessionEntry> {
   return Object.fromEntries(
     listSessionEntries({ agentId }).map(({ sessionKey, entry }) => [sessionKey, entry]),
   );
 }
 
 async function seedTargetSession(agentId: string, targetSessionKey: string) {
-  await replaceSessionStore(agentId, {
+  await replaceSessionRows(agentId, {
     [targetSessionKey]: {
       sessionId: "session-target",
       updatedAt: Date.now(),
@@ -266,7 +266,7 @@ async function expectNextRunUsesTargetSession(
 }
 
 async function writeStoredModelOverride(): Promise<void> {
-  await replaceSessionStore("main", {
+  await replaceSessionRows("main", {
     [MAIN_SESSION_KEY]: {
       sessionId: "main",
       updatedAt: Date.now(),
@@ -556,7 +556,7 @@ describe("trigger handling", () => {
       const text = maybeReplyText(res);
       expect(text?.startsWith("⚙️ Compacted")).toBe(true);
       expect(getCompactEmbeddedPiSessionMock()).toHaveBeenCalledOnce();
-      const store = readSessionStore("main");
+      const store = readSessionRows("main");
       const sessionKey = resolveSessionKey("per-sender", request);
       expect(store[sessionKey]?.compactionCount).toBe(1);
     });
@@ -594,7 +594,7 @@ describe("trigger handling", () => {
       getAbortEmbeddedPiRunMock().mockReset().mockReturnValue(false);
       const targetSessionKey = "agent:main:telegram:group:123";
       const targetSessionId = "session-target";
-      await replaceSessionStore("main", {
+      await replaceSessionRows("main", {
         [targetSessionKey]: {
           sessionId: targetSessionId,
           updatedAt: Date.now(),
@@ -646,7 +646,7 @@ describe("trigger handling", () => {
       const text = Array.isArray(res) ? res[0]?.text : res?.text;
       expect(text).toBe("⚙️ Agent was aborted.");
       expect(getAbortEmbeddedPiRunMock()).toHaveBeenCalledWith(targetSessionId);
-      const store = readSessionStore("main");
+      const store = readSessionRows("main");
       expect(store[targetSessionKey]?.abortedLastRun).toBe(true);
       expect(getFollowupQueueDepth(targetSessionKey)).toBe(0);
     });
@@ -674,7 +674,7 @@ describe("trigger handling", () => {
 
       expect(maybeReplyText(res)).toContain("Model set to openai/gpt-4.1-mini");
 
-      const store = readSessionStore("main");
+      const store = readSessionRows("main");
       expect(store[targetSessionKey]?.providerOverride).toBe("openai");
       expect(store[targetSessionKey]?.modelOverride).toBe("gpt-4.1-mini");
       expect(store[slashSessionKey]).toBeUndefined();
@@ -707,7 +707,7 @@ describe("trigger handling", () => {
       const slashSessionKey = "agent:main:telegram:slash:7595562691";
       const targetSessionKey = "agent:main:main:thread:7595562691:12812";
 
-      await replaceSessionStore("main", {
+      await replaceSessionRows("main", {
         [targetSessionKey]: {
           sessionId: "session-target",
           updatedAt: Date.now(),
@@ -728,7 +728,7 @@ describe("trigger handling", () => {
 
       expect(maybeReplyText(res)).toContain("Model set to deepseek/deepseek-v4-pro");
 
-      const store = readSessionStore("main");
+      const store = readSessionRows("main");
       expect(store[targetSessionKey]?.providerOverride).toBe("deepseek");
       expect(store[targetSessionKey]?.modelOverride).toBe("deepseek-v4-pro");
       expect(store[slashSessionKey]).toBeUndefined();
@@ -794,7 +794,7 @@ describe("trigger handling", () => {
 
       expect(maybeReplyText(res)).toContain(`Auth profile set to ${TEST_SECONDARY_PROFILE_ID}`);
 
-      const store = readSessionStore("main");
+      const store = readSessionRows("main");
       expect(store[targetSessionKey]?.authProfileOverride).toBe(TEST_SECONDARY_PROFILE_ID);
       expect(store[targetSessionKey]?.authProfileOverrideSource).toBe("user");
       expect(store[slashSessionKey]).toBeUndefined();
