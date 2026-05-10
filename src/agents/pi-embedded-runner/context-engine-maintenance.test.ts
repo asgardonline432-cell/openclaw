@@ -19,11 +19,6 @@ import { withStateDirEnv } from "../../test-helpers/state-dir-env.js";
 import { castAgentMessage } from "../test-helpers/agent-message-fixtures.js";
 import { resolveSessionLane } from "./lanes.js";
 
-const rewriteTranscriptEntriesInSessionManagerMock = vi.fn((_params?: unknown) => ({
-  changed: true,
-  bytesFreed: 77,
-  rewrittenEntries: 1,
-}));
 const rewriteTranscriptEntriesInSqliteTranscriptMock = vi.fn(async (_params?: unknown) => ({
   changed: true,
   bytesFreed: 123,
@@ -89,8 +84,6 @@ vi.mock("./context-engine-capabilities.js", () => ({
 }));
 
 vi.mock("./transcript-rewrite.js", () => ({
-  rewriteTranscriptEntriesInSessionManager: (params: unknown) =>
-    rewriteTranscriptEntriesInSessionManagerMock(params),
   rewriteTranscriptEntriesInSqliteTranscript: (params: unknown) =>
     rewriteTranscriptEntriesInSqliteTranscriptMock(params),
 }));
@@ -107,7 +100,6 @@ async function loadFreshContextEngineMaintenanceModuleForTest() {
 
 describe("buildContextEngineMaintenanceRuntimeContext", () => {
   beforeEach(async () => {
-    rewriteTranscriptEntriesInSessionManagerMock.mockClear();
     rewriteTranscriptEntriesInSqliteTranscriptMock.mockClear();
     resetSystemEventsForTest();
     resetTaskRegistryDeliveryRuntimeForTests();
@@ -149,37 +141,6 @@ describe("buildContextEngineMaintenanceRuntimeContext", () => {
         ],
       },
     });
-  });
-
-  it("reuses the active session manager when one is provided", async () => {
-    const sessionManager = { appendMessage: vi.fn() } as unknown as Parameters<
-      typeof buildContextEngineMaintenanceRuntimeContext
-    >[0]["sessionManager"];
-    const runtimeContext = buildContextEngineMaintenanceRuntimeContext({
-      sessionId: "session-1",
-      sessionKey: "agent:main:session-1",
-      transcriptScope: sqliteTranscriptScope("session-1"),
-      sessionManager,
-    });
-
-    const result = await runtimeContext.rewriteTranscriptEntries?.({
-      replacements: [
-        { entryId: "entry-1", message: { role: "user", content: "hi", timestamp: 1 } },
-      ],
-    });
-
-    expect(result).toEqual({
-      changed: true,
-      bytesFreed: 77,
-      rewrittenEntries: 1,
-    });
-    expect(rewriteTranscriptEntriesInSessionManagerMock).toHaveBeenCalledWith({
-      sessionManager,
-      replacements: [
-        { entryId: "entry-1", message: { role: "user", content: "hi", timestamp: 1 } },
-      ],
-    });
-    expect(rewriteTranscriptEntriesInSqliteTranscriptMock).not.toHaveBeenCalled();
   });
 
   it("defers SQLite transcript rewrites onto the session lane when requested", async () => {
@@ -296,7 +257,6 @@ describe("createDeferredTurnMaintenanceAbortSignal", () => {
 
 describe("runContextEngineMaintenance", () => {
   beforeEach(async () => {
-    rewriteTranscriptEntriesInSessionManagerMock.mockClear();
     rewriteTranscriptEntriesInSqliteTranscriptMock.mockClear();
     await loadFreshContextEngineMaintenanceModuleForTest();
   });
@@ -377,10 +337,6 @@ describe("runContextEngineMaintenance", () => {
         rewrittenEntries: 0,
       };
     });
-    const sessionManager = { appendMessage: vi.fn() } as unknown as Parameters<
-      typeof buildContextEngineMaintenanceRuntimeContext
-    >[0]["sessionManager"];
-
     await runContextEngineMaintenance({
       contextEngine: {
         info: { id: "test", name: "Test Engine", turnMaintenanceMode: "background" },
@@ -394,10 +350,8 @@ describe("runContextEngineMaintenance", () => {
       transcriptScope: sqliteTranscriptScope("session-background-file-rewrite"),
       reason: "turn",
       executionMode: "background",
-      sessionManager,
     });
 
-    expect(rewriteTranscriptEntriesInSessionManagerMock).not.toHaveBeenCalled();
     expect(rewriteTranscriptEntriesInSqliteTranscriptMock).toHaveBeenCalledWith({
       agentId: "main",
       sessionId: "session-background-file-rewrite",

@@ -29,13 +29,13 @@ afterEach(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-async function writeStore(store: Record<string, SessionEntry>): Promise<void> {
-  for (const [sessionKey, entry] of Object.entries(store)) {
+async function writeSessionEntries(entries: Record<string, SessionEntry>): Promise<void> {
+  for (const [sessionKey, entry] of Object.entries(entries)) {
     upsertSessionEntry({ agentId: "main", sessionKey, entry });
   }
 }
 
-function readStore(): Record<string, SessionEntry> {
+function readSessionEntries(): Record<string, SessionEntry> {
   return Object.fromEntries(
     listSessionEntries({ agentId: "main" }).map(({ sessionKey, entry }) => [sessionKey, entry]),
   );
@@ -66,7 +66,7 @@ async function writeTranscript(sessionId: string, messages: unknown[]): Promise<
 
 describe("main-session-restart-recovery", () => {
   it("resumes marked sessions with a tool-result transcript tail", async () => {
-    await writeStore({
+    await writeSessionEntries({
       "agent:main:main": {
         sessionId: "main-session",
         updatedAt: Date.now() - 10_000,
@@ -90,12 +90,12 @@ describe("main-session-restart-recovery", () => {
     expect(resumeParams?.sessionKey).toBe("agent:main:main");
     expect(resumeParams?.deliver).toBe(false);
     expect(resumeParams?.lane).toBe("main");
-    const store = readStore();
+    const store = readSessionEntries();
     expect(store["agent:main:main"]?.abortedLastRun).toBe(false);
   });
 
   it("fails marked sessions with stale approval-pending exec tool results", async () => {
-    await writeStore({
+    await writeSessionEntries({
       "agent:main:main": {
         sessionId: "main-session",
         updatedAt: Date.now() - 10_000,
@@ -122,14 +122,14 @@ describe("main-session-restart-recovery", () => {
 
     expect(result).toEqual({ recovered: 0, failed: 1, skipped: 0 });
     expect(callGateway).not.toHaveBeenCalled();
-    const store = readStore();
+    const store = readSessionEntries();
     expect(store["agent:main:main"]?.status).toBe("failed");
     expect(store["agent:main:main"]?.abortedLastRun).toBe(true);
   });
 
   it("resumes marked sessions with a durable pending final delivery payload (Phase 2)", async () => {
     const pendingPayload = "The final answer is 42.";
-    await writeStore({
+    await writeSessionEntries({
       "agent:main:main": {
         sessionId: "main-session",
         updatedAt: Date.now() - 10_000,
@@ -156,7 +156,7 @@ describe("main-session-restart-recovery", () => {
     expect(callParams.message).toContain(pendingPayload);
 
     const beforeStoreRead = Date.now();
-    const store = readStore();
+    const store = readSessionEntries();
     const entry = store["agent:main:main"];
     expect(entry?.abortedLastRun).toBe(false);
     expect(entry?.pendingFinalDelivery).toBe(true);
@@ -171,7 +171,7 @@ describe("main-session-restart-recovery", () => {
   });
 
   it("does not scan ordinary running sessions without the restart-aborted marker", async () => {
-    await writeStore({
+    await writeSessionEntries({
       "agent:main:main": {
         sessionId: "main-session",
         updatedAt: Date.now() - 10_000,
@@ -190,7 +190,7 @@ describe("main-session-restart-recovery", () => {
   });
 
   it("fails marked sessions whose transcript tail cannot be resumed", async () => {
-    await writeStore({
+    await writeSessionEntries({
       "agent:main:main": {
         sessionId: "main-session",
         updatedAt: Date.now() - 10_000,
@@ -207,7 +207,7 @@ describe("main-session-restart-recovery", () => {
 
     expect(result).toEqual({ recovered: 0, failed: 1, skipped: 0 });
     expect(callGateway).not.toHaveBeenCalled();
-    const store = readStore();
+    const store = readSessionEntries();
     expect(store["agent:main:main"]?.status).toBe("failed");
     expect(store["agent:main:main"]?.abortedLastRun).toBe(true);
   });

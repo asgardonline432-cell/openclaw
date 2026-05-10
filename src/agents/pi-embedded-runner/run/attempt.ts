@@ -184,8 +184,9 @@ import {
 } from "../../tool-search.js";
 import { shouldAllowProviderOwnedThinkingReplay } from "../../transcript-policy.js";
 import { repairTranscriptSessionStateIfNeeded } from "../../transcript-state-repair.js";
-import { removeSessionManagerTailEntries } from "../../transcript/session-manager-tail.js";
 import { openTranscriptSessionManagerForSession } from "../../transcript/session-manager.js";
+import type { SessionTranscriptScope } from "../../transcript/session-transcript-types.js";
+import { removeTailEntriesFromSqliteTranscript } from "../../transcript/transcript-state.js";
 import { normalizeUsage, type NormalizedUsage } from "../../usage.js";
 import { DEFAULT_BOOTSTRAP_FILENAME } from "../../workspace.js";
 import { isRunnerAbortError } from "../abort.js";
@@ -249,7 +250,7 @@ import {
 } from "../tool-result-context-guard.js";
 import {
   resolveLiveToolResultMaxChars,
-  truncateOversizedToolResultsInSessionManager,
+  truncateOversizedToolResultsInSession,
 } from "../tool-result-truncation.js";
 import { splitSdkTools } from "../tool-split.js";
 import { mapThinkingLevel } from "../utils.js";
@@ -652,30 +653,26 @@ function isMidTurnPrecheckAssistantError(message: AgentMessage | undefined): boo
 
 function removeTrailingMidTurnPrecheckAssistantError(params: {
   activeSession: { agent: { state: { messages: AgentMessage[] } } };
-  sessionManager: ReturnType<typeof guardSessionManager>;
+  transcriptScope: SessionTranscriptScope;
 }): void {
   const messages = params.activeSession.agent.state.messages;
   if (isMidTurnPrecheckAssistantError(messages.at(-1))) {
     params.activeSession.agent.state.messages = messages.slice(0, -1);
   }
 
-  const removal = removeSessionManagerTailEntries(
-    params.sessionManager,
-    (entry) => entry.type === "message" && isMidTurnPrecheckAssistantError(entry.message as never),
-    { maxEntries: 1 },
-  );
-  if (removal.rewriteUnavailable) {
-    log.warn(
-      "[context-overflow-midturn-precheck] removed synthetic assistant error from active session but SessionManager tail removal is unavailable",
-    );
-    return;
-  }
+  const removed = removeTailEntriesFromSqliteTranscript({
+    agentId: params.transcriptScope.agentId,
+    sessionId: params.transcriptScope.sessionId,
+    shouldRemove: (entry) =>
+      entry.type === "message" && isMidTurnPrecheckAssistantError(entry.message as never),
+    options: { maxEntries: 1 },
+  });
   if (
-    removal.removed === 0 &&
+    removed === 0 &&
     isMidTurnPrecheckAssistantError(params.activeSession.agent.state.messages.at(-1))
   ) {
     log.warn(
-      "[context-overflow-midturn-precheck] removed synthetic assistant error from active session but could not locate matching persisted SessionManager entry",
+      "[context-overflow-midturn-precheck] removed synthetic assistant error from active session but could not locate matching persisted SQLite transcript entry",
     );
   }
 }
@@ -1651,7 +1648,6 @@ export async function runEmbeddedAttempt(
         sessionId: params.sessionId,
         sessionKey: params.sessionKey,
         transcriptScope: sessionTranscriptScope,
-        sessionManager,
         runtimeContext: buildAfterTurnRuntimeContext({
           attempt: params,
           workspaceDir: effectiveWorkspace,
@@ -1668,7 +1664,6 @@ export async function runEmbeddedAttempt(
             sessionKey: contextParams.sessionKey,
             transcriptScope: contextParams.transcriptScope,
             reason: contextParams.reason,
-            sessionManager: contextParams.sessionManager as never,
             runtimeContext: contextParams.runtimeContext,
             config: params.config,
             agentId: sessionAgentId,
@@ -2852,7 +2847,7 @@ export async function runEmbeddedAttempt(
       const activeSessionManager = sessionManager;
       let preflightRecovery: EmbeddedRunAttemptResult["preflightRecovery"];
       let promptErrorSource: EmbeddedRunAttemptResult["promptErrorSource"] = null;
-      const handleMidTurnPrecheckRequest = (request: MidTurnPrecheckRequest) => {
+      const handleMidTurnPrecheckRequest = async (request: MidTurnPrecheckRequest) => {
         const logMidTurnPrecheck = (route: string, extra?: string) => {
           log.warn(
             `[context-overflow-midturn-precheck] sessionKey=${params.sessionKey ?? params.sessionId} ` +
@@ -2874,8 +2869,7 @@ export async function runEmbeddedAttempt(
             cfg: params.config,
             agentId: sessionAgentId,
           });
-          const truncationResult = truncateOversizedToolResultsInSessionManager({
-            sessionManager: activeSessionManager,
+          const truncationResult = await truncateOversizedToolResultsInSession({
             contextWindowTokens: contextTokenBudget,
             maxCharsOverride: toolResultMaxChars,
             agentId: sessionAgentId,
@@ -2889,8 +2883,8 @@ export async function runEmbeddedAttempt(
               handled: true,
               truncatedCount: truncationResult.truncatedCount,
             };
-            const sessionContext = activeSessionManager.buildSessionContext();
-            activeSession.agent.state.messages = sessionContext.messages;
+            activeSession.agent.state.messages =
+              truncationResult.messages ?? activeSessionManager.buildSessionContext().messages;
             logMidTurnPrecheck(
               request.route,
               `handled=true truncatedCount=${truncationResult.truncatedCount}`,
@@ -3418,8 +3412,7 @@ export async function runEmbeddedAttempt(
               cfg: params.config,
               agentId: sessionAgentId,
             });
-            const truncationResult = truncateOversizedToolResultsInSessionManager({
-              sessionManager,
+            const truncationResult = await truncateOversizedToolResultsInSession({
               contextWindowTokens: contextTokenBudget,
               maxCharsOverride: toolResultMaxChars,
               agentId: sessionAgentId,
@@ -3427,6 +3420,9 @@ export async function runEmbeddedAttempt(
               sessionKey: params.sessionKey,
             });
             if (truncationResult.truncated) {
+              if (truncationResult.messages) {
+                activeSession.agent.state.messages = truncationResult.messages;
+              }
               preflightRecovery = {
                 route: "truncate_tool_results_only",
                 handled: true,
@@ -3530,12 +3526,12 @@ export async function runEmbeddedAttempt(
               runId: params.runId,
               sessionId: params.sessionId,
             });
-            stripSessionsYieldArtifacts(activeSession);
+            stripSessionsYieldArtifacts(activeSession, sessionTranscriptScope);
             if (yieldMessage) {
               await persistSessionsYieldContextMessage(activeSession, yieldMessage);
             }
           } else if (isMidTurnPrecheckSignal(err)) {
-            handleMidTurnPrecheckRequest(err.request);
+            await handleMidTurnPrecheckRequest(err.request);
           } else {
             promptError = err;
             promptErrorSource = "prompt";
@@ -3551,12 +3547,12 @@ export async function runEmbeddedAttempt(
           pendingMidTurnPrecheckRequest = null;
           removeTrailingMidTurnPrecheckAssistantError({
             activeSession,
-            sessionManager,
+            transcriptScope: sessionTranscriptScope,
           });
           if (!preflightRecovery && promptErrorSource !== "precheck") {
             promptError = null;
             promptErrorSource = null;
-            handleMidTurnPrecheckRequest(request);
+            await handleMidTurnPrecheckRequest(request);
           }
         }
 
@@ -3757,12 +3753,10 @@ export async function runEmbeddedAttempt(
                 sessionKey: contextParams.sessionKey,
                 transcriptScope: contextParams.transcriptScope,
                 reason: contextParams.reason,
-                sessionManager: contextParams.sessionManager as never,
                 runtimeContext: contextParams.runtimeContext,
                 config: params.config,
                 agentId: sessionAgentId,
               }),
-            sessionManager,
             config: params.config,
             warn: (message) => log.warn(message),
           });

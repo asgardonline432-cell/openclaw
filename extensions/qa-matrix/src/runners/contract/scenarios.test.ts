@@ -316,20 +316,20 @@ async function writeMatrixStorageMetaEntry(params: {
 
 async function writeMatrixSyncStoreEntry(params: {
   nextBatch: string;
+  rootDir: string;
   stateDir: string;
-  storagePath: string;
 }) {
   await withTestOpenClawStateDir(params.stateDir, () =>
     matrixSyncStore.register(
-      resolveMatrixPluginStateKey(params.storagePath),
+      resolveMatrixPluginStateKey(params.rootDir),
       matrixSyncStoreFixture(params.nextBatch),
     ),
   );
 }
 
-async function readMatrixSyncStoreEntry(params: { stateDir: string; storagePath: string }) {
+async function readMatrixSyncStoreEntry(params: { rootDir: string; stateDir: string }) {
   return withTestOpenClawStateDir(params.stateDir, () =>
-    matrixSyncStore.lookup(resolveMatrixPluginStateKey(params.storagePath)),
+    matrixSyncStore.lookup(resolveMatrixPluginStateKey(params.rootDir)),
   );
 }
 
@@ -1801,7 +1801,6 @@ describe("matrix live qa scenarios", () => {
     try {
       const accountDir = path.join(stateRoot, "matrix", "accounts", "sut", "server", "token");
       const staleSyncRoomId = "!stale-sync:matrix-qa.test";
-      const syncStorePath = path.join(accountDir, "bot-storage.json");
       await mkdir(accountDir, { recursive: true });
       await writeMatrixStorageMetaEntry({
         accountId: "sut",
@@ -1811,8 +1810,8 @@ describe("matrix live qa scenarios", () => {
       });
       await writeMatrixSyncStoreEntry({
         nextBatch: "driver-sync-start",
+        rootDir: accountDir,
         stateDir: stateRoot,
-        storagePath: syncStorePath,
       });
 
       const callOrder: string[] = [];
@@ -1875,13 +1874,13 @@ describe("matrix live qa scenarios", () => {
           callOrder.push("hard-restart");
           await writeMatrixSyncStoreEntry({
             nextBatch: "driver-sync-after-first",
+            rootDir: accountDir,
             stateDir: stateRoot,
-            storagePath: syncStorePath,
           });
           await mutateState({ stateDir: stateRoot });
           const persisted = await readMatrixSyncStoreEntry({
+            rootDir: accountDir,
             stateDir: stateRoot,
-            storagePath: syncStorePath,
           });
           if (!persisted) {
             throw new Error("missing persisted Matrix sync-store entry");
@@ -1963,7 +1962,6 @@ describe("matrix live qa scenarios", () => {
         "server",
         "token",
       );
-      const syncStorePath = path.join(accountDir, "bot-storage.json");
       await mkdir(accountDir, { recursive: true });
       await writeTestJsonFile(gatewayConfigPath, {
         channels: {
@@ -1991,8 +1989,8 @@ describe("matrix live qa scenarios", () => {
       });
       await writeMatrixSyncStoreEntry({
         nextBatch: "sut-sync-before-loss",
+        rootDir: accountDir,
         stateDir: stateRoot,
-        storagePath: syncStorePath,
       });
 
       const registerWithToken = vi.fn().mockResolvedValue({
@@ -2097,18 +2095,20 @@ describe("matrix live qa scenarios", () => {
         waitGatewayAccountReady,
       });
       const artifacts = result.artifacts as {
-        deletedSyncStorePath?: unknown;
+        deletedSyncStoreRoot?: unknown;
         driverEventId?: unknown;
         replyEventId?: unknown;
         roomKey?: unknown;
       };
-      expect(artifacts.deletedSyncStorePath).toBe(syncStorePath);
+      expect(artifacts.deletedSyncStoreRoot).toBe(accountDir);
       expect(artifacts.driverEventId).toBe("$driver-trigger");
       expect(artifacts.replyEventId).toBe("$sut-decrypted-reply");
       expect(artifacts.roomKey).toBe("e2ee-sync-state-loss-crypto-intact-recovery");
 
-      await expectPathMissing(syncStorePath);
-      expect(registerWithToken.mock.calls.at(0)?.[0]?.registrationToken).toBe("registration-token");
+      await expect(
+        readMatrixSyncStoreEntry({ rootDir: accountDir, stateDir: stateRoot }),
+      ).resolves.toBeUndefined();
+      expect(registerWithToken.mock.calls[0]?.[0]?.registrationToken).toBe("registration-token");
       expect(createPrivateRoom).toHaveBeenCalledWith({
         encrypted: true,
         inviteUserIds: ["@observer:matrix-qa.test", "@sync-gateway:matrix-qa.test"],

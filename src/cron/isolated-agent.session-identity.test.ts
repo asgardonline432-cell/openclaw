@@ -64,7 +64,7 @@ describe("runCronIsolatedAgentTurn session identity", () => {
     });
   });
 
-  it("uses agentId for workspace, session key, and store paths", async () => {
+  it("uses agentId for workspace and session identity", async () => {
     await withTempHome(async (home) => {
       const deps = makeDeps();
       const opsWorkspace = path.join(home, "ops-workspace");
@@ -128,7 +128,7 @@ describe("runCronIsolatedAgentTurn session identity", () => {
 
   it("starts a fresh session id for each cron run", async () => {
     await withTempHome(async (home) => {
-      await seedMainRouteSession(home, { lastProvider: "webchat", lastTo: "" });
+      await seedMainRouteSession(home, { lastChannel: "webchat", lastTo: "" });
       const deps = makeDeps();
       const runPingTurn = () =>
         runCronTurn(home, {
@@ -156,7 +156,7 @@ describe("runCronIsolatedAgentTurn session identity", () => {
         "agent:main:main": {
           sessionId: "main-session",
           updatedAt: Date.now(),
-          lastProvider: "webchat",
+          lastChannel: "webchat",
           lastTo: "",
         },
         "agent:main:cron:job-1": {

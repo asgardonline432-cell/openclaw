@@ -752,7 +752,7 @@ type ConnectResponse = {
   error?: { message?: string; code?: string; details?: unknown };
 };
 
-function resolveDefaultTestDeviceIdentityPath(params: {
+function resolveDefaultTestDeviceIdentityKey(params: {
   clientId: string;
   clientMode: string;
   platform: string;
@@ -765,8 +765,7 @@ function resolveDefaultTestDeviceIdentityPath(params: {
       "_",
     ),
   );
-  const suiteRoot = process.env.OPENCLAW_STATE_DIR ?? process.env.HOME ?? os.tmpdir();
-  return path.join(suiteRoot, "test-device-identities", `${safe}.json`);
+  return `test:${safe}`;
 }
 
 export async function readConnectChallengeNonce(
@@ -843,7 +842,7 @@ export async function connectReq(
       signedAt: number;
       nonce?: string;
     } | null;
-    deviceIdentityPath?: string;
+    deviceIdentityKey?: string;
     skipConnectChallengeNonce?: boolean;
     timeoutMs?: number;
   },
@@ -898,16 +897,16 @@ export async function connectReq(
     if (!connectChallengeNonce) {
       throw new Error("missing connect.challenge nonce");
     }
-    const identityPath =
-      opts?.deviceIdentityPath ??
-      resolveDefaultTestDeviceIdentityPath({
+    const identityKey =
+      opts?.deviceIdentityKey ??
+      resolveDefaultTestDeviceIdentityKey({
         clientId: client.id,
         clientMode: client.mode,
         platform: client.platform,
         deviceFamily: client.deviceFamily,
         role,
       });
-    const identity = loadOrCreateDeviceIdentity(identityPath);
+    const identity = loadOrCreateDeviceIdentity({ key: identityKey });
     const signedAtMs = Date.now();
     const payload = buildDeviceAuthPayloadV3({
       deviceId: identity.deviceId,

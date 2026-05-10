@@ -486,7 +486,6 @@ async function cleanupProvisionalSession(
   childSessionKey: string,
   options?: {
     emitLifecycleHooks?: boolean;
-    deleteTranscript?: boolean;
   },
 ): Promise<void> {
   try {
@@ -495,7 +494,6 @@ async function cleanupProvisionalSession(
       params: {
         key: childSessionKey,
         emitLifecycleHooks: options?.emitLifecycleHooks === true,
-        deleteTranscript: options?.deleteTranscript === true,
       },
       timeoutMs: SUBAGENT_CONTROL_GATEWAY_TIMEOUT_MS,
     });
@@ -507,11 +505,9 @@ async function cleanupProvisionalSession(
 async function cleanupFailedSpawnBeforeAgentStart(params: {
   childSessionKey: string;
   emitLifecycleHooks?: boolean;
-  deleteTranscript?: boolean;
 }): Promise<void> {
   await cleanupProvisionalSession(params.childSessionKey, {
     emitLifecycleHooks: params.emitLifecycleHooks,
-    deleteTranscript: params.deleteTranscript,
   });
 }
 
@@ -895,7 +891,6 @@ export async function spawnSubagentDirect(
   if (preparedSpawnContext.status === "error") {
     await cleanupProvisionalSession(childSessionKey, {
       emitLifecycleHooks: false,
-      deleteTranscript: true,
     });
     return {
       status: "error",
@@ -946,7 +941,7 @@ export async function spawnSubagentDirect(
       try {
         await callSubagentGateway({
           method: "sessions.delete",
-          params: { key: childSessionKey, deleteTranscript: true, emitLifecycleHooks: false },
+          params: { key: childSessionKey, emitLifecycleHooks: false },
           timeoutMs: SUBAGENT_CONTROL_GATEWAY_TIMEOUT_MS,
         });
       } catch {
@@ -996,7 +991,6 @@ export async function spawnSubagentDirect(
   if (preparedAttachments && preparedAttachments.status !== "ok") {
     await cleanupProvisionalSession(childSessionKey, {
       emitLifecycleHooks: threadBindingReady,
-      deleteTranscript: true,
     });
     return {
       status: preparedAttachments.status,
@@ -1044,7 +1038,6 @@ export async function spawnSubagentDirect(
     await cleanupFailedSpawnBeforeAgentStart({
       childSessionKey,
       emitLifecycleHooks: threadBindingReady,
-      deleteTranscript: true,
     });
     return {
       status: "error",
@@ -1063,7 +1056,6 @@ export async function spawnSubagentDirect(
     await cleanupFailedSpawnBeforeAgentStart({
       childSessionKey,
       emitLifecycleHooks: threadBindingReady,
-      deleteTranscript: true,
     });
     return {
       status: "error",
@@ -1162,7 +1154,6 @@ export async function spawnSubagentDirect(
         method: "sessions.delete",
         params: {
           key: childSessionKey,
-          deleteTranscript: true,
           emitLifecycleHooks,
         },
         timeoutMs: SUBAGENT_CONTROL_GATEWAY_TIMEOUT_MS,
@@ -1205,7 +1196,6 @@ export async function spawnSubagentDirect(
         method: "sessions.delete",
         params: {
           key: childSessionKey,
-          deleteTranscript: true,
           emitLifecycleHooks: threadBindingReady,
         },
         timeoutMs: SUBAGENT_CONTROL_GATEWAY_TIMEOUT_MS,

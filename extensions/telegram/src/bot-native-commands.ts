@@ -187,7 +187,6 @@ async function resolveTelegramCommandTranscriptScope(params: {
       sessionKey: resolved.normalizedKey,
       sessionEntry: resolved.existing,
       agentId: params.agentId,
-      topicId: params.threadId,
     });
     return { sessionId: scope.sessionId };
   } catch {

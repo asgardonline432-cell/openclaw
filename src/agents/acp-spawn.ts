@@ -1315,7 +1315,6 @@ export async function spawnAcpDirect(
       cfg,
       sessionKey,
       shouldDeleteSession: sessionCreated,
-      deleteTranscript: true,
       runtimeCloseHandle: initializedRuntime,
     });
     return createAcpSpawnFailure({
@@ -1388,7 +1387,6 @@ export async function spawnAcpDirect(
       cfg,
       sessionKey,
       shouldDeleteSession: true,
-      deleteTranscript: true,
     });
     return createAcpSpawnFailure({
       status: "error",

@@ -141,13 +141,13 @@ describe("CLI attempt execution", () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  async function writeStore(store: Record<string, SessionEntry>) {
-    for (const [sessionKey, entry] of Object.entries(store)) {
+  async function writeSessionEntries(entries: Record<string, SessionEntry>) {
+    for (const [sessionKey, entry] of Object.entries(entries)) {
       upsertSessionEntry({ agentId: "main", sessionKey, entry });
     }
   }
 
-  function readStore(): Record<string, SessionEntry> {
+  function readSessionEntries(): Record<string, SessionEntry> {
     return Object.fromEntries(
       listSessionEntries({ agentId: "main" }).map(({ sessionKey, entry }) => [sessionKey, entry]),
     );
@@ -214,7 +214,7 @@ describe("CLI attempt execution", () => {
       },
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
 
     runCliAgentMock
       .mockRejectedValueOnce(
@@ -260,7 +260,7 @@ describe("CLI attempt execution", () => {
     expect(runCliAgentMock.mock.calls[1]?.[0]?.cliSessionId).toBeUndefined();
     expect(sessionStore[sessionKey]?.cliSessionBindings?.["claude-cli"]).toBeUndefined();
 
-    const persisted = readStore();
+    const persisted = readSessionEntries();
     expect(persisted[sessionKey]?.cliSessionBindings?.["claude-cli"]).toBeUndefined();
   });
 
@@ -279,7 +279,7 @@ describe("CLI attempt execution", () => {
       },
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("fresh cli response"));
 
     await runClaudeCliAttempt({
@@ -295,7 +295,7 @@ describe("CLI attempt execution", () => {
     expect(runCliAgentMock.mock.calls.at(0)?.[0]?.cliSessionBinding).toBeUndefined();
     expect(sessionStore[sessionKey]?.cliSessionBindings?.["claude-cli"]).toBeUndefined();
 
-    const persisted = readStore();
+    const persisted = readSessionEntries();
     expect(persisted[sessionKey]?.cliSessionBindings?.["claude-cli"]).toBeUndefined();
   });
 
@@ -328,7 +328,7 @@ describe("CLI attempt execution", () => {
       },
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("resumed cli response"));
 
     await runClaudeCliAttempt({
@@ -359,7 +359,7 @@ describe("CLI attempt execution", () => {
       authProfileOverrideSource: "user",
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("codex cli response"));
 
     await runAgentAttempt({
@@ -401,7 +401,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
 
     await persistCliTurnTranscript({
       body: "persist this",
@@ -451,7 +451,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
 
     const result = makeCliResult("already mirrored");
     result.meta.executionTrace = {
@@ -506,7 +506,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
 
     const result = makeCliResult("same answer");
     result.meta.executionTrace = {
@@ -569,7 +569,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
 
     await persistCliTurnTranscript({
       body: [
@@ -604,7 +604,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("channel aware"));
 
     await runAgentAttempt({
@@ -653,7 +653,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("restricted cli"));
 
     await runAgentAttempt({
@@ -700,7 +700,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("canonical cli"));
 
     await runAgentAttempt({
@@ -753,7 +753,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("canonical codex cli"));
 
     await runAgentAttempt({
@@ -806,7 +806,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runEmbeddedPiAgentMock.mockResolvedValueOnce({
       meta: { durationMs: 1 },
     } satisfies EmbeddedPiRunResult);
@@ -884,7 +884,6 @@ describe("CLI attempt execution", () => {
       allowed: true,
       defaultLevel: "on" as const,
     };
-    await fs.writeFile(storePath, JSON.stringify(sessionStore, null, 2), "utf-8");
     runEmbeddedPiAgentMock.mockResolvedValueOnce({
       meta: { durationMs: 1 },
     } satisfies EmbeddedPiRunResult);
@@ -898,7 +897,6 @@ describe("CLI attempt execution", () => {
       sessionId: sessionEntry.sessionId,
       sessionKey,
       sessionAgentId: "main",
-      sessionFile: path.join(tmpDir, "session.jsonl"),
       workspaceDir: tmpDir,
       body: "follow up after approved exec",
       isFallbackRetry: false,
@@ -918,7 +916,6 @@ describe("CLI attempt execution", () => {
       onAgentEvent: vi.fn(),
       authProfileProvider: "openai",
       sessionStore,
-      storePath,
       sessionHasHistory: false,
     });
 
@@ -936,7 +933,7 @@ describe("CLI attempt execution", () => {
       updatedAt: Date.now(),
     };
     const sessionStore: Record<string, SessionEntry> = { [sessionKey]: sessionEntry };
-    await writeStore(sessionStore);
+    await writeSessionEntries(sessionStore);
     runCliAgentMock.mockResolvedValueOnce(makeCliResult("cleanup cli"));
 
     await runAgentAttempt({

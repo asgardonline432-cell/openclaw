@@ -241,8 +241,6 @@ export type SessionEntry = {
   /** Epoch ms cutoff paired with abortCutoffMessageSid when available. */
   abortCutoffTimestamp?: number;
   chatType?: SessionChatType;
-  /** @deprecated Legacy alias migrated to lastChannel by doctor session migration. */
-  lastProvider?: string;
   thinkingLevel?: string;
   fastMode?: boolean;
   verboseLevel?: string;
@@ -314,7 +312,7 @@ export type SessionEntry = {
   pendingFinalDeliveryIntentId?: string | null;
   /**
    * Whether totalTokens reflects a fresh context snapshot for the latest run.
-   * Undefined means legacy/unknown freshness; false forces consumers to treat
+   * Undefined means unknown freshness; false forces consumers to treat
    * totalTokens as stale/unknown for context-utilization displays.
    */
   totalTokensFresh?: boolean;

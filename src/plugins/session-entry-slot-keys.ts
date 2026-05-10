@@ -104,7 +104,6 @@ const SESSION_ENTRY_RESERVED_SLOT_KEY_LIST = [
   "origin",
   "deliveryContext",
   "lastChannel",
-  "lastProvider",
   "lastTo",
   "lastAccountId",
   "lastThreadId",

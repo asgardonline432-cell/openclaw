@@ -288,7 +288,6 @@ describe("subagent announce seam flow", () => {
       method: "sessions.delete",
       params: {
         key: "agent:main:subagent:test",
-        deleteTranscript: true,
         emitLifecycleHooks: false,
       },
       timeoutMs: 10_000,
@@ -319,7 +318,6 @@ describe("subagent announce seam flow", () => {
       method: "sessions.delete",
       params: {
         key: "agent:main:subagent:test",
-        deleteTranscript: true,
         emitLifecycleHooks: true,
       },
       timeoutMs: 10_000,

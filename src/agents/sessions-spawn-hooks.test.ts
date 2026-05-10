@@ -456,7 +456,6 @@ describe("sessions_spawn subagent lifecycle hooks", () => {
       deleteCall?.params,
       {
         key: event.targetSessionKey,
-        deleteTranscript: true,
         emitLifecycleHooks: false,
       },
       "delete params",
@@ -483,7 +482,6 @@ describe("sessions_spawn subagent lifecycle hooks", () => {
     expectFields(
       deleteCall?.params,
       {
-        deleteTranscript: true,
         emitLifecycleHooks: true,
       },
       "delete params",
@@ -531,7 +529,6 @@ describe("sessions_spawn subagent lifecycle hooks", () => {
       deleteCall?.params,
       {
         key: result.childSessionKey,
-        deleteTranscript: true,
         emitLifecycleHooks: true,
       },
       "delete params",

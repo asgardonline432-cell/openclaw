@@ -27,8 +27,6 @@ export async function appendSessionTranscriptMessage(params: {
   now?: number;
   sessionId: string;
   cwd?: string;
-  useRawWhenLinear?: boolean;
-  config?: unknown;
 }): Promise<{ messageId: string }> {
   const scope = normalizeRequiredScope(params);
   const sessionVersion = await loadCurrentSessionVersion();

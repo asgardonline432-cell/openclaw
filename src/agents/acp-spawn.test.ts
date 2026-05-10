@@ -766,8 +766,6 @@ describe("spawnAcpDirect", () => {
         }),
       }),
     );
-    for (const call of hoisted.upsertSessionEntryMock.mock.calls) {
-    }
   });
 
   it("allows ACP resume IDs recorded for the requester session", async () => {
