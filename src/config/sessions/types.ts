@@ -342,9 +342,7 @@ export type SessionEntry = {
   memoryFlushAt?: number;
   memoryFlushCompactionCount?: number;
   memoryFlushContextHash?: string;
-  cliSessionIds?: Record<string, string>;
   cliSessionBindings?: Record<string, CliSessionBinding>;
-  claudeCliSessionId?: string;
   label?: string;
   displayName?: string;
   channel?: string;
