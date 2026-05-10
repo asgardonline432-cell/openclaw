@@ -525,6 +525,68 @@ describe("installPluginFromNpmSpec e2e", () => {
     expect(lock.packages?.["node_modules/openclaw"]).toBeUndefined();
   });
 
+  it("skips reinstall when the managed npm package already satisfies the requested version", async () => {
+    const rootDir = await makeTempDir("npm-plugin-satisfying-installed-e2e");
+    const npmRoot = path.join(rootDir, "managed-npm");
+    const packageName = `satisfying-plugin-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const versions = [
+      await packPlugin({ packageName, pluginId: packageName, version: "1.0.0", rootDir }),
+      await packPlugin({ packageName, pluginId: packageName, version: "2.0.0", rootDir }),
+    ];
+    const registry = await startStaticRegistry([{ packageName, latest: "2.0.0", versions }]);
+    process.env.NPM_CONFIG_REGISTRY = registry;
+    process.env.npm_config_registry = registry;
+
+    await fs.mkdir(npmRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(npmRoot, "package.json"),
+      `${JSON.stringify({ private: true, dependencies: { [packageName]: "2.0.0" } }, null, 2)}\n`,
+      "utf8",
+    );
+    await execFileAsync(
+      "npm",
+      ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel=error"],
+      {
+        cwd: npmRoot,
+        env: {
+          ...process.env,
+          NPM_CONFIG_REGISTRY: registry,
+          npm_config_registry: registry,
+        },
+        timeout: 120_000,
+      },
+    );
+
+    const logMessages: string[] = [];
+    const result = await installPluginFromNpmSpec({
+      spec: `${packageName}@1.0.0`,
+      npmDir: npmRoot,
+      logger: { info: (message) => logMessages.push(message), warn: () => {} },
+      timeoutMs: 120_000,
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    expect(result.pluginId).toBe(packageName);
+    expect(result.version).toBe("2.0.0");
+    expect(result.extensions).toEqual(["./dist/index.js"]);
+    expect(result.npmResolution?.version).toBe("1.0.0");
+    expect(logMessages).toContain(
+      `Plugin ${packageName}@2.0.0 already installed (requested 1.0.0); skipping.`,
+    );
+
+    const installedManifest = JSON.parse(
+      await fs.readFile(path.join(result.targetDir, "package.json"), "utf8"),
+    ) as { version?: string };
+    expect(installedManifest.version).toBe("2.0.0");
+
+    const manifest = JSON.parse(await fs.readFile(path.join(npmRoot, "package.json"), "utf8")) as {
+      dependencies?: Record<string, string>;
+    };
+    expect(manifest.dependencies?.[packageName]).toBe("2.0.0");
+  });
+
   it("pins a mutable npm tag to the version resolved before install", async () => {
     const rootDir = await makeTempDir("npm-plugin-e2e");
     const npmRoot = path.join(rootDir, "managed-npm");

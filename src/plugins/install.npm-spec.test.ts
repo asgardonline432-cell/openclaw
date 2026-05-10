@@ -1167,20 +1167,24 @@ describe("installPluginFromNpmSpec", () => {
   });
 
   it("skips reinstall when installed version is newer than or equal to requested", async () => {
-    for (const [installedVersion, requestedVersion] of [
-      ["0.0.2", "0.0.1"],
-      ["0.0.1", "0.0.1"],
+    for (const { installedVersion, requestedVersion, trustedSourceLinkedOfficialInstall } of [
+      { installedVersion: "0.0.2", requestedVersion: "0.0.1" },
+      { installedVersion: "0.0.1", requestedVersion: "0.0.1" },
+      {
+        installedVersion: "2026.5.3-1",
+        requestedVersion: "2026.5.3",
+        trustedSourceLinkedOfficialInstall: true,
+      },
     ]) {
       runCommandWithTimeoutMock.mockReset();
       const stateDir = suiteTempRootTracker.makeTempDir();
       const npmRoot = path.join(stateDir, "npm");
-      const installRoot = path.join(npmRoot, "node_modules", "@openclaw", "voice-call");
-      fs.mkdirSync(installRoot, { recursive: true });
-      fs.writeFileSync(
-        path.join(installRoot, "package.json"),
-        JSON.stringify({ name: "@openclaw/voice-call", version: installedVersion }),
-        "utf-8",
-      );
+      const installRoot = writeInstalledNpmPlugin({
+        npmRoot,
+        packageName: "@openclaw/voice-call",
+        version: installedVersion,
+        pluginId: "voice-call",
+      });
       mockNpmViewMetadataResult(runCommandWithTimeoutMock, {
         name: "@openclaw/voice-call",
         version: requestedVersion,
@@ -1192,16 +1196,131 @@ describe("installPluginFromNpmSpec", () => {
         spec: `@openclaw/voice-call@${requestedVersion}`,
         npmDir: npmRoot,
         mode: "install",
+        ...(trustedSourceLinkedOfficialInstall ? { trustedSourceLinkedOfficialInstall } : {}),
         logger: { info: () => {}, warn: () => {} },
       });
 
       expect(result.ok).toBe(true);
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      expect(result.pluginId).toBe("voice-call");
+      expect(result.targetDir).toBe(installRoot);
+      expect(result.version).toBe(installedVersion);
+      expect(result.extensions).toEqual(["./dist/index.js"]);
       expect(
         runCommandWithTimeoutMock.mock.calls.some(
           (call) => Array.isArray(call[0]) && call[0][0] === "npm" && call[0][1] === "install",
         ),
       ).toBe(false);
     }
+  });
+
+  it("validates an existing satisfying npm package before skipping reinstall", async () => {
+    const stateDir = suiteTempRootTracker.makeTempDir();
+    const npmRoot = path.join(stateDir, "npm");
+    const installRoot = path.join(npmRoot, "node_modules", "@openclaw", "voice-call");
+    fs.mkdirSync(installRoot, { recursive: true });
+    fs.writeFileSync(
+      path.join(installRoot, "package.json"),
+      JSON.stringify({ name: "@openclaw/voice-call", version: "0.0.2" }),
+      "utf-8",
+    );
+    mockNpmViewMetadataResult(runCommandWithTimeoutMock, {
+      name: "@openclaw/voice-call",
+      version: "0.0.1",
+      integrity: "sha512-plugin-test",
+      shasum: "pluginshasum",
+    });
+
+    const result = await installPluginFromNpmSpec({
+      spec: "@openclaw/voice-call@0.0.1",
+      npmDir: npmRoot,
+      mode: "install",
+      logger: { info: () => {}, warn: () => {} },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe(PLUGIN_INSTALL_ERROR_CODE.MISSING_OPENCLAW_EXTENSIONS);
+    }
+    expect(
+      runCommandWithTimeoutMock.mock.calls.some(
+        (call) => Array.isArray(call[0]) && call[0][0] === "npm" && call[0][1] === "install",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not mutate peer links while dry-running a cached npm install", async () => {
+    const stateDir = suiteTempRootTracker.makeTempDir();
+    const npmRoot = path.join(stateDir, "npm");
+    const installRoot = writeInstalledNpmPlugin({
+      npmRoot,
+      packageName: "@openclaw/voice-call",
+      version: "0.0.2",
+      pluginId: "voice-call",
+      peerDependencies: { openclaw: "^2026.0.0" },
+    });
+    mockNpmViewMetadataResult(runCommandWithTimeoutMock, {
+      name: "@openclaw/voice-call",
+      version: "0.0.1",
+      integrity: "sha512-plugin-test",
+      shasum: "pluginshasum",
+    });
+
+    const result = await installPluginFromNpmSpec({
+      spec: "@openclaw/voice-call@0.0.1",
+      npmDir: npmRoot,
+      mode: "install",
+      dryRun: true,
+      logger: { info: () => {}, warn: () => {} },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fs.existsSync(path.join(installRoot, "node_modules", "openclaw"))).toBe(false);
+    expect(
+      runCommandWithTimeoutMock.mock.calls.some(
+        (call) => Array.isArray(call[0]) && call[0][0] === "npm" && call[0][1] === "install",
+      ),
+    ).toBe(false);
+    expect(
+      runCommandWithTimeoutMock.mock.calls.some(
+        (call) => Array.isArray(call[0]) && call[0][0] === "npm" && call[0][1] === "uninstall",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps normal SemVer ordering for untrusted npm correction-looking prereleases", async () => {
+    const stateDir = suiteTempRootTracker.makeTempDir();
+    const npmRoot = path.join(stateDir, "npm");
+    writeInstalledNpmPlugin({
+      npmRoot,
+      packageName: "third-party-plugin",
+      version: "2026.5.3-1",
+    });
+    mockNpmViewMetadataResult(runCommandWithTimeoutMock, {
+      name: "third-party-plugin",
+      version: "2026.5.3",
+      integrity: "sha512-plugin-test",
+      shasum: "pluginshasum",
+    });
+
+    const result = await installPluginFromNpmSpec({
+      spec: "third-party-plugin@2026.5.3",
+      npmDir: npmRoot,
+      mode: "install",
+      logger: { info: () => {}, warn: () => {} },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("plugin already exists");
+    }
+    expect(
+      runCommandWithTimeoutMock.mock.calls.some(
+        (call) => Array.isArray(call[0]) && call[0][0] === "npm" && call[0][1] === "install",
+      ),
+    ).toBe(false);
   });
 
   it("allows duplicate npm installs in update mode", async () => {

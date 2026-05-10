@@ -177,11 +177,43 @@ function isNpmPackageNotFoundMessage(error: string): boolean {
 }
 
 function compareNpmSemver(a: string, b: string): number {
-  const releaseCmp = compareOpenClawReleaseVersions(a, b);
-  if (releaseCmp !== null) {
-    return releaseCmp;
+  return compareNpmVersions(a, b, { openClawReleaseOrdering: true }) ?? 0;
+}
+
+function compareNpmVersions(
+  a: string,
+  b: string,
+  options: { openClawReleaseOrdering?: boolean } = {},
+): number | null {
+  if (options.openClawReleaseOrdering) {
+    const releaseCmp = compareOpenClawReleaseVersions(a, b);
+    if (releaseCmp !== null) {
+      return releaseCmp;
+    }
   }
-  return compareComparableSemver(parseComparableSemver(a), parseComparableSemver(b)) ?? 0;
+  return compareComparableSemver(parseComparableSemver(a), parseComparableSemver(b));
+}
+
+async function readInstalledPackageIdentity(
+  packageJsonPath: string,
+): Promise<{ name: string; version: string } | null> {
+  return await fs
+    .readFile(packageJsonPath, "utf8")
+    .then((raw) => {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+      const record = parsed as { name?: unknown; version?: unknown };
+      if (typeof record.name !== "string" || typeof record.version !== "string") {
+        return null;
+      }
+      return {
+        name: record.name,
+        version: record.version,
+      };
+    })
+    .catch(() => null);
 }
 
 type TrustedOfficialPrereleaseResolution =
@@ -451,43 +483,43 @@ async function installPluginFromManagedNpmRoot(
   const npmRoot = params.npmDir ? resolveUserPath(params.npmDir) : resolveDefaultPluginNpmDir();
   const installRoot = path.join(npmRoot, "node_modules", params.packageName);
 
-  // When the wizard uses mode="install" but the plugin dir already exists, check whether
-  // the installed version already satisfies the requested version before erroring.
-  // If installed >= requested, skip reinstall silently.
   if (mode === "install" && params.npmResolution.version) {
-    const installedPkgJson = path.join(installRoot, "package.json");
-    const installedVersion = await fs
-      .readFile(installedPkgJson, "utf8")
-      .then((raw) => {
-        const parsed = JSON.parse(raw) as unknown;
-        return parsed &&
-          typeof parsed === "object" &&
-          "version" in parsed &&
-          typeof (parsed as { version: unknown }).version === "string"
-          ? (parsed as { version: string }).version
-          : null;
-      })
-      .catch(() => null);
-    if (installedVersion) {
-      const installedParsed = parseComparableSemver(installedVersion);
-      const requestedParsed = parseComparableSemver(params.npmResolution.version);
-      if (
-        installedParsed &&
-        requestedParsed &&
-        (compareComparableSemver(installedParsed, requestedParsed) ?? -1) >= 0
-      ) {
+    const installedPackage = await readInstalledPackageIdentity(
+      path.join(installRoot, "package.json"),
+    );
+    const versionCompare = installedPackage
+      ? compareNpmVersions(installedPackage.version, params.npmResolution.version, {
+          openClawReleaseOrdering: params.trustedSourceLinkedOfficialInstall === true,
+        })
+      : null;
+    if (
+      installedPackage?.name === params.packageName &&
+      versionCompare !== null &&
+      versionCompare >= 0
+    ) {
+      const existingInstall = await installPluginFromInstalledPackageDir({
+        dangerouslyForceUnsafeInstall: params.dangerouslyForceUnsafeInstall,
+        trustedSourceLinkedOfficialInstall: params.trustedSourceLinkedOfficialInstall,
+        packageDir: installRoot,
+        dependencyScanRootDir: npmRoot,
+        logger,
+        mode: "install",
+        dryRun,
+        timeoutMs,
+        expectedPluginId,
+        installPolicyRequest: params.installPolicyRequest,
+      });
+      if (existingInstall.ok) {
         logger.info?.(
-          `Plugin ${params.packageName}@${installedVersion} already installed (requested ${params.npmResolution.version}); skipping.`,
+          `Plugin ${params.packageName}@${installedPackage.version} already installed (requested ${params.npmResolution.version}); skipping.`,
         );
         return {
-          ok: true,
-          pluginId: expectedPluginId ?? params.packageName,
-          targetDir: installRoot,
-          extensions: [],
+          ...existingInstall,
           npmResolution: params.npmResolution,
           ...(params.integrityDrift ? { integrityDrift: params.integrityDrift } : {}),
         };
       }
+      return existingInstall;
     }
   }
 
@@ -1238,6 +1270,7 @@ async function scanAndLinkInstalledPackage(params: {
   pluginId: string;
   peerDependencies: Record<string, string>;
   logger: PluginInstallLogger;
+  dryRun?: boolean;
 }): Promise<Extract<InstallPluginResult, { ok: false }> | null> {
   const scanResult = await runInstallSourceScan({
     subject: `Plugin "${params.pluginId}"`,
@@ -1254,6 +1287,9 @@ async function scanAndLinkInstalledPackage(params: {
   if (scanResult) {
     return scanResult;
   }
+  if (params.dryRun) {
+    return null;
+  }
   await linkOpenClawPeerDependencies({
     installedDir: params.installedDir,
     peerDependencies: params.peerDependencies,
@@ -1269,7 +1305,7 @@ export async function installPluginFromInstalledPackageDir(
   } & PackageInstallCommonParams,
 ): Promise<InstallPluginResult> {
   const runtime = await loadPluginInstallRuntime();
-  const { logger } = runtime.resolveTimedInstallModeOptions(params, defaultLogger);
+  const { logger, dryRun } = runtime.resolveTimedInstallModeOptions(params, defaultLogger);
   const validated = await validatePackagePluginInstallSource({
     runtime,
     packageDir: params.packageDir,
@@ -1291,6 +1327,7 @@ export async function installPluginFromInstalledPackageDir(
     pluginId: validated.plugin.pluginId,
     peerDependencies: validated.plugin.peerDependencies,
     logger,
+    dryRun,
   });
   if (postInstallError) {
     return postInstallError;
