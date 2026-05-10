@@ -1315,7 +1315,7 @@ describe("runCodexAppServerAttempt", () => {
         ),
       { interval: 1 },
     );
-    expect(queueActiveRunMessageForTest("session-1", "after timeout")).toBe(false);
+    expect(queueActiveRunMessageForTest("session", "after timeout")).toBe(false);
   });
 
   it("closes the app-server client when the active turn exceeds the attempt timeout", async () => {
@@ -1652,7 +1652,7 @@ describe("runCodexAppServerAttempt", () => {
         ),
       { interval: 1 },
     );
-    expect(queueActiveRunMessageForTest("session-1", "after silent turn")).toBe(false);
+    expect(queueActiveRunMessageForTest("session", "after silent turn")).toBe(false);
   });
 
   it("does not treat global rate-limit notifications as turn progress", async () => {
@@ -2156,7 +2156,7 @@ describe("runCodexAppServerAttempt", () => {
       },
       expect.objectContaining({
         runId: "run-1",
-        sessionId: "session-1",
+        sessionId,
       }),
     );
     expect(harness.requests).toEqual(
@@ -2267,7 +2267,7 @@ describe("runCodexAppServerAttempt", () => {
         [
           expect.objectContaining({
             runId: "run-1",
-            sessionId: "session-1",
+            sessionId,
             provider: "codex",
             model: "gpt-5.4-codex",
             prompt: "hello",
@@ -2277,7 +2277,7 @@ describe("runCodexAppServerAttempt", () => {
           }),
           expect.objectContaining({
             runId: "run-1",
-            sessionId: "session-1",
+            sessionId,
             sessionKey: params.sessionKey,
           }),
         ],
@@ -2353,7 +2353,7 @@ describe("runCodexAppServerAttempt", () => {
     expect(llmOutput).toHaveBeenCalledWith(
       expect.objectContaining({
         runId: "run-1",
-        sessionId: "session-1",
+        sessionId,
         provider: "codex",
         model: "gpt-5.4-codex",
         resolvedRef: "codex/gpt-5.4-codex",
@@ -2365,7 +2365,7 @@ describe("runCodexAppServerAttempt", () => {
       }),
       expect.objectContaining({
         runId: "run-1",
-        sessionId: "session-1",
+        sessionId,
       }),
     );
     expect(agentEnd).toHaveBeenCalledWith(
@@ -2378,7 +2378,7 @@ describe("runCodexAppServerAttempt", () => {
       }),
       expect.objectContaining({
         runId: "run-1",
-        sessionId: "session-1",
+        sessionId,
       }),
     );
   });
@@ -2887,7 +2887,7 @@ describe("runCodexAppServerAttempt", () => {
     await harness.waitForMethod("turn/start");
     const startRequest = harness.requests.find((request) => request.method === "thread/start");
     const relayId = extractRelayIdFromThreadRequest(startRequest?.params);
-    expect(abortAgentHarnessRun("session-1")).toBe(true);
+    expect(abortAgentHarnessRun(sessionId)).toBe(true);
 
     const result = await run;
 
@@ -2991,7 +2991,7 @@ describe("runCodexAppServerAttempt", () => {
       }),
       expect.objectContaining({
         runId: "run-1",
-        sessionId: "session-1",
+        sessionId,
       }),
     );
   });
@@ -3033,7 +3033,7 @@ describe("runCodexAppServerAttempt", () => {
         resolvedRef: "codex/gpt-5.4-codex",
         harnessId: "codex",
         runId: "run-1",
-        sessionId: "session-1",
+        sessionId,
       }),
       expect.any(Object),
     );
@@ -3061,7 +3061,7 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     await waitForMethod("turn/start");
-    expect(abortAgentHarnessRun("session-1")).toBe(true);
+    expect(abortAgentHarnessRun("session")).toBe(true);
 
     const result = await run;
     expect(result.aborted).toBe(true);
@@ -3082,11 +3082,11 @@ describe("runCodexAppServerAttempt", () => {
     });
     await waitForMethod("turn/start");
 
-    expect(queueActiveRunMessageForTest("session-1", "more context", { debounceMs: 1 })).toBe(true);
+    expect(queueActiveRunMessageForTest("session", "more context", { debounceMs: 1 })).toBe(true);
     await vi.waitFor(() => expect(requests.map((entry) => entry.method)).toContain("turn/steer"), {
       interval: 1,
     });
-    expect(abortAgentHarnessRun("session-1")).toBe(true);
+    expect(abortAgentHarnessRun("session")).toBe(true);
     await vi.waitFor(
       () => expect(requests.map((entry) => entry.method)).toContain("turn/interrupt"),
       { interval: 1 },
@@ -3128,8 +3128,8 @@ describe("runCodexAppServerAttempt", () => {
     const run = runCodexAppServerAttempt(createParams("session", path.join(tempDir, "workspace")));
     await waitForMethod("turn/start");
 
-    expect(queueActiveRunMessageForTest("session-1", "first", { debounceMs: 5 })).toBe(true);
-    expect(queueActiveRunMessageForTest("session-1", "second", { debounceMs: 5 })).toBe(true);
+    expect(queueActiveRunMessageForTest("session", "first", { debounceMs: 5 })).toBe(true);
+    expect(queueActiveRunMessageForTest("session", "second", { debounceMs: 5 })).toBe(true);
 
     await vi.waitFor(
       () =>
@@ -3159,7 +3159,7 @@ describe("runCodexAppServerAttempt", () => {
     const run = runCodexAppServerAttempt(createParams("session", path.join(tempDir, "workspace")));
     await waitForMethod("turn/start");
 
-    expect(queueActiveRunMessageForTest("session-1", "late steer", { debounceMs: 30_000 })).toBe(
+    expect(queueActiveRunMessageForTest("session", "late steer", { debounceMs: 30_000 })).toBe(
       true,
     );
 
@@ -3184,12 +3184,10 @@ describe("runCodexAppServerAttempt", () => {
     const run = runCodexAppServerAttempt(createParams("session", path.join(tempDir, "workspace")));
     await waitForMethod("turn/start");
 
-    expect(
-      queueActiveRunMessageForTest("session-1", "first", { steeringMode: "one-at-a-time" }),
-    ).toBe(true);
-    expect(
-      queueActiveRunMessageForTest("session-1", "second", { steeringMode: "one-at-a-time" }),
-    ).toBe(true);
+    expect(queueActiveRunMessageForTest("session", "first", { steeringMode: "one-at-a-time" }))
+      .toBe(true);
+    expect(queueActiveRunMessageForTest("session", "second", { steeringMode: "one-at-a-time" }))
+      .toBe(true);
 
     await vi.waitFor(
       () =>
@@ -3286,7 +3284,7 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     await vi.waitFor(() => expect(params.onBlockReply).toHaveBeenCalledTimes(1), { interval: 1 });
-    expect(queueActiveRunMessageForTest("session-1", "2")).toBe(true);
+    expect(queueActiveRunMessageForTest("session", "2")).toBe(true);
     await expect(response).resolves.toEqual({
       answers: { mode: { answers: ["Deep"] } },
     });
@@ -3356,10 +3354,14 @@ describe("runCodexAppServerAttempt", () => {
         {
           method: "turn/start",
           params: expect.objectContaining({
-            input: [
-              { type: "text", text: "hello", text_elements: [] },
+            input: expect.arrayContaining([
+              expect.objectContaining({
+                type: "text",
+                text: expect.stringContaining("hello"),
+                text_elements: [],
+              }),
               { type: "image", url: "data:image/png;base64,aW1hZ2UtYnl0ZXM=" },
-            ],
+            ]),
           }),
         },
       ]),
@@ -4246,7 +4248,7 @@ describe("runCodexAppServerAttempt", () => {
     await expect(runCodexAppServerAttempt(params, { startupTimeoutFloorMs: 1 })).rejects.toThrow(
       "codex app-server startup timed out",
     );
-    expect(queueActiveRunMessageForTest("session-1", "after timeout")).toBe(false);
+    expect(queueActiveRunMessageForTest("session", "after timeout")).toBe(false);
   });
 
   it("passes the selected auth profile into app-server startup", async () => {
@@ -4302,7 +4304,7 @@ describe("runCodexAppServerAttempt", () => {
     params.timeoutMs = 1;
 
     await expect(runCodexAppServerAttempt(params)).rejects.toThrow("turn/start timed out");
-    expect(queueActiveRunMessageForTest("session-1", "after timeout")).toBe(false);
+    expect(queueActiveRunMessageForTest("session", "after timeout")).toBe(false);
   });
 
   it("keeps extended history enabled when resuming a bound Codex thread", async () => {
@@ -4453,8 +4455,7 @@ describe("runCodexAppServerAttempt", () => {
       dynamicTools: [createMessageDynamicTool("Send and manage messages.")],
       appServer,
     });
-    const fingerprint = (await readCodexAppServerBinding({ sessionKey: params.sessionKey }))
-      ?.dynamicToolsFingerprint;
+    const fingerprint = (await readCodexAppServerBinding(sessionId))?.dynamicToolsFingerprint;
     await startOrResumeThread({
       client: { request } as never,
       params,
@@ -4470,9 +4471,7 @@ describe("runCodexAppServerAttempt", () => {
       appServer,
     });
 
-    await expect(
-      readCodexAppServerBinding({ sessionKey: params.sessionKey }),
-    ).resolves.toMatchObject({
+    await expect(readCodexAppServerBinding(sessionId)).resolves.toMatchObject({
       dynamicToolsFingerprint: fingerprint,
       threadId: "thread-1",
     });
