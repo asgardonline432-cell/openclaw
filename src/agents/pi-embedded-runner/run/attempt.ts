@@ -945,7 +945,6 @@ export async function runEmbeddedAttempt(
       isRawModelRun,
       toolsAllow: params.toolsAllow,
     });
-    const toolsEnabled = supportsModelTools(params.model);
     const toolSearchControlsEnabledForRun =
       toolsEnabled &&
       params.disableTools !== true &&
