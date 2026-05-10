@@ -651,11 +651,13 @@ function rewriteSessionModelPair(params: {
 
 function clearStaleCodexFallbackNotice(entry: SessionEntry): boolean {
   if (
+    !isOpenAICodexModelRef(entry.fallbackOverrideSelectedModel) &&
     !isOpenAICodexModelRef(entry.fallbackNoticeSelectedModel) &&
     !isOpenAICodexModelRef(entry.fallbackNoticeActiveModel)
   ) {
     return false;
   }
+  delete entry.fallbackOverrideSelectedModel;
   delete entry.fallbackNoticeSelectedModel;
   delete entry.fallbackNoticeActiveModel;
   delete entry.fallbackNoticeReason;
@@ -721,6 +723,7 @@ function scanCodexSessionStoreRoutes(store: Record<string, SessionEntry>): strin
       normalizeString(entry.providerOverride) === "openai-codex" ||
       isOpenAICodexModelRef(entry.model) ||
       isOpenAICodexModelRef(entry.modelOverride) ||
+      isOpenAICodexModelRef(entry.fallbackOverrideSelectedModel) ||
       isOpenAICodexModelRef(entry.fallbackNoticeSelectedModel) ||
       isOpenAICodexModelRef(entry.fallbackNoticeActiveModel);
     return hasLegacyRoute ? [sessionKey] : [];

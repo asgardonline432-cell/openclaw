@@ -257,6 +257,7 @@ describe("collectCodexRouteWarnings", () => {
         authProfileOverride: "openai-codex:default",
         authProfileOverrideSource: "auto",
         authProfileOverrideCompactionCount: 2,
+        fallbackOverrideSelectedModel: "openai-codex/gpt-5.5",
         fallbackNoticeSelectedModel: "openai-codex/gpt-5.5",
         fallbackNoticeActiveModel: "openai-codex/gpt-5.4",
         fallbackNoticeReason: "rate-limit",
@@ -285,11 +286,39 @@ describe("collectCodexRouteWarnings", () => {
     expect(store.main.authProfileOverrideCompactionCount).toBe(2);
     expect(store.main.agentHarnessId).toBeUndefined();
     expect(store.main.agentRuntimeOverride).toBeUndefined();
+    expect(store.main.fallbackOverrideSelectedModel).toBeUndefined();
     expect(store.main.fallbackNoticeSelectedModel).toBeUndefined();
     expect(store.main.fallbackNoticeActiveModel).toBeUndefined();
     expect(store.main.fallbackNoticeReason).toBeUndefined();
     expect(store.other.updatedAt).toBe(2);
     expect(store.other.agentHarnessId).toBe("codex");
+  });
+
+  it("repairs durable fallback origin when notice metadata is already clear", () => {
+    const store: Record<string, SessionEntry> = {
+      main: {
+        sessionId: "s1",
+        updatedAt: 1,
+        providerOverride: "openrouter",
+        modelOverride: "openai/gpt-5.4",
+        modelOverrideSource: "auto",
+        agentHarnessId: "codex",
+        fallbackOverrideSelectedModel: "openai-codex/gpt-5.5",
+      },
+    };
+
+    const result = repairCodexSessionStoreRoutes({
+      store,
+      now: 123,
+    });
+
+    expect(result).toEqual({ changed: true, sessionKeys: ["main"] });
+    expect(store.main.updatedAt).toBe(123);
+    expect(store.main.providerOverride).toBe("openrouter");
+    expect(store.main.modelOverride).toBe("openai/gpt-5.4");
+    expect(store.main.modelOverrideSource).toBe("auto");
+    expect(store.main.fallbackOverrideSelectedModel).toBeUndefined();
+    expect(store.main.agentHarnessId).toBeUndefined();
   });
 
   it("keeps Codex session auth pins while leaving runtime unpinned", () => {

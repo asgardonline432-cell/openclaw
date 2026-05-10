@@ -80,6 +80,7 @@ export async function resetReplyRunSession(params: {
     cacheWrite: undefined,
     contextTokens: undefined,
     systemPromptReport: undefined,
+    fallbackOverrideSelectedModel: undefined,
     fallbackNoticeSelectedModel: undefined,
     fallbackNoticeActiveModel: undefined,
     fallbackNoticeReason: undefined,

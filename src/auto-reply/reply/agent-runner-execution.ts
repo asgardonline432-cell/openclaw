@@ -58,6 +58,7 @@ import {
 } from "../../utils/message-channel.js";
 import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
+import { formatProviderModelRef } from "../model-runtime.js";
 import { markReplyPayloadForSourceSuppressionDelivery } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
 import type { VerboseLevel } from "../thinking.js";
@@ -130,6 +131,7 @@ type FallbackSelectionState = Pick<
   | "providerOverride"
   | "modelOverride"
   | "modelOverrideSource"
+  | "fallbackOverrideSelectedModel"
   | "authProfileOverride"
   | "authProfileOverrideSource"
   | "authProfileOverrideCompactionCount"
@@ -139,6 +141,7 @@ const FALLBACK_SELECTION_STATE_KEYS = [
   "providerOverride",
   "modelOverride",
   "modelOverrideSource",
+  "fallbackOverrideSelectedModel",
   "authProfileOverride",
   "authProfileOverrideSource",
   "authProfileOverrideCompactionCount",
@@ -165,6 +168,13 @@ function setFallbackSelectionStateField(
     case "modelOverrideSource":
       if (entry.modelOverrideSource !== value) {
         entry.modelOverrideSource = value as SessionEntry["modelOverrideSource"];
+        return true;
+      }
+      return false;
+    case "fallbackOverrideSelectedModel":
+      if (entry.fallbackOverrideSelectedModel !== value) {
+        entry.fallbackOverrideSelectedModel =
+          value as SessionEntry["fallbackOverrideSelectedModel"];
         return true;
       }
       return false;
@@ -196,6 +206,7 @@ function snapshotFallbackSelectionState(entry: SessionEntry): FallbackSelectionS
     providerOverride: entry.providerOverride,
     modelOverride: entry.modelOverride,
     modelOverrideSource: entry.modelOverrideSource,
+    fallbackOverrideSelectedModel: entry.fallbackOverrideSelectedModel,
     authProfileOverride: entry.authProfileOverride,
     authProfileOverrideSource: entry.authProfileOverrideSource,
     authProfileOverrideCompactionCount: entry.authProfileOverrideCompactionCount,
@@ -205,6 +216,7 @@ function snapshotFallbackSelectionState(entry: SessionEntry): FallbackSelectionS
 function buildFallbackSelectionState(params: {
   provider: string;
   model: string;
+  fallbackOverrideSelectedModel?: string;
   authProfileId?: string;
   authProfileIdSource?: "auto" | "user";
 }): FallbackSelectionState {
@@ -212,6 +224,7 @@ function buildFallbackSelectionState(params: {
     providerOverride: params.provider,
     modelOverride: params.model,
     modelOverrideSource: "auto",
+    fallbackOverrideSelectedModel: params.fallbackOverrideSelectedModel,
     authProfileOverride: params.authProfileId,
     authProfileOverrideSource: params.authProfileId ? params.authProfileIdSource : undefined,
     authProfileOverrideCompactionCount: undefined,
@@ -229,9 +242,24 @@ export function applyFallbackCandidateSelectionToEntry(params: {
     return { updated: false };
   }
   const scopedAuthProfile = resolveRunAuthProfile(params.run, params.provider);
+  const entryProviderOverride = normalizeOptionalString(params.entry.providerOverride);
+  const entryModelOverride = normalizeOptionalString(params.entry.modelOverride);
+  const runProvider = normalizeOptionalString(params.run.provider);
+  const runModel = normalizeOptionalString(params.run.model);
+  const isAdvancingExistingAutoFallback =
+    params.entry.modelOverrideSource === "auto" &&
+    Boolean(entryProviderOverride) &&
+    Boolean(entryModelOverride) &&
+    entryProviderOverride === runProvider &&
+    entryModelOverride === runModel;
+  const fallbackOverrideSelectedModel = isAdvancingExistingAutoFallback
+    ? (normalizeOptionalString(params.entry.fallbackOverrideSelectedModel) ??
+      normalizeOptionalString(params.entry.fallbackNoticeSelectedModel))
+    : formatProviderModelRef(params.run.provider, params.run.model);
   const nextState = buildFallbackSelectionState({
     provider: params.provider,
     model: params.model,
+    fallbackOverrideSelectedModel,
     authProfileId: scopedAuthProfile.authProfileId,
     authProfileIdSource: scopedAuthProfile.authProfileIdSource,
   });

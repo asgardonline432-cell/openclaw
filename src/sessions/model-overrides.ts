@@ -112,14 +112,22 @@ export function applyModelOverrideToSessionEntry(params: {
     }
   }
 
-  // Clear stale fallback notice when the user explicitly switches models.
-  if (updated) {
+  const fallbackMetadataPresent =
+    entry.fallbackOverrideSelectedModel !== undefined ||
+    entry.fallbackNoticeSelectedModel !== undefined ||
+    entry.fallbackNoticeActiveModel !== undefined ||
+    entry.fallbackNoticeReason !== undefined;
+
+  // Clear stale fallback metadata when the session model selection is rewritten.
+  if (updated || fallbackMetadataPresent) {
     if (selectionUpdated && params.markLiveSwitchPending) {
       entry.liveModelSwitchPending = true;
     }
+    delete entry.fallbackOverrideSelectedModel;
     delete entry.fallbackNoticeSelectedModel;
     delete entry.fallbackNoticeActiveModel;
     delete entry.fallbackNoticeReason;
+    updated = true;
     entry.updatedAt = Date.now();
   }
 

@@ -224,6 +224,7 @@ type OverrideFieldClearedByDelete =
   | "authProfileOverride"
   | "authProfileOverrideSource"
   | "authProfileOverrideCompactionCount"
+  | "fallbackOverrideSelectedModel"
   | "fallbackNoticeSelectedModel"
   | "fallbackNoticeActiveModel"
   | "fallbackNoticeReason"
@@ -235,6 +236,7 @@ const OVERRIDE_FIELDS_CLEARED_BY_DELETE: OverrideFieldClearedByDelete[] = [
   "authProfileOverride",
   "authProfileOverrideSource",
   "authProfileOverrideCompactionCount",
+  "fallbackOverrideSelectedModel",
   "fallbackNoticeSelectedModel",
   "fallbackNoticeActiveModel",
   "fallbackNoticeReason",

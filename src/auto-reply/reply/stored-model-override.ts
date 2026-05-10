@@ -79,7 +79,9 @@ export function isStaleHeartbeatAutoFallbackOverride(params: {
   if (params.sessionEntry?.modelOverrideSource !== "auto") {
     return false;
   }
-  const selectedModel = normalizeOptionalString(params.sessionEntry.fallbackNoticeSelectedModel);
+  const selectedModel =
+    normalizeOptionalString(params.sessionEntry.fallbackOverrideSelectedModel) ??
+    normalizeOptionalString(params.sessionEntry.fallbackNoticeSelectedModel);
   if (!selectedModel) {
     return false;
   }

@@ -110,6 +110,7 @@ function entryMayContainPluginSessionRouteState(entry: SessionEntry): boolean {
     normalizeString(record.providerOverride) !== undefined ||
     normalizeString(record.modelOverride) !== undefined ||
     normalizeString(record.modelOverrideSource) !== undefined ||
+    normalizeString(record.fallbackOverrideSelectedModel) !== undefined ||
     record.liveModelSwitchPending !== undefined ||
     normalizeString(record.modelProvider) !== undefined ||
     normalizeString(record.model) !== undefined ||
@@ -384,6 +385,7 @@ export function applySessionRouteStateRepair(params: {
     clear("providerOverride");
     clear("modelOverride");
     clear("modelOverrideSource");
+    clear("fallbackOverrideSelectedModel");
     clear("liveModelSwitchPending");
   }
   if (params.repair.reasons.includes("runtime model state")) {

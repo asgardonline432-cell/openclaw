@@ -34,6 +34,7 @@ describe("applyModelOverrideToSessionEntry", () => {
       providerOverride: "anthropic",
       modelOverride: "claude-sonnet-4-6",
       contextTokens: 160_000,
+      fallbackOverrideSelectedModel: "anthropic/claude-sonnet-4-6",
       fallbackNoticeSelectedModel: "anthropic/claude-sonnet-4-6",
       fallbackNoticeActiveModel: "anthropic/claude-sonnet-4-6",
       fallbackNoticeReason: "provider temporary failure",
@@ -44,6 +45,7 @@ describe("applyModelOverrideToSessionEntry", () => {
     expect(result.updated).toBe(true);
     expectRuntimeModelFieldsCleared(entry, before);
     expect(entry.contextTokens).toBeUndefined();
+    expect(entry.fallbackOverrideSelectedModel).toBeUndefined();
     expect(entry.fallbackNoticeSelectedModel).toBeUndefined();
     expect(entry.fallbackNoticeActiveModel).toBeUndefined();
     expect(entry.fallbackNoticeReason).toBeUndefined();

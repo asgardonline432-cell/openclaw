@@ -330,6 +330,8 @@ export type SessionEntry = {
    * Last selected/runtime model pair for which a fallback notice was emitted.
    * Used to avoid repeating the same fallback notice every turn.
    */
+  /** Durable selected model that produced the persisted auto fallback override. */
+  fallbackOverrideSelectedModel?: string;
   fallbackNoticeSelectedModel?: string;
   fallbackNoticeActiveModel?: string;
   fallbackNoticeReason?: string;

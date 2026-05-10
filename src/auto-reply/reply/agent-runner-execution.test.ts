@@ -3652,8 +3652,107 @@ describe("runAgentTurnWithFallback", () => {
       providerOverride: "anthropic",
       modelOverride: "claude-sonnet",
       modelOverrideSource: "auto",
+      fallbackOverrideSelectedModel: "anthropic/claude-opus",
       authProfileOverride: "anthropic:openclaw",
       authProfileOverrideSource: "user",
     });
+  });
+
+  it("preserves original selected model when fallback advances again", async () => {
+    const applyFallbackCandidateSelectionToEntry =
+      await getApplyFallbackCandidateSelectionToEntry();
+    const entry = {
+      sessionId: "session",
+      updatedAt: 1,
+      providerOverride: "anthropic",
+      modelOverride: "claude-sonnet",
+      modelOverrideSource: "auto" as const,
+      fallbackOverrideSelectedModel: "anthropic/claude-opus",
+    } as SessionEntry;
+
+    const { updated } = applyFallbackCandidateSelectionToEntry({
+      entry,
+      run: {
+        provider: "anthropic",
+        model: "claude-sonnet",
+      } as FollowupRun["run"],
+      provider: "openrouter",
+      model: "anthropic/claude-haiku",
+      now: 123,
+    });
+
+    expect(updated).toBe(true);
+    expect(entry).toMatchObject({
+      updatedAt: 123,
+      providerOverride: "openrouter",
+      modelOverride: "anthropic/claude-haiku",
+      modelOverrideSource: "auto",
+      fallbackOverrideSelectedModel: "anthropic/claude-opus",
+    });
+  });
+
+  it("refreshes fallback origin when a new selected run replaces an old auto fallback", async () => {
+    const applyFallbackCandidateSelectionToEntry =
+      await getApplyFallbackCandidateSelectionToEntry();
+    const entry = {
+      sessionId: "session",
+      updatedAt: 1,
+      providerOverride: "anthropic",
+      modelOverride: "claude-sonnet",
+      modelOverrideSource: "auto" as const,
+      fallbackOverrideSelectedModel: "anthropic/claude-opus",
+    } as SessionEntry;
+
+    const { updated } = applyFallbackCandidateSelectionToEntry({
+      entry,
+      run: {
+        provider: "google",
+        model: "gemini-3-pro",
+      } as FollowupRun["run"],
+      provider: "openrouter",
+      model: "google/gemini-3-flash",
+      now: 123,
+    });
+
+    expect(updated).toBe(true);
+    expect(entry).toMatchObject({
+      updatedAt: 123,
+      providerOverride: "openrouter",
+      modelOverride: "google/gemini-3-flash",
+      modelOverrideSource: "auto",
+      fallbackOverrideSelectedModel: "google/gemini-3-pro",
+    });
+  });
+
+  it("keeps fallback origin unknown when legacy auto fallback advances", async () => {
+    const applyFallbackCandidateSelectionToEntry =
+      await getApplyFallbackCandidateSelectionToEntry();
+    const entry = {
+      sessionId: "session",
+      updatedAt: 1,
+      providerOverride: "anthropic",
+      modelOverride: "claude-sonnet",
+      modelOverrideSource: "auto" as const,
+    } as SessionEntry;
+
+    const { updated } = applyFallbackCandidateSelectionToEntry({
+      entry,
+      run: {
+        provider: "anthropic",
+        model: "claude-sonnet",
+      } as FollowupRun["run"],
+      provider: "openrouter",
+      model: "anthropic/claude-haiku",
+      now: 123,
+    });
+
+    expect(updated).toBe(true);
+    expect(entry).toMatchObject({
+      updatedAt: 123,
+      providerOverride: "openrouter",
+      modelOverride: "anthropic/claude-haiku",
+      modelOverrideSource: "auto",
+    });
+    expect(entry.fallbackOverrideSelectedModel).toBeUndefined();
   });
 });
