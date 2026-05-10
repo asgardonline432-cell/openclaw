@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { __resetSlackChannelTypeCacheForTest, resolveSlackChannelType } from "./channel-type.js";
+import {
+  __resetSlackChannelTypeCacheForTest,
+  resolveSlackChannelType,
+  resolveSlackConversationInfo,
+} from "./channel-type.js";
 
 const conversationsInfoMock = vi.fn();
 
@@ -57,5 +61,132 @@ describe("resolveSlackChannelType", () => {
     ).resolves.toBe("group");
 
     expect(conversationsInfoMock).not.toHaveBeenCalled();
+  });
+
+  it("returns Slack IM peer user metadata from conversations.info", async () => {
+    conversationsInfoMock.mockResolvedValueOnce({
+      channel: {
+        id: "D0AEWSDHAQH",
+        is_im: true,
+        user: "U09G2DJ0275",
+      },
+    });
+
+    await expect(
+      resolveSlackConversationInfo({
+        cfg: {
+          channels: {
+            slack: {
+              botToken: "xoxb-test",
+            },
+          },
+        } as never,
+        channelId: "D0AEWSDHAQH",
+      }),
+    ).resolves.toEqual({
+      type: "dm",
+      user: "U09G2DJ0275",
+    });
+    expect(conversationsInfoMock).toHaveBeenCalledWith({ channel: "D0AEWSDHAQH" });
+  });
+
+  it("keeps D-prefixed channels typed as dm when Slack lookup fails", async () => {
+    conversationsInfoMock.mockRejectedValueOnce(new Error("missing_scope"));
+
+    await expect(
+      resolveSlackConversationInfo({
+        cfg: {
+          channels: {
+            slack: {
+              botToken: "xoxb-test",
+            },
+          },
+        } as never,
+        channelId: "D0AEWSDHAQH",
+      }),
+    ).resolves.toEqual({
+      type: "dm",
+    });
+  });
+
+  it("does not cache incomplete native IM channel lookups", async () => {
+    conversationsInfoMock
+      .mockRejectedValueOnce(new Error("temporary_failure"))
+      .mockResolvedValueOnce({
+        channel: {
+          id: "D0AEWSDHAQH",
+          is_im: true,
+          user: "U09G2DJ0275",
+        },
+      });
+
+    const cfg = {
+      channels: {
+        slack: {
+          botToken: "xoxb-test",
+        },
+      },
+    } as never;
+
+    await expect(
+      resolveSlackConversationInfo({
+        cfg,
+        channelId: "D0AEWSDHAQH",
+      }),
+    ).resolves.toEqual({
+      type: "dm",
+    });
+    await expect(
+      resolveSlackConversationInfo({
+        cfg,
+        channelId: "D0AEWSDHAQH",
+      }),
+    ).resolves.toEqual({
+      type: "dm",
+      user: "U09G2DJ0275",
+    });
+    expect(conversationsInfoMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let group-channel overrides reclassify native IM channel ids", async () => {
+    await expect(
+      resolveSlackConversationInfo({
+        cfg: {
+          channels: {
+            slack: {
+              dm: {
+                groupChannels: ["D0AEWSDHAQH"],
+              },
+            },
+          },
+        } as never,
+        channelId: "D0AEWSDHAQH",
+      }),
+    ).resolves.toEqual({
+      type: "dm",
+    });
+    expect(conversationsInfoMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves the channel-type wrapper contract", async () => {
+    conversationsInfoMock.mockResolvedValueOnce({
+      channel: {
+        id: "G123",
+        is_mpim: true,
+      },
+    });
+
+    await expect(
+      resolveSlackChannelType({
+        cfg: {
+          channels: {
+            slack: {
+              botToken: "xoxb-test",
+            },
+          },
+        } as never,
+        channelId: "G123",
+      }),
+    ).resolves.toBe("group");
   });
 });
