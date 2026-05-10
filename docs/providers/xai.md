@@ -69,8 +69,7 @@ variants are the current image-capable Grok refs in the bundled catalog.
 
 The bundled plugin maps xAI's current public API surface onto OpenClaw's shared
 provider and tool contracts. Capabilities that don't fit the shared contract
-(for example streaming TTS and realtime voice) are not exposed - see the table
-below.
+(for example streaming TTS) are not exposed - see the table below.
 
 | xAI capability             | OpenClaw surface                          | Status                                                              |
 | -------------------------- | ----------------------------------------- | ------------------------------------------------------------------- |
@@ -84,16 +83,14 @@ below.
 | Streaming TTS              | -                                         | Not exposed; OpenClaw's TTS contract returns complete audio buffers |
 | Batch speech-to-text       | `tools.media.audio` / media understanding | Yes                                                                 |
 | Streaming speech-to-text   | Voice Call `streaming.provider: "xai"`    | Yes                                                                 |
-| Realtime voice             | -                                         | Not exposed yet; different session/WebSocket contract               |
+| Realtime voice             | Voice Call `realtime.provider: "xai"`     | Yes, Grok Voice Agent via gateway relay                             |
 | Files / batches            | Generic model API compatibility only      | Not a first-class OpenClaw tool                                     |
 
 <Note>
 OpenClaw uses xAI's REST image/video/TTS/STT APIs for media generation,
 speech, and batch transcription, xAI's streaming STT WebSocket for live
-voice-call transcription, and the Responses API for model, search, and
-code-execution tools. Features that need different OpenClaw contracts, such as
-Realtime voice sessions, are documented here as upstream capabilities rather
-than hidden plugin behavior.
+voice-call transcription, xAI's Voice Agent WebSocket for Voice Call realtime
+voice, and the Responses API for model, search, and code-execution tools.
 </Note>
 
 ### Fast-mode mappings
@@ -333,6 +330,55 @@ Legacy aliases still normalize to the canonical bundled ids:
     This streaming provider is for Voice Call's realtime transcription path.
     Discord voice currently records short segments and uses the batch
     `tools.media.audio` transcription path instead.
+    </Note>
+
+  </Accordion>
+
+  <Accordion title="Realtime voice">
+    The bundled `xai` plugin registers a realtime voice provider for Voice
+    Call's full-duplex Twilio media stream path.
+
+    - Endpoint: xAI WebSocket `wss://api.x.ai/v1/realtime`
+    - Default model: `grok-voice-think-fast-1.0`
+    - Default voice: `ara`
+    - Default telephony format: G.711 µ-law (`audio/pcmu`)
+    - PCM bridge format: 24 kHz PCM16 (`audio/pcm`, `rate: 24000`)
+
+    ```json5
+    {
+      plugins: {
+        entries: {
+          "voice-call": {
+            config: {
+              provider: "twilio",
+              realtime: {
+                enabled: true,
+                provider: "xai",
+                providers: {
+                  xai: {
+                    apiKey: "${XAI_API_KEY}",
+                    model: "grok-voice-think-fast-1.0",
+                    voice: "ara",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }
+    ```
+
+    Provider-owned config lives under
+    `plugins.entries.voice-call.config.realtime.providers.xai`. Supported keys
+    are `apiKey`, `baseUrl`, `model`, `voice`, `vadThreshold`,
+    `silenceDurationMs`, and `prefixPaddingMs`.
+
+    <Note>
+    Voice Call exposes `openclaw_agent_consult` by default. If you declare
+    custom realtime tools named `send_dtmf` or `end_call` under
+    `realtime.tools`, Voice Call now has built-in handlers for IVR navigation
+    and call completion.
     </Note>
 
   </Accordion>

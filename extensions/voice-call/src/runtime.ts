@@ -69,6 +69,9 @@ const REALTIME_VOICE_CONSULT_SYSTEM_PROMPT = [
   "Do not print secret values or dump environment variables; only check whether required configuration is present.",
   "Be accurate, brief, and speakable.",
 ].join(" ");
+const REALTIME_VOICE_SEND_DTMF_TOOL_NAME = "send_dtmf";
+const REALTIME_VOICE_END_CALL_TOOL_NAME = "end_call";
+const REALTIME_VOICE_DTMF_DIGITS_RE = /[^0-9*#wWpP,]/g;
 
 let telnyxProviderPromise: Promise<TelnyxProviderModule> | undefined;
 let twilioProviderPromise: Promise<TwilioProviderModule> | undefined;
@@ -143,6 +146,26 @@ function mapVoiceCallConsultTranscript(
     transcript.push({ role: "user", text: partial });
   }
   return transcript;
+}
+
+function readRealtimeToolStringArg(args: unknown, key: string): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return undefined;
+  }
+  const value = (args as Record<string, unknown>)[key];
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function normalizeRealtimeDtmfDigits(args: unknown): string {
+  return (readRealtimeToolStringArg(args, "digits") ?? "")
+    .replace(REALTIME_VOICE_DTMF_DIGITS_RE, "")
+    .trim();
 }
 
 function createRuntimeResourceLifecycle(params: {
@@ -410,6 +433,26 @@ export async function createVoiceCallRuntime(params: {
         },
       );
     }
+    realtimeHandler.registerToolHandler(
+      REALTIME_VOICE_SEND_DTMF_TOOL_NAME,
+      async (args, callId) => {
+        const digits = normalizeRealtimeDtmfDigits(args);
+        if (!digits) {
+          return { error: "no valid DTMF digits" };
+        }
+        const result = await manager.sendDtmf(callId, digits);
+        return result.success
+          ? { success: true, digits }
+          : { error: result.error ?? "dtmf failed" };
+      },
+    );
+    realtimeHandler.registerToolHandler(
+      REALTIME_VOICE_END_CALL_TOOL_NAME,
+      async (_args, callId) => {
+        const result = await manager.endCall(callId);
+        return result.success ? { success: true } : { error: result.error ?? "end call failed" };
+      },
+    );
     webhookServer.setRealtimeHandler(realtimeHandler);
   }
   const lifecycle = createRuntimeResourceLifecycle({ config, webhookServer });

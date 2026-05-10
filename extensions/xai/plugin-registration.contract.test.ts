@@ -5,6 +5,7 @@ describePluginRegistrationContract({
   providerIds: ["xai"],
   webSearchProviderIds: ["grok"],
   mediaUnderstandingProviderIds: ["xai"],
+  realtimeVoiceProviderIds: ["xai"],
   videoGenerationProviderIds: ["xai"],
   toolNames: ["code_execution", "x_search"],
   requireGenerateVideo: true,

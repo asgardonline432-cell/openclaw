@@ -23,6 +23,7 @@ import type {
   RealtimeVoiceToolResultOptions,
 } from "openclaw/plugin-sdk/realtime-voice";
 import {
+  decodeRealtimeVoiceBase64Audio,
   REALTIME_VOICE_AUDIO_FORMAT_G711_ULAW_8KHZ,
   REALTIME_VOICE_AUDIO_FORMAT_PCM16_24KHZ,
 } from "openclaw/plugin-sdk/realtime-voice";
@@ -337,10 +338,6 @@ function hasOpenAIRealtimeBrowserAuthInput(params: {
     provider: "openai-codex",
     cfg: params.cfg,
   });
-}
-
-function base64ToBuffer(b64: string): Buffer {
-  return Buffer.from(b64, "base64");
 }
 
 class OpenAIRealtimeVoiceBridge implements RealtimeVoiceBridge {
@@ -863,7 +860,7 @@ class OpenAIRealtimeVoiceBridge implements RealtimeVoiceBridge {
         if (!audioDelta) {
           return;
         }
-        const audio = base64ToBuffer(audioDelta);
+        const audio = decodeRealtimeVoiceBase64Audio(audioDelta);
         this.config.onAudio(audio);
         if (event.item_id && event.item_id !== this.lastAssistantItemId) {
           this.lastAssistantItemId = event.item_id;

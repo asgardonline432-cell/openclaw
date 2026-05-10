@@ -30,6 +30,7 @@ import type {
 } from "openclaw/plugin-sdk/realtime-voice";
 import {
   convertPcmToMulaw8k,
+  decodeRealtimeVoiceBase64Audio,
   mulawToPcm,
   REALTIME_VOICE_AUDIO_FORMAT_G711_ULAW_8KHZ,
   REALTIME_VOICE_AUDIO_FORMAT_PCM16_24KHZ,
@@ -739,7 +740,7 @@ class GoogleRealtimeVoiceBridge implements RealtimeVoiceBridge {
     let emittedAssistantText = false;
     for (const part of content.modelTurn?.parts ?? []) {
       if (part.inlineData?.data) {
-        const pcm = Buffer.from(part.inlineData.data, "base64");
+        const pcm = decodeRealtimeVoiceBase64Audio(part.inlineData.data);
         const sampleRate = parsePcmSampleRate(part.inlineData.mimeType);
         const audio = this.toOutputAudio(pcm, sampleRate);
         if (audio.length > 0) {

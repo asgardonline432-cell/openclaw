@@ -142,6 +142,7 @@ export const pluginRegistrationContractCases = {
     providerIds: ["xai"],
     webSearchProviderIds: ["grok"],
     realtimeTranscriptionProviderIds: ["xai"],
+    realtimeVoiceProviderIds: ["xai"],
     mediaUnderstandingProviderIds: ["xai"],
   },
   zai: {

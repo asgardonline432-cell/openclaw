@@ -226,9 +226,10 @@ Current runtime behaviour:
 
 - `realtime.enabled` is supported for Twilio Media Streams.
 - `realtime.provider` is optional. If unset, Voice Call uses the first registered realtime voice provider.
-- Bundled realtime voice providers: Google Gemini Live (`google`) and OpenAI (`openai`), registered by their provider plugins.
+- Bundled realtime voice providers: Google Gemini Live (`google`), OpenAI (`openai`), and xAI Grok Voice (`xai`), registered by their provider plugins.
 - Provider-owned raw config lives under `realtime.providers.<providerId>`.
 - Voice Call exposes the shared `openclaw_agent_consult` realtime tool by default. The realtime model can call it when the caller asks for deeper reasoning, current information, or normal OpenClaw tools.
+- Voice Call also has built-in realtime handlers for custom tools named `send_dtmf` and `end_call`, so providers can navigate IVRs or finish the call when those tools are declared in `realtime.tools`.
 - `realtime.consultPolicy` optionally adds guidance for when the realtime model should call `openclaw_agent_consult`.
 - `realtime.agentContext.enabled` is default-off. When enabled, Voice Call injects a bounded agent identity, system prompt override, and selected workspace-file capsule into the realtime provider instructions at session setup.
 - `realtime.fastContext.enabled` is default-off. When enabled, Voice Call first searches indexed memory/session context for the consult question and returns those snippets to the realtime model within `realtime.fastContext.timeoutMs` before falling back to the full consult agent only if `realtime.fastContext.fallbackToConsult` is true.
@@ -358,10 +359,42 @@ for tool work, current information, memory lookups, or workspace state.
     }
     ```
   </Tab>
+  <Tab title="xAI Grok Voice">
+    Defaults: API key from `realtime.providers.xai.apiKey` or `XAI_API_KEY`;
+    model `grok-voice-think-fast-1.0`; voice `ara`. Voice Call sends Twilio
+    media as xAI `audio/pcmu` by default, and skips OpenAI-only truncate events
+    during barge-in.
+
+    ```json5
+    {
+      plugins: {
+        entries: {
+          "voice-call": {
+            config: {
+              provider: "twilio",
+              realtime: {
+                enabled: true,
+                provider: "xai",
+                providers: {
+                  xai: {
+                    apiKey: "${XAI_API_KEY}",
+                    model: "grok-voice-think-fast-1.0",
+                    voice: "ara",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }
+    ```
+
+  </Tab>
 </Tabs>
 
-See [Google provider](/providers/google) and
-[OpenAI provider](/providers/openai) for provider-specific realtime voice
+See [Google provider](/providers/google), [OpenAI provider](/providers/openai),
+and [xAI provider](/providers/xai) for provider-specific realtime voice
 options.
 
 ## Streaming transcription

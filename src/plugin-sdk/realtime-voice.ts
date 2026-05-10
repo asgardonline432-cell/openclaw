@@ -122,3 +122,10 @@ export {
   resamplePcm,
   resamplePcmTo8k,
 } from "../talk/audio-codec.js";
+export {
+  decodeRealtimeVoiceBase64Audio,
+  describeRealtimeVoiceServerEvent,
+  readRealtimeVoiceErrorDetail,
+  RealtimeVoiceToolCallAccumulator,
+  type RealtimeVoiceProviderEventLike,
+} from "../talk/realtime-voice-provider-utils.js";

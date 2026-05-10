@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   validateProviderConfig: vi.fn(),
   managerInitialize: vi.fn(),
   managerGetCall: vi.fn(),
+  managerSendDtmf: vi.fn(),
+  managerEndCall: vi.fn(),
   webhookStart: vi.fn(),
   webhookStop: vi.fn(),
   webhookSetRealtimeHandler: vi.fn(),
@@ -53,6 +55,8 @@ vi.mock("./manager.js", () => ({
   CallManager: class {
     initialize = mocks.managerInitialize;
     getCall = mocks.managerGetCall;
+    sendDtmf = mocks.managerSendDtmf;
+    endCall = mocks.managerEndCall;
   },
 }));
 
@@ -154,6 +158,10 @@ describe("createVoiceCallRuntime lifecycle", () => {
     mocks.validateProviderConfig.mockReturnValue({ valid: true, errors: [] });
     mocks.managerInitialize.mockResolvedValue(undefined);
     mocks.managerGetCall.mockReset();
+    mocks.managerSendDtmf.mockReset();
+    mocks.managerSendDtmf.mockResolvedValue({ success: true });
+    mocks.managerEndCall.mockReset();
+    mocks.managerEndCall.mockResolvedValue({ success: true });
     mocks.webhookStart.mockResolvedValue("http://127.0.0.1:3334/voice/webhook");
     mocks.webhookStop.mockResolvedValue(undefined);
     mocks.webhookSetRealtimeHandler.mockReset();
@@ -417,6 +425,39 @@ describe("createVoiceCallRuntime lifecycle", () => {
     expect(consultParams.extraSystemPrompt).toContain("one or two bounded read-only queries");
     expect(consultParams.prompt).toContain("Caller: Can you check shipment status?");
     expect(consultParams.prompt).toContain("Caller: Also check the ETA.");
+  });
+
+  it("wires realtime DTMF and end-call tool handlers", async () => {
+    const config = createBaseConfig();
+    config.realtime.enabled = true;
+
+    await createVoiceCallRuntime({
+      config,
+      coreConfig: {} as CoreConfig,
+      agentRuntime: {} as never,
+    });
+
+    const handlers = new Map(
+      mocks.realtimeHandlerRegisterToolHandler.mock.calls.map(([name, handler]) => [
+        name,
+        handler as (args: unknown, callId: string) => Promise<unknown>,
+      ]),
+    );
+
+    await expect(handlers.get("send_dtmf")?.({ digits: "w 1,p2A3# x" }, "call-1")).resolves.toEqual(
+      {
+        success: true,
+        digits: "w1,p23#",
+      },
+    );
+    expect(mocks.managerSendDtmf).toHaveBeenCalledWith("call-1", "w1,p23#");
+
+    await expect(
+      handlers.get("send_dtmf")?.({ digits: "letters only" }, "call-1"),
+    ).resolves.toEqual({ error: "no valid DTMF digits" });
+
+    await expect(handlers.get("end_call")?.({}, "call-1")).resolves.toEqual({ success: true });
+    expect(mocks.managerEndCall).toHaveBeenCalledWith("call-1");
   });
 
   it("uses persisted per-call session keys for realtime consults", async () => {
