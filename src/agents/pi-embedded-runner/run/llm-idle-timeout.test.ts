@@ -262,7 +262,11 @@ describe("streamWithIdleTimeout", () => {
 
     void wrapped(model, context, options);
 
-    expect(baseFn).toHaveBeenCalledWith(model, context, options);
+    expect(baseFn).toHaveBeenCalledWith(
+      model,
+      context,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("throws on idle timeout", async () => {
@@ -285,7 +289,15 @@ describe("streamWithIdleTimeout", () => {
 
   it("throws when a promise stream never resolves", async () => {
     vi.useFakeTimers();
-    const baseFn = vi.fn().mockReturnValue(new Promise<AsyncIterable<unknown>>(() => {}));
+    let streamSignal: AbortSignal | undefined;
+    const baseFn = vi.fn((_model, _context, options) => {
+      streamSignal = options?.signal;
+      return new Promise<AsyncIterable<unknown>>((_resolve, reject) => {
+        streamSignal?.addEventListener("abort", () => {
+          reject(streamSignal?.reason);
+        });
+      });
+    });
     const onIdleTimeout = vi.fn();
     const wrapped = streamWithIdleTimeout(baseFn, 50, onIdleTimeout);
 
@@ -298,6 +310,7 @@ describe("streamWithIdleTimeout", () => {
     await stream;
 
     expect(onIdleTimeout).toHaveBeenCalledTimes(1);
+    expect(streamSignal?.aborted).toBe(true);
   });
 
   it("resets timer on each chunk", async () => {
