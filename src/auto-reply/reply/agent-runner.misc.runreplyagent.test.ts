@@ -49,13 +49,13 @@ async function createTestStateDir(prefix: string): Promise<string> {
 
 type TestSessionRowsTarget = {
   agentId: string;
-  sessionsDir: string;
+  transcriptDir: string;
 };
 
 function resolveTestSessionRowsTarget(root: string, agentId = "main"): TestSessionRowsTarget {
   return {
     agentId,
-    sessionsDir: path.join(root, "agents", agentId, "sessions"),
+    transcriptDir: path.join(root, "transcript-fixtures", agentId),
   };
 }
 
@@ -1102,7 +1102,7 @@ describe("runReplyAgent Active Memory inline debug", () => {
   it("appends raw trace payloads when trace raw is enabled", async () => {
     const tmp = await createTestStateDir("openclaw-trace-raw-usage-");
     const sessionRowsTarget = resolveTestSessionRowsTarget(tmp);
-    const sessionFile = path.join(sessionRowsTarget.sessionsDir, "session.jsonl");
+    const sessionFile = path.join(sessionRowsTarget.transcriptDir, "session.jsonl");
     const sessionKey = "main";
     const sessionEntry: SessionEntry = {
       sessionId: "session",
@@ -1326,7 +1326,7 @@ describe("runReplyAgent Active Memory inline debug", () => {
   it("does not emit persisted trace output to an unauthorized sender", async () => {
     const tmp = await createTestStateDir("openclaw-trace-raw-unauthorized-");
     const sessionRowsTarget = resolveTestSessionRowsTarget(tmp);
-    const sessionFile = path.join(sessionRowsTarget.sessionsDir, "session.jsonl");
+    const sessionFile = path.join(sessionRowsTarget.transcriptDir, "session.jsonl");
     const sessionKey = "main";
     const sessionEntry: SessionEntry = {
       sessionId: "session",
@@ -1421,7 +1421,7 @@ describe("runReplyAgent Active Memory inline debug", () => {
   it("shows session and last-turn usage totals without per-call usage blocks", async () => {
     const tmp = await createTestStateDir("openclaw-trace-raw-usage-");
     const sessionRowsTarget = resolveTestSessionRowsTarget(tmp);
-    const sessionFile = path.join(sessionRowsTarget.sessionsDir, "session.jsonl");
+    const sessionFile = path.join(sessionRowsTarget.transcriptDir, "session.jsonl");
     const sessionKey = "main";
     const sessionEntry: SessionEntry = {
       sessionId: "session",
@@ -1528,7 +1528,7 @@ describe("runReplyAgent Active Memory inline debug", () => {
   it("escapes markdown fence delimiters inside raw trace blocks", async () => {
     const tmp = await createTestStateDir("openclaw-trace-raw-fence-");
     const sessionRowsTarget = resolveTestSessionRowsTarget(tmp);
-    const sessionFile = path.join(sessionRowsTarget.sessionsDir, "session.jsonl");
+    const sessionFile = path.join(sessionRowsTarget.transcriptDir, "session.jsonl");
     const sessionKey = "main";
     const sessionEntry: SessionEntry = {
       sessionId: "session",
