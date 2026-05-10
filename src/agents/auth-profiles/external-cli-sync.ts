@@ -251,12 +251,6 @@ export function resolveExternalCliAuthProfiles(
     if (providerConfig.bootstrapOnly && existingOAuth) {
       continue;
     }
-    const creds = providerConfig.readCredentials({
-      allowKeychainPrompt: options?.allowKeychainPrompt,
-    });
-    if (!creds) {
-      continue;
-    }
     if (
       existingOAuth &&
       !providerConfig.bootstrapOnly &&

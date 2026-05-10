@@ -1609,7 +1609,7 @@ describe("runtime web tools resolution", () => {
     });
 
     it("selects the configured provider without re-invoking provider discovery when found in the first pass", async () => {
-      resolvePluginWebSearchProvidersMock
+      resolveRuntimeWebSearchProvidersMock
         .mockReturnValueOnce(buildTestWebSearchProviders())
         .mockReturnValueOnce([]);
 
@@ -1640,7 +1640,7 @@ describe("runtime web tools resolution", () => {
       expect(metadata.search.providerSource).toBe("configured");
       expect(metadata.search.selectedProviderKeySource).toBe("config");
       expectNoDiagnosticCode(context.warnings, "WEB_SEARCH_PROVIDER_INVALID_AUTODETECT");
-      expect(resolvePluginWebSearchProvidersMock).toHaveBeenCalledTimes(1);
+      expect(resolveRuntimeWebSearchProvidersMock).toHaveBeenCalledTimes(1);
       expect(
         resolveBundledExplicitWebSearchProvidersFromPublicArtifactsMock,
       ).not.toHaveBeenCalled();

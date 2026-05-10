@@ -432,6 +432,7 @@ describe("normalizeAgentCommandReplyPayloads", () => {
         bestEffortDeliver: true,
         replyChannel: "slack",
         replyTo: "#general",
+        outboundChannelRuntime: slackOutboundRuntimeForTest,
       } as AgentCommandOpts,
       outboundSession: {
         key: "agent:tester:slack:direct:alice",
@@ -567,6 +568,7 @@ describe("normalizeAgentCommandReplyPayloads", () => {
         json: true,
         replyChannel: "slack",
         replyTo: "#general",
+        outboundChannelRuntime: slackOutboundRuntimeForTest,
       } as AgentCommandOpts,
       outboundSession: {
         key: "agent:tester:slack:direct:alice",
@@ -693,6 +695,7 @@ describe("normalizeAgentCommandReplyPayloads", () => {
         deliver: true,
         replyChannel: "slack",
         replyTo: "#general",
+        outboundChannelRuntime: slackOutboundRuntimeForTest,
       } as AgentCommandOpts,
       outboundSession: undefined,
       sessionEntry: undefined,
@@ -721,6 +724,7 @@ describe("normalizeAgentCommandReplyPayloads", () => {
         deliver: true,
         replyChannel: "slack",
         replyTo: "#general",
+        outboundChannelRuntime: slackOutboundRuntimeForTest,
       } as AgentCommandOpts,
       outboundSession: undefined,
       sessionEntry: undefined,
@@ -798,6 +802,7 @@ describe("normalizeAgentCommandReplyPayloads", () => {
           bestEffortDeliver: false,
           replyChannel: "slack",
           replyTo: "#general",
+          outboundChannelRuntime: slackOutboundRuntimeForTest,
         } as AgentCommandOpts,
         outboundSession: {
           key: "agent:tester:slack:direct:alice",
