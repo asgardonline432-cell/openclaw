@@ -18,6 +18,7 @@ import {
 import { splitTrailingAuthProfile } from "./model-ref-profile.js";
 import {
   buildModelAliasIndex,
+  prepareModelSelectionConfigIndex,
   resolveDefaultModelForAgent,
   resolveModelRefFromString,
 } from "./model-selection.js";
@@ -76,16 +77,29 @@ export function resolveSimpleCompletionSelectionForAgent(params: {
   agentId: string;
   modelRef?: string;
 }): AgentSimpleCompletionSelection | null {
+  const defaultModelSelectionConfigIndex = prepareModelSelectionConfigIndex({
+    cfg: params.cfg,
+    defaultProvider: DEFAULT_PROVIDER,
+  });
   const fallbackRef = resolveDefaultModelForAgent({
     cfg: params.cfg,
     agentId: params.agentId,
+    preparedModelSelectionConfigIndex: defaultModelSelectionConfigIndex,
   });
   const modelRef =
     params.modelRef?.trim() || resolveAgentEffectiveModelPrimary(params.cfg, params.agentId);
   const split = modelRef ? splitTrailingAuthProfile(modelRef) : null;
+  const aliasModelSelectionConfigIndex =
+    fallbackRef.provider === DEFAULT_PROVIDER
+      ? defaultModelSelectionConfigIndex
+      : prepareModelSelectionConfigIndex({
+          cfg: params.cfg,
+          defaultProvider: fallbackRef.provider || DEFAULT_PROVIDER,
+        });
   const aliasIndex = buildModelAliasIndex({
     cfg: params.cfg,
     defaultProvider: fallbackRef.provider || DEFAULT_PROVIDER,
+    preparedModelSelectionConfigIndex: aliasModelSelectionConfigIndex,
   });
   const resolved = split
     ? resolveModelRefFromString({

@@ -37,6 +37,7 @@ import {
   inferUniqueProviderFromCatalog,
   inferUniqueProviderFromConfiguredModels,
   normalizeModelSelection,
+  prepareModelSelectionConfigIndex,
   resolveBareModelDefaultProvider,
   resolveAllowedModelRefFromAliasIndex,
   resolveAllowlistModelKey as resolveAllowlistModelKeyFromShared,
@@ -45,10 +46,11 @@ import {
   resolveHooksGmailModel,
   resolveModelRefFromString,
   type ModelAliasIndex,
+  type PreparedModelSelectionConfigIndex,
   type ModelRefStatus,
 } from "./model-selection-shared.js";
 
-export type { ModelAliasIndex, ModelRef, ModelRefStatus };
+export type { ModelAliasIndex, ModelRef, ModelRefStatus, PreparedModelSelectionConfigIndex };
 
 export type ThinkLevel =
   | "off"
@@ -75,6 +77,7 @@ export {
   normalizeProviderId,
   normalizeProviderIdForAuth,
   parseModelRef,
+  prepareModelSelectionConfigIndex,
   resolveBareModelDefaultProvider,
   resolveConfiguredModelRef,
   resolveHooksGmailModel,
@@ -209,6 +212,7 @@ export function resolveDefaultModelForAgent(params: {
   cfg: OpenClawConfig;
   agentId?: string;
   allowPluginNormalization?: boolean;
+  preparedModelSelectionConfigIndex?: PreparedModelSelectionConfigIndex;
 }): ModelRef {
   const agentModelOverride = params.agentId
     ? resolveAgentEffectiveModelPrimary(params.cfg, params.agentId)
@@ -218,6 +222,7 @@ export function resolveDefaultModelForAgent(params: {
     defaultProvider: DEFAULT_PROVIDER,
     defaultModel: DEFAULT_MODEL,
     allowPluginNormalization: params.allowPluginNormalization,
+    preparedModelSelectionConfigIndex: params.preparedModelSelectionConfigIndex,
     ...(agentModelOverride ? { primaryModelOverride: agentModelOverride } : {}),
   });
 }
@@ -333,9 +338,14 @@ export function resolveSubagentSpawnModelSelection(params: {
   agentId: string;
   modelOverride?: unknown;
 }): string {
+  const defaultModelSelectionConfigIndex = prepareModelSelectionConfigIndex({
+    cfg: params.cfg,
+    defaultProvider: DEFAULT_PROVIDER,
+  });
   const runtimeDefault = resolveDefaultModelForAgent({
     cfg: params.cfg,
     agentId: params.agentId,
+    preparedModelSelectionConfigIndex: defaultModelSelectionConfigIndex,
   });
   const raw =
     normalizeModelSelection(params.modelOverride) ??
@@ -345,9 +355,17 @@ export function resolveSubagentSpawnModelSelection(params: {
     }) ??
     normalizeModelSelection(resolveAgentModelPrimaryValue(params.cfg.agents?.defaults?.model)) ??
     `${runtimeDefault.provider}/${runtimeDefault.model}`;
+  const aliasModelSelectionConfigIndex =
+    runtimeDefault.provider === DEFAULT_PROVIDER
+      ? defaultModelSelectionConfigIndex
+      : prepareModelSelectionConfigIndex({
+          cfg: params.cfg,
+          defaultProvider: runtimeDefault.provider,
+        });
   const aliasIndex = buildModelAliasIndex({
     cfg: params.cfg,
     defaultProvider: runtimeDefault.provider,
+    preparedModelSelectionConfigIndex: aliasModelSelectionConfigIndex,
   });
   return resolveModelThroughAliases(raw, aliasIndex);
 }
@@ -428,9 +446,14 @@ export function resolveAllowedModelRef(params: {
     return { error: "invalid model: empty" };
   }
 
+  const preparedModelSelectionConfigIndex = prepareModelSelectionConfigIndex({
+    cfg: params.cfg,
+    defaultProvider: params.defaultProvider,
+  });
   const aliasIndex = buildModelAliasIndex({
     cfg: params.cfg,
     defaultProvider: params.defaultProvider,
+    preparedModelSelectionConfigIndex,
   });
 
   const openrouterCompatRef = resolveConfiguredOpenRouterCompatAlias({

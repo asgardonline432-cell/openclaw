@@ -38,6 +38,7 @@ import { modelKey, normalizeModelRef } from "./model-selection-normalize.js";
 import {
   buildConfiguredAllowlistKeys,
   buildModelAliasIndex,
+  prepareModelSelectionConfigIndex,
   resolveConfiguredModelRef,
   resolveModelRefFromString,
 } from "./model-selection-resolve.js";
@@ -480,13 +481,20 @@ function resolveImageFallbackCandidates(params: {
   defaultProvider: string;
   modelOverride?: string;
 }): ModelCandidate[] {
-  const aliasIndex = buildModelAliasIndex({
-    cfg: params.cfg ?? {},
+  const cfg = params.cfg ?? {};
+  const preparedModelSelectionConfigIndex = prepareModelSelectionConfigIndex({
+    cfg,
     defaultProvider: params.defaultProvider,
+  });
+  const aliasIndex = buildModelAliasIndex({
+    cfg,
+    defaultProvider: params.defaultProvider,
+    preparedModelSelectionConfigIndex,
   });
   const allowlist = buildConfiguredAllowlistKeys({
     cfg: params.cfg,
     defaultProvider: params.defaultProvider,
+    preparedModelSelectionConfigIndex,
   });
   const { candidates, addExplicitCandidate, addAllowlistedCandidate } =
     createModelCandidateCollector(allowlist);
@@ -530,9 +538,14 @@ function resolveImageFallbackCandidates(params: {
 function resolveImageFallbackDefaultProvider(cfg: OpenClawConfig | undefined): string {
   const configuredPrimary = resolveAgentModelPrimaryValue(cfg?.agents?.defaults?.imageModel);
   if (configuredPrimary?.trim()) {
+    const preparedModelSelectionConfigIndex = prepareModelSelectionConfigIndex({
+      cfg: cfg ?? {},
+      defaultProvider: DEFAULT_PROVIDER,
+    });
     const aliasIndex = buildModelAliasIndex({
       cfg: cfg ?? {},
       defaultProvider: DEFAULT_PROVIDER,
+      preparedModelSelectionConfigIndex,
     });
     const resolved = resolveModelRefFromString({
       raw: configuredPrimary,
@@ -560,11 +573,19 @@ function resolveFallbackCandidates(params: {
   /** Optional explicit fallbacks list; when provided (even empty), replaces agents.defaults.model.fallbacks. */
   fallbacksOverride?: string[];
 }): ModelCandidate[] {
+  const cfg = params.cfg ?? {};
+  const defaultModelSelectionConfigIndex = params.cfg
+    ? prepareModelSelectionConfigIndex({
+        cfg: params.cfg,
+        defaultProvider: DEFAULT_PROVIDER,
+      })
+    : undefined;
   const primary = params.cfg
     ? resolveConfiguredModelRef({
         cfg: params.cfg,
         defaultProvider: DEFAULT_PROVIDER,
         defaultModel: DEFAULT_MODEL,
+        preparedModelSelectionConfigIndex: defaultModelSelectionConfigIndex,
       })
     : null;
   const defaultProvider = primary?.provider ?? DEFAULT_PROVIDER;
@@ -573,13 +594,22 @@ function resolveFallbackCandidates(params: {
   const modelRaw = normalizeOptionalString(params.model) || defaultModel;
   const normalizedPrimary = normalizeModelRef(providerRaw, modelRaw);
   const configuredPrimary = normalizeModelRef(defaultProvider, defaultModel);
+  const preparedModelSelectionConfigIndex =
+    defaultProvider === DEFAULT_PROVIDER && defaultModelSelectionConfigIndex
+      ? defaultModelSelectionConfigIndex
+      : prepareModelSelectionConfigIndex({
+          cfg,
+          defaultProvider,
+        });
   const aliasIndex = buildModelAliasIndex({
-    cfg: params.cfg ?? {},
+    cfg,
     defaultProvider,
+    preparedModelSelectionConfigIndex,
   });
   const allowlist = buildConfiguredAllowlistKeys({
     cfg: params.cfg,
     defaultProvider,
+    preparedModelSelectionConfigIndex,
   });
   const { candidates, addExplicitCandidate } = createModelCandidateCollector(allowlist);
   const resolvedModelAlias = resolveModelRefFromString({

@@ -14,11 +14,15 @@ export {
   buildModelAliasIndex,
   normalizeModelSelection,
   inferUniqueProviderFromConfiguredModels,
+  prepareModelSelectionConfigIndex,
   resolveConfiguredModelRef,
   resolveHooksGmailModel,
   resolveModelRefFromString,
 } from "./model-selection-shared.js";
-export type { ModelRefStatus } from "./model-selection-shared.js";
+export type {
+  ModelRefStatus,
+  PreparedModelSelectionConfigIndex,
+} from "./model-selection-shared.js";
 
 function resolveDefaultFallbackModels(cfg: OpenClawConfig): string[] {
   return resolveAgentModelFallbackValues(cfg.agents?.defaults?.model);

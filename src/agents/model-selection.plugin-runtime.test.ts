@@ -20,7 +20,6 @@ const emptyPluginMetadataSnapshot = vi.hoisted(() => ({
 }));
 
 vi.mock("./provider-model-normalization.runtime.js", () => ({
-  getProviderModelNormalizationRuntimeCacheKey: () => "test-runtime",
   normalizeProviderModelIdWithRuntime: (params: unknown) =>
     normalizeProviderModelIdWithPluginMock(params),
 }));
@@ -75,13 +74,17 @@ describe("model-selection plugin runtime normalization", () => {
     expect(normalizeProviderModelIdWithPluginMock).not.toHaveBeenCalled();
   });
 
-  it("reuses config model-selection indexes across alias and allowlist builders", async () => {
+  it("reuses a prepared config model-selection index across alias and allowlist builders", async () => {
     normalizeProviderModelIdWithPluginMock.mockImplementation(({ context }) => {
       const modelId = (context as { modelId?: string }).modelId;
       return modelId === "custom-legacy-model" ? "custom-modern-model" : undefined;
     });
-    const { buildConfiguredAllowlistKeys, buildModelAliasIndex, modelKey } =
-      await import("./model-selection.js");
+    const {
+      buildConfiguredAllowlistKeys,
+      buildModelAliasIndex,
+      modelKey,
+      prepareModelSelectionConfigIndex,
+    } = await import("./model-selection.js");
     const cfg = {
       agents: {
         defaults: {
@@ -93,13 +96,19 @@ describe("model-selection plugin runtime normalization", () => {
       },
     } as OpenClawConfig;
 
+    const preparedModelSelectionConfigIndex = prepareModelSelectionConfigIndex({
+      cfg,
+      defaultProvider: "custom-provider",
+    });
     const firstAliases = buildModelAliasIndex({
       cfg,
       defaultProvider: "custom-provider",
+      preparedModelSelectionConfigIndex,
     });
     const firstAllowlist = buildConfiguredAllowlistKeys({
       cfg,
       defaultProvider: "custom-provider",
+      preparedModelSelectionConfigIndex,
     });
     firstAliases.byAlias.clear();
     firstAllowlist?.clear();
@@ -107,10 +116,12 @@ describe("model-selection plugin runtime normalization", () => {
     const secondAliases = buildModelAliasIndex({
       cfg,
       defaultProvider: "custom-provider",
+      preparedModelSelectionConfigIndex,
     });
     const secondAllowlist = buildConfiguredAllowlistKeys({
       cfg,
       defaultProvider: "custom-provider",
+      preparedModelSelectionConfigIndex,
     });
 
     expect(normalizeProviderModelIdWithPluginMock).toHaveBeenCalledTimes(2);
