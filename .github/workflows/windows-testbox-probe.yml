@@ -17,26 +17,11 @@ on:
           - blacksmith-16vcpu-windows-2025
           - blacksmith-32vcpu-windows-2025
           - windows-2025
-      keepalive_minutes:
-        description: "Minutes to keep the Windows runner alive for SSH inspection"
+      model:
+        description: "OpenAI model id"
         required: false
-        default: "20"
+        default: "openai/gpt-5.5"
         type: string
-      require_wsl2:
-        description: "Fail the run when WSL2 is unavailable"
-        required: false
-        default: false
-        type: boolean
-      import_ubuntu_wsl2:
-        description: "Import a throwaway Ubuntu WSL2 distro when none is installed"
-        required: false
-        default: false
-        type: boolean
-      enable_wsl2_features:
-        description: "Try enabling Windows WSL2/VM optional features before probing"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -46,9 +31,9 @@ env:
 
 jobs:
   probe:
-    name: Windows probe
+    name: Windows agent exec proof
     runs-on: ${{ inputs.runner_label }}
-    timeout-minutes: 75
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
@@ -60,130 +45,192 @@ jobs:
           persist-credentials: false
           submodules: false
 
-      - name: Probe native Windows
+      - name: Try to exclude workspace from Windows Defender
+        run: |
+          $cmd = Get-Command Add-MpPreference -ErrorAction SilentlyContinue
+          if (-not $cmd) {
+            Write-Host "Add-MpPreference not available, skipping Defender exclusions."
+            exit 0
+          }
+
+          try {
+            Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE" -ErrorAction Stop
+            Add-MpPreference -ExclusionProcess "node.exe" -ErrorAction Stop
+            Write-Host "Defender exclusions applied."
+          } catch {
+            Write-Warning "Failed to apply Defender exclusions, continuing. $($_.Exception.Message)"
+          }
+
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          node-version: "24.x"
+          install-bun: "false"
+
+      - name: Real Windows agent exec proof
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          MODEL_ID: ${{ inputs.model }}
         run: |
           $ErrorActionPreference = "Stop"
-          Write-Host "runner=$env:RUNNER_NAME"
-          Write-Host "machine=$env:COMPUTERNAME"
-          Write-Host "workspace=$env:GITHUB_WORKSPACE"
-          Write-Host "target_ref=${{ inputs.target_ref || github.ref }}"
-          Write-Host ("os=" + [System.Environment]::OSVersion.VersionString)
-          Write-Host ("arch=" + [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)
-          Write-Host ("powershell=" + $PSVersionTable.PSVersion.ToString())
-          cmd.exe /c ver
-          git --version
+          $PSNativeCommandUseErrorActionPreference = $false
 
-      - name: Probe WSL2
-        id: wsl2
-        env:
-          ENABLE_WSL2_FEATURES: ${{ inputs.enable_wsl2_features }}
-          IMPORT_UBUNTU_WSL2: ${{ inputs.import_ubuntu_wsl2 }}
-          UBUNTU_WSL_ROOTFS_URL: https://cloud-images.ubuntu.com/wsl/releases/24.04/current/ubuntu-noble-wsl-amd64-wsl.rootfs.tar.gz
-        run: |
-          $ErrorActionPreference = "Continue"
-          $ok = $false
-
-          function Invoke-WslText {
-            param([string[]] $Arguments)
-            $output = & wsl.exe @Arguments 2>&1
-            $code = $LASTEXITCODE
-            $text = (($output | ForEach-Object { "$_" }) -join "`n") -replace "`0", ""
-            [pscustomobject]@{ Code = $code; Text = $text }
+          if (-not $env:OPENAI_API_KEY) {
+            throw "Missing OPENAI_API_KEY secret."
+          }
+          if ($env:RUNNER_OS -ne "Windows") {
+            throw "Expected Windows runner, got $env:RUNNER_OS."
+          }
+          $nodePlatform = (& node -p "process.platform").Trim()
+          if ($nodePlatform -ne "win32") {
+            throw "Expected node process.platform=win32, got $nodePlatform."
+          }
+          if ($env:MODEL_ID -notmatch '^openai/.+') {
+            throw "This probe expects an OpenAI model id, got $env:MODEL_ID."
           }
 
-          function Get-WslDistros {
-            $result = Invoke-WslText -Arguments @("--list", "--quiet")
-            $result.Text -split "\r?\n" |
-              ForEach-Object { $_.Trim() } |
-              Where-Object {
-                $_ -and
-                $_ -notmatch "Windows Subsystem for Linux has no installed distributions" -and
-                $_ -notmatch "^Use 'wsl\.exe" -and
-                $_ -notmatch "^and 'wsl\.exe"
-              }
-          }
+          $proofRoot = Join-Path $env:RUNNER_TEMP "openclaw-windows-agent-proof"
+          $stateDir = Join-Path $proofRoot "state"
+          $workspace = Join-Path $proofRoot "workspace"
+          $configPath = Join-Path $stateDir "openclaw.json"
+          New-Item -ItemType Directory -Force -Path $stateDir, $workspace | Out-Null
 
-          $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
-          if (-not $wsl) {
-            Write-Warning "wsl.exe is not available on this runner."
-          } else {
-            Write-Host "wsl.exe=$($wsl.Source)"
-            if ($env:ENABLE_WSL2_FEATURES -eq "true") {
-              Write-Host "enable_wsl2_features=true"
-              foreach ($feature in @("Microsoft-Windows-Subsystem-Linux", "VirtualMachinePlatform", "HypervisorPlatform", "Microsoft-Hyper-V-All")) {
-                dism.exe /online /enable-feature /featurename:$feature /all /norestart
-                Write-Host "enable_feature_${feature}_exit=$LASTEXITCODE"
+          $env:OPENCLAW_STATE_DIR = $stateDir
+          $env:OPENCLAW_CONFIG_PATH = $configPath
+          $env:OPENCLAW_WORKSPACE_DIR = $workspace
+
+          $modelName = $env:MODEL_ID.Substring("openai/".Length)
+          $config = @{
+            agents = @{
+              defaults = @{
+                skipBootstrap = $true
+                model = @{ primary = $env:MODEL_ID }
+                models = @{
+                  ($env:MODEL_ID) = @{
+                    alias = "GPT"
+                    params = @{ transport = "sse" }
+                    agentRuntime = @{ id = "pi" }
+                  }
+                }
               }
             }
-
-            $status = Invoke-WslText -Arguments @("--status")
-            Write-Host $status.Text
-            Write-Host "wsl_status_exit=$($status.Code)"
-
-            $list = Invoke-WslText -Arguments @("--list", "--verbose")
-            Write-Host $list.Text
-            Write-Host "wsl_list_exit=$($list.Code)"
-
-            $distros = @(Get-WslDistros)
-            if ($distros.Count -eq 0 -and $env:IMPORT_UBUNTU_WSL2 -eq "true") {
-              Write-Host "import_ubuntu_wsl2=true"
-              $wslRoot = "C:\wsl\UbuntuProbe"
-              $rootfs = "C:\wsl\ubuntu-noble-wsl.rootfs.tar.gz"
-              New-Item -ItemType Directory -Force -Path @((Split-Path -Parent $rootfs), $wslRoot) | Out-Null
-              Invoke-WebRequest -Uri $env:UBUNTU_WSL_ROOTFS_URL -OutFile $rootfs -UseBasicParsing
-              wsl.exe --import UbuntuProbe $wslRoot $rootfs --version 2
-              Write-Host "wsl_import_exit=$LASTEXITCODE"
-              $list = Invoke-WslText -Arguments @("--list", "--verbose")
-              Write-Host $list.Text
-              Write-Host "wsl_list_after_import_exit=$($list.Code)"
-              $distros = @(Get-WslDistros)
+            models = @{
+              providers = @{
+                openai = @{
+                  api = "openai-responses"
+                  baseUrl = "https://api.openai.com/v1"
+                  apiKey = @{
+                    source = "env"
+                    provider = "default"
+                    id = "OPENAI_API_KEY"
+                  }
+                  timeoutSeconds = 1800
+                  models = @(
+                    @{
+                      id = $modelName
+                      name = $modelName
+                      contextWindow = 1047576
+                      maxTokens = 32768
+                    }
+                  )
+                }
+              }
             }
-
-            if ($distros.Count -gt 0) {
-              $distro = $distros[0]
-              Write-Host "wsl_probe_distro=$distro"
-              wsl.exe -d $distro --exec bash -lc 'set -euo pipefail; uname -a; if [ -f /etc/os-release ]; then sed -n "1,8p" /etc/os-release; fi'
-            } else {
-              wsl.exe --exec bash -lc 'set -euo pipefail; uname -a; if [ -f /etc/os-release ]; then sed -n "1,8p" /etc/os-release; fi'
+            tools = @{
+              profile = "coding"
+              exec = @{
+                host = "gateway"
+                security = "full"
+                ask = "off"
+                timeoutSec = 120
+              }
             }
-            if ($LASTEXITCODE -eq 0) {
-              $ok = $true
+          }
+          $config | ConvertTo-Json -Depth 20 | Set-Content -Path $configPath -Encoding UTF8
+
+          @'
+          # Identity
+
+          - Name: OpenClaw
+          - Purpose: Windows agent exec proof assistant.
+          '@ | Set-Content -Path (Join-Path $workspace "IDENTITY.md") -Encoding UTF8
+          New-Item -ItemType Directory -Force -Path (Join-Path $workspace ".openclaw") | Out-Null
+          @'
+          {
+            "version": 1,
+            "setupCompletedAt": "2026-01-01T00:00:00.000Z"
+          }
+          '@ | Set-Content -Path (Join-Path $workspace ".openclaw\workspace-state.json") -Encoding UTF8
+
+          pnpm openclaw --version
+
+          $sessionId = "windows-agent-exec-proof"
+          $proofFile = Join-Path $workspace "windows-agent-proof.txt"
+          $sessionPath = Join-Path $stateDir "agents\main\sessions\$sessionId.jsonl"
+          Remove-Item $proofFile -Force -ErrorAction SilentlyContinue
+          Remove-Item $sessionPath -Force -ErrorAction SilentlyContinue
+
+          $message = @"
+          Create a file named windows-agent-proof.txt in the current workspace with exact content WINDOWS_AGENT_EXEC_OK and no trailing newline. Use the exec tool exactly once. You are running on Windows, so use the native Windows shell style for the command. Do not use bash, sh, WSL, touch, printf, or /bin paths. After the exec tool succeeds, reply with exact text OK.
+          "@
+
+          $agentOutput = pnpm openclaw agent --local --agent main --session-id $sessionId --model $env:MODEL_ID --message $message --thinking minimal --timeout 1800 --json 2>&1
+          $agentExit = $LASTEXITCODE
+          if ($null -ne $agentOutput) { $agentOutput | ForEach-Object { $_ } }
+          if ($agentExit -ne 0) {
+            throw "agent failed with exit code $agentExit"
+          }
+          if (($agentOutput | Out-String) -notmatch '"finalAssistant(Raw|Visible)Text":\s*"OK"') {
+            throw "agent finished without exact OK response"
+          }
+          if (-not (Test-Path $proofFile)) {
+            throw "agent did not create proof file"
+          }
+          $proofContent = [System.IO.File]::ReadAllText($proofFile)
+          if ($proofContent -ne "WINDOWS_AGENT_EXEC_OK") {
+            throw "proof file content mismatch: [$proofContent]"
+          }
+          if (-not (Test-Path $sessionPath)) {
+            throw "session transcript not found at $sessionPath"
+          }
+
+          $execCommands = New-Object System.Collections.Generic.List[string]
+          foreach ($line in [System.IO.File]::ReadLines($sessionPath)) {
+            if (-not $line.Trim()) { continue }
+            $record = $line | ConvertFrom-Json
+            $messageRecord = $record.message
+            if ($null -eq $messageRecord -or $messageRecord.role -ne "assistant") { continue }
+            foreach ($block in @($messageRecord.content)) {
+              if ($block.type -eq "toolCall" -and $block.name -eq "exec") {
+                $execCommands.Add([string]$block.arguments.command)
+              }
             }
-            Write-Host "wsl_exec_exit=$LASTEXITCODE"
+          }
+          if ($execCommands.Count -ne 1) {
+            throw "expected exactly one exec call, got $($execCommands.Count)"
           }
 
-          if ($ok) {
-            "wsl2_ok=true" >> $env:GITHUB_OUTPUT
-            "OPENCLAW_WSL2_PROBE_OK=true" >> $env:GITHUB_ENV
-            Write-Host "wsl2_ok=true"
-          } else {
-            "wsl2_ok=false" >> $env:GITHUB_OUTPUT
-            "OPENCLAW_WSL2_PROBE_OK=false" >> $env:GITHUB_ENV
-            Write-Warning "wsl2_ok=false"
+          $command = $execCommands[0]
+          $forbidden = @("bash", "sh -c", "/bin/sh", "/bin/bash", "wsl", "touch ", "printf ")
+          foreach ($term in $forbidden) {
+            if ($command.IndexOf($term, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+              throw "exec command used forbidden POSIX term '$term': $command"
+            }
+          }
+          $windowsNative =
+            $command -match '(?i)\b(Set-Content|Out-File|New-Item|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?)\b' -or
+            $command -match '\\' -or
+            $command -match '\$[A-Za-z_][A-Za-z0-9_]*'
+          if (-not $windowsNative) {
+            throw "exec command did not look Windows-native: $command"
           }
 
-          exit 0
-
-      - name: Keep runner alive for SSH inspection
-        env:
-          KEEPALIVE_MINUTES: ${{ inputs.keepalive_minutes }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $minutes = 20
-          if ($env:KEEPALIVE_MINUTES -match '^\d+$') {
-            $minutes = [int]$env:KEEPALIVE_MINUTES
+          $summary = [ordered]@{
+            platform = $nodePlatform
+            runner = $env:RUNNER_NAME
+            model = $env:MODEL_ID
+            proofFile = "created"
+            proofContent = $proofContent
+            execCommand = $command
           }
-          $minutes = [Math]::Max(0, [Math]::Min($minutes, 60))
-          Write-Host "keepalive_minutes=$minutes"
-          for ($i = 1; $i -le $minutes; $i++) {
-            Write-Host "keepalive minute $i/$minutes"
-            Start-Sleep -Seconds 60
-          }
-
-      - name: Enforce WSL2 requirement
-        if: ${{ inputs.require_wsl2 }}
-        run: |
-          if ($env:OPENCLAW_WSL2_PROBE_OK -ne "true") {
-            Write-Error "WSL2 probe failed or WSL2 is unavailable on this Windows runner."
-            exit 1
-          }
+          $summary | ConvertTo-Json -Depth 5
