@@ -80,6 +80,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Gateway: scope `sessions.resolve` sessionId and label store loads to the requested agent so large unrelated agent stores are not parsed for scoped lookups. Fixes #51264. (#79474) Thanks @samzong.
 - Browser: report Chrome MCP existing-session page readiness in browser status without letting status probes exceed the client timeout. Fixes #80268. (#80280) Thanks @ai-hpc.
 - Memory: reject symlinked directory components in configured extra memory paths before reading Markdown files. (#80331) Thanks @samzong.
 - WhatsApp: apply hot-reloaded `dmPolicy` and `allowFrom` settings to the active Web listener before processing new inbound DMs. Fixes #80538. Thanks @Ampaskopi129.
