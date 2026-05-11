@@ -27,12 +27,9 @@ import {
 } from "./group-policy.js";
 import { checkWhatsAppHeartbeatReady } from "./heartbeat.js";
 import {
-  isWhatsAppGroupJid,
-  isWhatsAppNewsletterJid,
   looksLikeWhatsAppTargetId,
   normalizeWhatsAppAllowFromEntry,
   normalizeWhatsAppMessagingTarget,
-  normalizeWhatsAppTarget,
 } from "./normalize.js";
 import { getWhatsAppRuntime } from "./runtime.js";
 import { sendTypingWhatsApp } from "./send.js";
@@ -45,6 +42,7 @@ import {
 } from "./shared.js";
 import { detectWhatsAppLegacyStateMigrations } from "./state-migrations.js";
 import { collectWhatsAppStatusIssues } from "./status-issues.js";
+import { resolveWhatsAppTargetFacts } from "./target-facts.js";
 
 const loadWhatsAppDirectoryConfig = createLazyRuntimeModule(() => import("./directory-config.js"));
 const loadWhatsAppChannelReactAction = createLazyRuntimeModule(
@@ -52,17 +50,14 @@ const loadWhatsAppChannelReactAction = createLazyRuntimeModule(
 );
 
 function parseWhatsAppExplicitTarget(raw: string) {
-  const normalized = normalizeWhatsAppTarget(raw);
-  if (!normalized) {
+  const resolution = resolveWhatsAppTargetFacts({ target: raw });
+  if (!resolution.ok) {
     return null;
   }
+  const facts = resolution.facts;
   return {
-    to: normalized,
-    chatType: isWhatsAppGroupJid(normalized)
-      ? ("group" as const)
-      : isWhatsAppNewsletterJid(normalized)
-        ? ("channel" as const)
-        : ("direct" as const),
+    to: facts.normalizedTarget,
+    chatType: facts.chatType,
   };
 }
 
