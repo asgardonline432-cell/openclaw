@@ -784,7 +784,7 @@ describe("cron tool", () => {
     });
   });
 
-  it("preserves legacy telegram dm thread ids when inferring delivery", async () => {
+  it("preserves telegram dm thread ids when inferring delivery", async () => {
     expect(
       await executeAddAndReadDelivery({
         callId: "call-telegram-dm-thread",
