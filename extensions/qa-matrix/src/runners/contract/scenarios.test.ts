@@ -4834,7 +4834,7 @@ describe("matrix live qa scenarios", () => {
       expect(endStdin).toHaveBeenCalledTimes(1);
       expect(wait).toHaveBeenCalledTimes(1);
       expect(kill).toHaveBeenCalledTimes(1);
-      const registrationRequest = registerWithToken.mock.calls.at(0)?.[0];
+      const registrationRequest = registerWithToken.mock.calls[0]?.[0];
       expect(registrationRequest?.deviceName).toBe(
         "OpenClaw Matrix QA CLI Self Verification Owner",
       );
