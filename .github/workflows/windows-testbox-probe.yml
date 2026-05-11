@@ -18,9 +18,9 @@ on:
           - blacksmith-32vcpu-windows-2025
           - windows-2025
       model:
-        description: "OpenAI model id"
+        description: "Model id"
         required: false
-        default: "openai/gpt-5.4"
+        default: "anthropic/claude-sonnet-4-6"
         type: string
 
 permissions:
@@ -70,14 +70,12 @@ jobs:
       - name: Real Windows agent exec proof
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MODEL_ID: ${{ inputs.model }}
         run: |
           $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $false
 
-          if (-not $env:OPENAI_API_KEY) {
-            throw "Missing OPENAI_API_KEY secret."
-          }
           if ($env:RUNNER_OS -ne "Windows") {
             throw "Expected Windows runner, got $env:RUNNER_OS."
           }
@@ -85,8 +83,20 @@ jobs:
           if ($nodePlatform -ne "win32") {
             throw "Expected node process.platform=win32, got $nodePlatform."
           }
-          if ($env:MODEL_ID -notmatch '^openai/.+') {
-            throw "This probe expects an OpenAI model id, got $env:MODEL_ID."
+          $modelParts = $env:MODEL_ID.Split("/", 2)
+          if ($modelParts.Count -ne 2 -or -not $modelParts[0] -or -not $modelParts[1]) {
+            throw "Expected provider/model model id, got $env:MODEL_ID."
+          }
+          $providerId = $modelParts[0]
+          $modelName = $modelParts[1]
+          if ($providerId -eq "openai" -and -not $env:OPENAI_API_KEY) {
+            throw "Missing OPENAI_API_KEY secret."
+          }
+          if ($providerId -eq "anthropic" -and -not $env:ANTHROPIC_API_KEY) {
+            throw "Missing ANTHROPIC_API_KEY secret."
+          }
+          if ($providerId -ne "openai" -and $providerId -ne "anthropic") {
+            throw "Unsupported probe provider '$providerId'."
           }
 
           $proofRoot = Join-Path $env:RUNNER_TEMP "openclaw-windows-agent-proof"
@@ -99,7 +109,59 @@ jobs:
           $env:OPENCLAW_CONFIG_PATH = $configPath
           $env:OPENCLAW_WORKSPACE_DIR = $workspace
 
-          $modelName = $env:MODEL_ID.Substring("openai/".Length)
+          if ($providerId -eq "openai") {
+            $providerConfig = @{
+              openai = @{
+                api = "openai-responses"
+                baseUrl = "https://api.openai.com/v1"
+                apiKey = @{
+                  source = "env"
+                  provider = "default"
+                  id = "OPENAI_API_KEY"
+                }
+                timeoutSeconds = 1800
+                models = @(
+                  @{
+                    id = $modelName
+                    name = $modelName
+                    contextWindow = 1047576
+                    maxTokens = 32768
+                  }
+                )
+              }
+            }
+            $agentModelConfig = @{
+              alias = "GPT"
+              params = @{ transport = "sse" }
+              agentRuntime = @{ id = "pi" }
+            }
+          } else {
+            $providerConfig = @{
+              anthropic = @{
+                api = "anthropic-messages"
+                baseUrl = "https://api.anthropic.com"
+                apiKey = @{
+                  source = "env"
+                  provider = "default"
+                  id = "ANTHROPIC_API_KEY"
+                }
+                timeoutSeconds = 900
+                models = @(
+                  @{
+                    id = $modelName
+                    name = $modelName
+                    contextWindow = 200000
+                    maxTokens = 64000
+                  }
+                )
+              }
+            }
+            $agentModelConfig = @{
+              alias = "Claude"
+              agentRuntime = @{ id = "pi" }
+            }
+          }
+
           $config = @{
             agents = @{
               defaults = @{
@@ -107,35 +169,12 @@ jobs:
                 workspace = $workspace
                 model = @{ primary = $env:MODEL_ID }
                 models = @{
-                  ($env:MODEL_ID) = @{
-                    alias = "GPT"
-                    params = @{ transport = "sse" }
-                    agentRuntime = @{ id = "pi" }
-                  }
+                  ($env:MODEL_ID) = $agentModelConfig
                 }
               }
             }
             models = @{
-              providers = @{
-                openai = @{
-                  api = "openai-responses"
-                  baseUrl = "https://api.openai.com/v1"
-                  apiKey = @{
-                    source = "env"
-                    provider = "default"
-                    id = "OPENAI_API_KEY"
-                  }
-                  timeoutSeconds = 1800
-                  models = @(
-                    @{
-                      id = $modelName
-                      name = $modelName
-                      contextWindow = 1047576
-                      maxTokens = 32768
-                    }
-                  )
-                }
-              }
+              providers = $providerConfig
             }
             tools = @{
               profile = "coding"
