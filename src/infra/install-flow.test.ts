@@ -76,7 +76,7 @@ describe("withExtractedArchiveRoot", () => {
     });
 
     expect(withTempDirSpy).toHaveBeenCalledTimes(1);
-    const withTempDirCall = withTempDirSpy.mock.calls.at(0);
+    const withTempDirCall = withTempDirSpy.mock.calls[0];
     expect(withTempDirCall?.[0]).toBe("openclaw-plugin-");
     expect(typeof withTempDirCall?.[1]).toBe("function");
     expect(extractSpy).toHaveBeenCalledOnce();
