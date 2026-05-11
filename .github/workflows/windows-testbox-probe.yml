@@ -175,7 +175,7 @@ jobs:
           Create a file named windows-agent-proof.txt in the current workspace with exact content WINDOWS_AGENT_EXEC_OK and no trailing newline. Use the exec tool exactly once. You are running on Windows, so use the native Windows shell style for the command. Do not use bash, sh, WSL, touch, printf, or /bin paths. After the exec tool succeeds, reply with exact text OK.
           "@
 
-          $agentOutput = pnpm openclaw agent --local --agent main --session-id $sessionId --model $env:MODEL_ID --message $message --thinking off --timeout 600 --json 2>&1
+          $agentOutput = pnpm openclaw agent --local --agent main --session-id $sessionId --model $env:MODEL_ID --message $message --thinking minimal --timeout 900 --json 2>&1
           $agentExit = $LASTEXITCODE
           if ($null -ne $agentOutput) { $agentOutput | ForEach-Object { $_ } }
           if ($agentExit -ne 0) {
