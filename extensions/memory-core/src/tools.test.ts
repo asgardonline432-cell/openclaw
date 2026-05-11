@@ -17,7 +17,6 @@ const sessionStore = vi.hoisted(() => ({
   "agent:main:main": {
     sessionId: "thread-1",
     updatedAt: 1,
-    sessionFile: "/tmp/sessions/thread-1.jsonl",
   },
 }));
 
@@ -26,9 +25,9 @@ vi.mock("openclaw/plugin-sdk/session-transcript-hit", async (importOriginal) => 
     await importOriginal<typeof import("openclaw/plugin-sdk/session-transcript-hit")>();
   return {
     ...actual,
-    loadCombinedSessionStoreForGateway: vi.fn(() => ({
-      storePath: "(test)",
-      store: sessionStore,
+    loadCombinedSessionEntriesForGateway: vi.fn(() => ({
+      databasePath: "(test)",
+      entries: sessionStore,
     })),
   };
 });
@@ -213,7 +212,7 @@ describe("memory_search corpus labels", () => {
         source: "memory" as const,
       },
       {
-        path: "sessions/thread-1.jsonl",
+        path: "transcript:main:thread-1",
         startLine: 1,
         endLine: 2,
         score: 0.9,
@@ -245,7 +244,7 @@ describe("memory_search corpus labels", () => {
       },
       {
         corpus: "sessions",
-        path: "sessions/thread-1.jsonl",
+        path: "transcript:main:thread-1",
         startLine: 1,
         endLine: 2,
         score: 0.9,
