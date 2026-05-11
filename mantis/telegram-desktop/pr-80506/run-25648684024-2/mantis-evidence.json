@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "telegram-desktop-proof",
+  "title": "Mantis Telegram Desktop Proof",
+  "summary": "Mantis could not capture native Telegram Desktop proof because this runner blocks DNS/network access to the Convex credential broker and Crabbox/GitHub APIs.",
+  "scenario": "telegram-desktop-proof",
+  "comparison": {
+    "baseline": {
+      "ref": "2c124a1e796af7ca9cf46155e49df1855fe95e77~3",
+      "sha": "7d161da58742b970dd483af86c39a3c0916792dd",
+      "expected": "native Telegram Desktop /status proof captured",
+      "status": "fail"
+    },
+    "candidate": {
+      "ref": "2c124a1e796af7ca9cf46155e49df1855fe95e77",
+      "sha": "2c124a1e796af7ca9cf46155e49df1855fe95e77",
+      "expected": "native Telegram Desktop /status proof captured",
+      "status": "fail",
+      "fixed": false
+    },
+    "pass": false
+  },
+  "artifacts": [
+    {
+      "alt": "Baseline native Telegram Desktop proof GIF unavailable: network blocked before capture",
+      "inline": true,
+      "kind": "motionPreview",
+      "label": "Main",
+      "lane": "baseline",
+      "path": "baseline/telegram-desktop-proof.gif",
+      "required": false,
+      "targetPath": "baseline/telegram-desktop-proof.gif",
+      "width": 520
+    },
+    {
+      "alt": "Candidate native Telegram Desktop proof GIF unavailable: network blocked before capture",
+      "inline": true,
+      "kind": "motionPreview",
+      "label": "This PR",
+      "lane": "candidate",
+      "path": "candidate/telegram-desktop-proof.gif",
+      "required": false,
+      "targetPath": "candidate/telegram-desktop-proof.gif",
+      "width": 520
+    },
+    {
+      "kind": "metadata",
+      "label": "Mantis blocked summary",
+      "lane": "run",
+      "path": "summary.json",
+      "targetPath": "summary.json"
+    },
+    {
+      "kind": "report",
+      "label": "Mantis blocked report",
+      "lane": "run",
+      "path": "report.md",
+      "targetPath": "report.md"
+    }
+  ]
+}

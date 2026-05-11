@@ -1,0 +1,24 @@
+{
+  "status": "fail",
+  "reason": "sandbox-network-blocked",
+  "attempted": {
+    "ghPrView": "failed: GitHub API DNS/network unavailable",
+    "ghPrDiff": "failed: GitHub API DNS/network unavailable",
+    "baselineInstall": "pass: pnpm install --offline with writable copied store",
+    "baselineBuild": "pass: pnpm build",
+    "candidateInstall": "pass: pnpm install --offline with writable copied store",
+    "candidateBuild": "pass: pnpm build",
+    "baselineTelegramStart": "fail: Convex credential broker DNS EAI_AGAIN before session creation",
+    "candidateTelegramStart": "fail: Convex credential broker DNS EAI_AGAIN before session creation"
+  },
+  "refs": {
+    "baseline": {
+      "ref": "2c124a1e796af7ca9cf46155e49df1855fe95e77~3",
+      "sha": "7d161da58742b970dd483af86c39a3c0916792dd"
+    },
+    "candidate": {
+      "ref": "2c124a1e796af7ca9cf46155e49df1855fe95e77",
+      "sha": "2c124a1e796af7ca9cf46155e49df1855fe95e77"
+    }
+  }
+}
