@@ -102,8 +102,8 @@ importers:
         specifier: 0.6.0
         version: 0.6.0
       '@openclaw/fs-safe':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: github:openclaw/fs-safe#c7ccb99d3058f2acf2ad2758ad2470c7e113a53c
+        version: https://codeload.github.com/openclaw/fs-safe/tar.gz/c7ccb99d3058f2acf2ad2758ad2470c7e113a53c
       '@slack/bolt':
         specifier: 4.7.2
         version: 4.7.2(@types/express@5.0.6)
@@ -294,9 +294,6 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
-      unrun:
-        specifier: 0.3.0
-        version: 0.3.0
       vitest:
         specifier: 4.1.6
         version: 4.1.6(@opentelemetry/api@1.9.1)(@types/node@25.7.0)(@vitest/browser-playwright@4.1.6)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1(@noble/hashes@2.0.1))(vite@8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
@@ -3349,8 +3346,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@openclaw/fs-safe@0.2.1':
-    resolution: {integrity: sha512-xFLJZHRtnxI9V5RfrPArzPXZRs5bVAbhV0x96qYKFmvyqxRwAyCdjXYLHpLHqU3uzwOGzRQFP8anAVNcfI7umA==}
+  '@openclaw/fs-safe@https://codeload.github.com/openclaw/fs-safe/tar.gz/c7ccb99d3058f2acf2ad2758ad2470c7e113a53c':
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/openclaw/fs-safe/tar.gz/c7ccb99d3058f2acf2ad2758ad2470c7e113a53c}
+    version: 0.2.0
     engines: {node: '>=20.11'}
 
   '@opentelemetry/api-logs@0.217.0':
@@ -10082,7 +10080,7 @@ snapshots:
   '@openai/codex@0.130.0-win32-x64':
     optional: true
 
-  '@openclaw/fs-safe@0.2.1':
+  '@openclaw/fs-safe@https://codeload.github.com/openclaw/fs-safe/tar.gz/c7ccb99d3058f2acf2ad2758ad2470c7e113a53c':
     optionalDependencies:
       jszip: 3.10.1
       tar: 7.5.15
