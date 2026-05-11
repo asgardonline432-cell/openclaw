@@ -1,0 +1,35 @@
+{
+  "artifacts": {
+    "desktopLog": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-desktop.log",
+    "ffmpegLog": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/ffmpeg.log",
+    "previewGif": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session-motion.gif",
+    "previewGifCropped": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session-motion-telegram-window.gif",
+    "trimmedVideoCropped": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session-motion-telegram-window.mp4",
+    "screenshot": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session.png",
+    "status": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/status.json",
+    "trimmedVideo": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session-motion.mp4",
+    "video": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session.mp4"
+  },
+  "finishedAt": "2026-05-11T06:39:01.965Z",
+  "session": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/session.json",
+  "startedAt": "2026-05-11T06:37:57.291Z",
+  "status": "pass",
+  "mediaPreview": {
+    "input": "/home/runner/_work/openclaw/openclaw/.artifacts/qa-e2e/mantis/telegram-desktop-proof-worktrees/candidate/.artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session.mp4",
+    "output": "/home/runner/_work/openclaw/openclaw/.artifacts/qa-e2e/mantis/telegram-desktop-proof-worktrees/candidate/.artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session-motion.gif",
+    "trimmedVideoOutput": "/home/runner/_work/openclaw/openclaw/.artifacts/qa-e2e/mantis/telegram-desktop-proof-worktrees/candidate/.artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-session-motion.mp4",
+    "sourceDurationSeconds": 65.083,
+    "previewStartSeconds": 11.208,
+    "previewDurationSeconds": 1.958,
+    "trimmedStaticEdges": true,
+    "detectedFreezeIntervals": 2,
+    "gifsicleOptimized": false
+  },
+  "croppedMediaPreview": {
+    "crop": "crop=650:1000:635:40",
+    "fps": 12,
+    "outputWidth": 520,
+    "segment": "final 12s after proof view"
+  },
+  "report": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/candidate-session/telegram-user-crabbox-proof.md"
+}

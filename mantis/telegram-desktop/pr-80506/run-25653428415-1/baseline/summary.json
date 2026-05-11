@@ -1,0 +1,35 @@
+{
+  "artifacts": {
+    "desktopLog": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-desktop.log",
+    "ffmpegLog": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/ffmpeg.log",
+    "previewGif": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session-motion.gif",
+    "previewGifCropped": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session-motion-telegram-window.gif",
+    "screenshot": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session.png",
+    "status": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/status.json",
+    "trimmedVideo": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session-motion.mp4",
+    "trimmedVideoCropped": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session-motion-telegram-window.mp4",
+    "video": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session.mp4"
+  },
+  "finishedAt": "2026-05-11T06:30:23.293Z",
+  "session": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/session.json",
+  "startedAt": "2026-05-11T06:29:13.459Z",
+  "status": "pass",
+  "report": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-proof.md",
+  "mediaPreview": {
+    "input": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session.mp4",
+    "output": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session-motion.gif",
+    "trimmedVideoOutput": ".artifacts/qa-e2e/mantis/telegram-desktop-proof/baseline-session/telegram-user-crabbox-session-motion.mp4",
+    "sourceDurationSeconds": 70.292,
+    "previewStartSeconds": 36.5,
+    "previewDurationSeconds": 1.917,
+    "trimmedStaticEdges": true,
+    "detectedFreezeIntervals": 2,
+    "gifsicleOptimized": false
+  },
+  "croppedMediaPreview": {
+    "crop": "crop=650:1000:635:40",
+    "fps": 12,
+    "outputWidth": 520,
+    "segment": "final 12s after proof view"
+  }
+}
