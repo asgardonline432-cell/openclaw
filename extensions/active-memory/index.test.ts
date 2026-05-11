@@ -3396,9 +3396,6 @@ describe("active-memory plugin", () => {
       sessionId: "session-a",
       updatedAt: 25,
       channel: "c2c:10D4F7C2",
-      origin: {
-        provider: "qqbot",
-      },
     };
 
     await hooks.before_prompt_build(
@@ -3422,9 +3419,7 @@ describe("active-memory plugin", () => {
     hoisted.sessionStore["agent:main:telegram:direct:12345"] = {
       sessionId: "session-a",
       updatedAt: 25,
-      origin: {
-        provider: "webchat",
-      },
+      channel: "webchat",
     };
 
     await hooks.before_prompt_build(
@@ -3434,32 +3429,6 @@ describe("active-memory plugin", () => {
         trigger: "user",
         sessionKey: "agent:main:telegram:direct:12345",
         messageProvider: "webchat",
-        channelId: "telegram",
-      },
-    );
-
-    expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]).toMatchObject({
-      messageChannel: "telegram",
-      messageProvider: "telegram",
-    });
-  });
-
-  it("preserves a direct explicit channel when weak legacy fallback disagrees", async () => {
-    hoisted.sessionStore["agent:main:telegram:direct:12345"] = {
-      sessionId: "session-a",
-      updatedAt: 25,
-      origin: {
-        provider: "webchat",
-      },
-    };
-
-    await hooks.before_prompt_build(
-      { prompt: "what wings should i order? direct explicit channel", messages: [] },
-      {
-        agentId: "main",
-        trigger: "user",
-        sessionKey: "agent:main:telegram:direct:12345",
-        messageProvider: "telegram",
         channelId: "telegram",
       },
     );
