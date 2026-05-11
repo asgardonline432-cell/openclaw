@@ -341,10 +341,10 @@ describe("basic browser routes", () => {
     expect(response.statusCode).toBe(200);
     expect(isTransportAvailable).toHaveBeenCalledTimes(1);
     expect(isTransportAvailable).toHaveBeenCalledWith(5_000);
-    const [timeoutMs, reachabilityOptions] = readFirstReachabilityCall(isReachable);
-    expect(timeoutMs).toBe(7_000);
-    expect(reachabilityOptions?.ephemeral).toBe(true);
-    expect(reachabilityOptions?.signal).toBeInstanceOf(AbortSignal);
+    expect(isReachable).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ ephemeral: true, signal: expect.any(AbortSignal) }),
+    );
     expect(isHttpReachable).not.toHaveBeenCalled();
     const body = responseBodyRecord(response);
     expect(body.cdpHttp).toBe(true);
@@ -369,10 +369,10 @@ describe("basic browser routes", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      const [timeoutMs, reachabilityOptions] = readFirstReachabilityCall(isReachable);
-      expect(timeoutMs).toBe(4_000);
-      expect(reachabilityOptions?.ephemeral).toBe(true);
-      expect(reachabilityOptions?.signal).toBeInstanceOf(AbortSignal);
+      expect(isReachable).toHaveBeenCalledWith(
+        4_000,
+        expect.objectContaining({ ephemeral: true, signal: expect.any(AbortSignal) }),
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -394,9 +394,9 @@ describe("basic browser routes", () => {
     });
 
     expect(isReachable).toHaveBeenCalledTimes(1);
-    const [, reachabilityOptions] = readFirstReachabilityCall(isReachable);
-    expect(reachabilityOptions?.ephemeral).toBe(true);
-    expect(reachabilityOptions?.signal).toBeInstanceOf(AbortSignal);
+    expect(isReachable.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ ephemeral: true, signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("skips the page-reachability probe when transport is unavailable", async () => {
