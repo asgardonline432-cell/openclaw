@@ -135,14 +135,6 @@ async function waitForRealtimeTest(
   await vi.waitFor(callback, { interval: 1, ...options });
 }
 
-function requireFirstMockCall(calls: readonly unknown[][], label: string): unknown[] {
-  const call = calls.at(0);
-  if (!call) {
-    throw new Error(`expected ${label} call`);
-  }
-  return call;
-}
-
 describe("RealtimeCallHandler path routing", () => {
   it("uses the request host and stream path in TwiML", () => {
     const handler = makeHandler();
@@ -232,9 +224,7 @@ describe("RealtimeCallHandler path routing", () => {
           expect(createBridge).toHaveBeenCalled();
         });
         callbacks?.onReady?.();
-        const event = requireFirstMockCall(processEvent.mock.calls, "processed event")[0] as
-          | NormalizedEvent
-          | undefined;
+        const event = processEvent.mock.calls[0]?.[0] as NormalizedEvent | undefined;
         expect(event?.type).toBe("call.initiated");
         if (event?.type !== "call.initiated") {
           throw new Error("expected outbound realtime stream to emit call.initiated");
@@ -826,7 +816,7 @@ describe("RealtimeCallHandler path routing", () => {
         await waitForRealtimeTest(() => {
           expect(consult).toHaveBeenCalledTimes(1);
         });
-        const [args, callId, context] = requireFirstMockCall(consult.mock.calls, "consult");
+        const [args, callId, context] = consult.mock.calls[0] ?? [];
         expect(args).toEqual({
           question: "Create a smoke test file for me.",
           context:
@@ -998,7 +988,7 @@ describe("RealtimeCallHandler path routing", () => {
           },
           { timeout: 2_000 },
         );
-        const [args, callId, context] = requireFirstMockCall(consult.mock.calls, "consult");
+        const [args, callId, context] = consult.mock.calls[0] ?? [];
         const consultArgs = args as { question?: string; context?: string } | undefined;
         expect(consultArgs?.question).toBe("Send a Discord message.");
         expect(consultArgs?.context).toBe(
