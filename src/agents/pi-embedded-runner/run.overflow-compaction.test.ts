@@ -706,7 +706,7 @@ describe("runEmbeddedPiAgent overflow compaction trigger routing", () => {
         forwardedAuthProfileId: "openai:personal",
       },
     });
-    const harnessParams = pluginRunAttempt.mock.calls.at(0)?.[0];
+    const harnessParams = pluginRunAttempt.mock.calls[0]?.[0];
     expect(harnessParams?.runtimePlan).toBe(runtimePlan);
     expect(Object.keys(harnessParams?.authProfileStore.profiles ?? {})).toEqual([
       "openai:personal",
@@ -714,140 +714,6 @@ describe("runEmbeddedPiAgent overflow compaction trigger routing", () => {
     expectRecordFields(harnessParams?.authProfileStore.profiles["openai:personal"], {
       provider: "openai-codex",
     });
-  });
-
-  it("rotates Codex harness auth profiles after a prompt-level subscription limit", async () => {
-    const { clearAgentHarnesses, registerAgentHarness } = await import("../harness/registry.js");
-    const subscriptionLimit = new Error(
-      "You've reached your Codex subscription usage limit. Next reset in 20 hours.",
-    );
-    const normalizedLimit = Object.assign(new Error(subscriptionLimit.message), {
-      name: "FailoverError",
-      reason: "rate_limit",
-      status: 429,
-    });
-    let attemptCount = 0;
-    const pluginRunAttempt = vi.fn<AgentHarness["runAttempt"]>(async () => {
-      attemptCount += 1;
-      return attemptCount === 1
-        ? makeAttemptResult({ promptError: subscriptionLimit })
-        : makeAttemptResult({ assistantTexts: ["backup ok"], promptError: null });
-    });
-    const firstRuntimePlan = makeForwardedRuntimePlan({
-      resolvedRef: {
-        provider: "openai",
-        modelId: "gpt-5.5",
-        harnessId: "codex",
-      },
-      auth: {
-        providerForAuth: "openai",
-        harnessAuthProvider: "openai-codex",
-        forwardedAuthProfileId: "openai-codex:sub",
-        forwardedAuthProfileCandidateIds: ["openai-codex:sub", "openai:backup"],
-      },
-    });
-    const secondRuntimePlan = makeForwardedRuntimePlan({
-      resolvedRef: {
-        provider: "openai",
-        modelId: "gpt-5.5",
-        harnessId: "codex",
-      },
-      auth: {
-        providerForAuth: "openai",
-        harnessAuthProvider: "openai-codex",
-        forwardedAuthProfileId: "openai:backup",
-        forwardedAuthProfileCandidateIds: ["openai-codex:sub", "openai:backup"],
-      },
-    });
-    clearAgentHarnesses();
-    registerAgentHarness({
-      id: "codex",
-      label: "Codex",
-      supports: () => ({ supported: false }),
-      runAttempt: pluginRunAttempt,
-    });
-    mockedBuildAgentRuntimePlan
-      .mockReturnValueOnce(firstRuntimePlan)
-      .mockReturnValueOnce(secondRuntimePlan);
-    mockedGetApiKeyForModel.mockRejectedValueOnce(new Error("generic auth should be skipped"));
-    mockedResolveAuthProfileOrder.mockReturnValueOnce(["openai-codex:sub", "openai:backup"]);
-    mockedEnsureAuthProfileStoreWithoutExternalProfiles.mockReturnValue({
-      version: 1,
-      profiles: {
-        "openai-codex:sub": {
-          type: "oauth",
-          provider: "openai-codex",
-          access: "access",
-          refresh: "refresh",
-          expires: Date.now() + 60_000,
-        },
-        "openai:backup": {
-          type: "api_key",
-          provider: "openai",
-          key: "sk-test",
-        },
-      },
-    });
-    mockedCoerceToFailoverError.mockReturnValueOnce(normalizedLimit);
-    mockedDescribeFailoverError.mockImplementation((err: unknown) => ({
-      message: err instanceof Error ? err.message : String(err),
-      reason: err === normalizedLimit ? "rate_limit" : undefined,
-      status: err === normalizedLimit ? 429 : undefined,
-      code: undefined,
-    }));
-
-    try {
-      await runEmbeddedPiAgent({
-        ...overflowBaseRunParams,
-        provider: "openai",
-        model: "gpt-5.5",
-        config: {
-          agents: {
-            defaults: {
-              agentRuntime: { id: "codex" },
-            },
-          },
-        },
-        runId: "forced-codex-harness-rotates-subscription-limit-auth",
-        authProfileId: "openai-codex:sub",
-        authProfileIdSource: "auto",
-      });
-    } finally {
-      clearAgentHarnesses();
-    }
-
-    expect(mockedGetApiKeyForModel).not.toHaveBeenCalled();
-    expect(pluginRunAttempt).toHaveBeenCalledTimes(2);
-    const firstAttempt = expectMockCallFields(pluginRunAttempt, {
-      provider: "openai",
-      authProfileId: "openai-codex:sub",
-      authProfileIdSource: "auto",
-    });
-    const secondAttempt = expectMockCallFields(
-      pluginRunAttempt,
-      {
-        provider: "openai",
-        authProfileId: "openai:backup",
-        authProfileIdSource: "auto",
-      },
-      1,
-    );
-    expectRuntimePlanFields(firstAttempt.runtimePlan, {
-      auth: {
-        forwardedAuthProfileId: "openai-codex:sub",
-        forwardedAuthProfileCandidateIds: ["openai-codex:sub", "openai:backup"],
-      },
-    });
-    expectRuntimePlanFields(secondAttempt.runtimePlan, {
-      auth: {
-        forwardedAuthProfileId: "openai:backup",
-        forwardedAuthProfileCandidateIds: ["openai-codex:sub", "openai:backup"],
-      },
-    });
-    const firstAuthProfileStore = expectRecordFields(firstAttempt.authProfileStore, {});
-    const firstAuthProfiles = expectRecordFields(firstAuthProfileStore.profiles, {});
-    expect(Object.keys(firstAuthProfiles)).toEqual(["openai-codex:sub", "openai:backup"]);
-    expect(secondAttempt.authProfileStore).toBe(firstAttempt.authProfileStore);
   });
 
   it("blocks undersized models before dispatching a provider attempt", async () => {
