@@ -8,6 +8,13 @@ import { describe, expect, it, vi } from "vitest";
 import { registerMinimaxProviders } from "./provider-registration.js";
 import { createMiniMaxWebSearchProvider } from "./src/minimax-web-search-provider.js";
 
+type CatalogProvider = {
+  api: string;
+  authHeader: boolean;
+  baseUrl: string;
+  models: Array<{ id?: string }>;
+};
+
 vi.mock("./oauth.runtime.js", () => ({
   loginMiniMaxPortalOAuth: vi.fn(async () => ({
     access: "minimax-oauth-access-token",
@@ -176,7 +183,10 @@ describe("minimax provider hooks", () => {
       }),
     } as never);
 
-    const provider = "provider" in (catalog ?? {}) ? catalog?.provider : undefined;
+    const provider =
+      catalog !== null && catalog !== undefined && "provider" in catalog
+        ? (catalog.provider as CatalogProvider)
+        : undefined;
     expect(provider).toMatchObject({
       api: "anthropic-messages",
       authHeader: true,

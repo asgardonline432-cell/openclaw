@@ -235,8 +235,9 @@ describe("createTelegramBot", () => {
   });
 
   it("logs middleware errors through grammY catch without rethrowing", () => {
+    const errorMock = vi.fn();
     const runtime = {
-      error: vi.fn(),
+      error: errorMock,
     } as unknown as NonNullable<TelegramBotOptions["runtime"]>;
     const bot = createTelegramBot({ token: "tok", runtime });
     const catchMock = bot.catch as unknown as {
@@ -246,7 +247,7 @@ describe("createTelegramBot", () => {
 
     expect(errorHandler).toBeTypeOf("function");
     errorHandler?.(new Error("handler boom"));
-    const errorMessage = stripAnsi(String(runtime.error.mock.calls[0]?.[0]));
+    const errorMessage = stripAnsi(String(errorMock.mock.calls[0]?.[0]));
     expect(errorMessage.startsWith("telegram bot error: Error: handler boom")).toBe(true);
   });
 

@@ -2,7 +2,7 @@ import { rmSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { stripAnsi } from "../../../src/terminal/ansi.js";
 import { loginWeb } from "./login.js";
 import { renderQrTerminal } from "./qr-terminal.js";
@@ -81,8 +81,9 @@ async function flushTasks() {
   await Promise.resolve();
 }
 
-function runtimeMessageCalls(fn: ReturnType<typeof vi.fn>) {
-  return fn.mock.calls.map((call) => stripAnsi(String(call[0])));
+function runtimeMessageCalls(fn: (...args: unknown[]) => void) {
+  const mock = fn as Mock<(...args: unknown[]) => void>;
+  return mock.mock.calls.map((call) => stripAnsi(String(call[0])));
 }
 
 describe("loginWeb coverage", () => {
