@@ -646,7 +646,6 @@ describe("scheduleRestartSentinelWake", () => {
       entry: {
         sessionId: "agent:main:group",
         updatedAt: 0,
-        origin: { provider: "telegram", chatType: "group" },
       },
       store: {},
       canonicalKey: "agent:main:group",
@@ -690,7 +689,6 @@ describe("scheduleRestartSentinelWake", () => {
       entry: {
         sessionId: "agent:main:telegram:group:-1003826723328:topic:13757",
         updatedAt: 0,
-        origin: { provider: "telegram", chatType: "group" },
       },
       store: {},
       canonicalKey: "agent:main:telegram:group:-1003826723328:topic:13757",
@@ -1305,7 +1303,6 @@ describe("scheduleRestartSentinelWake", () => {
         entry: {
           sessionId: "agent:main:matrix:channel:!lowercased:example.org:thread:$thread-event",
           updatedAt: 0,
-          origin: { provider: "matrix", accountId: "acct-thread", threadId: "$thread-event" },
         },
         store: {},
         agentId: "main",
