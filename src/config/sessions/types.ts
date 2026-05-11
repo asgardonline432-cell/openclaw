@@ -348,7 +348,6 @@ export type SessionEntry = {
   subject?: string;
   groupChannel?: string;
   space?: string;
-  origin?: SessionOrigin;
   deliveryContext?: DeliveryContext;
   lastChannel?: SessionChannelId;
   lastTo?: string;
