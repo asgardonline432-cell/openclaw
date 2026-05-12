@@ -10,10 +10,10 @@ const logger = createNoopLogger();
 const { makeStoreKey } = createCronStoreHarness({ prefix: "openclaw-cron-get-job-" });
 installCronTestHooks({ logger });
 
-function createCronService(storeKey: string) {
+function createCronService(storeKey: string, cronEnabled = true) {
   return new CronService({
     storeKey,
-    cronEnabled: true,
+    cronEnabled,
     log: logger,
     enqueueSystemEvent: vi.fn(),
     requestHeartbeat: vi.fn(),
@@ -76,8 +76,8 @@ describe("CronService.getJob", () => {
   });
 
   it("loads persisted jobs for direct reads without starting the scheduler", async () => {
-    const { storePath } = await makeStorePath();
-    const writer = createCronService(storePath);
+    const { storeKey } = await makeStoreKey();
+    const writer = createCronService(storeKey);
     await writer.start();
     const persisted = await writer.add({
       name: "persisted-job",
@@ -89,14 +89,12 @@ describe("CronService.getJob", () => {
     });
     writer.stop();
 
-    const reader = createCronService(storePath, false);
+    const reader = createCronService(storeKey, false);
 
     await expect(reader.readJob(persisted.id)).resolves.toMatchObject({
       id: persisted.id,
       name: "persisted-job",
     });
-    if (reader.getJob(persisted.id) === undefined) {
-      throw new Error("Expected persisted cron job");
-    }
+    expect(reader.getJob(persisted.id)).toBeDefined();
   });
 });
