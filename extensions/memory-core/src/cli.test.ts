@@ -1784,7 +1784,6 @@ describe("memory cli", () => {
       });
       expect(entries).toHaveLength(1);
       const entry = entries[0];
-      expect(entry).toBeDefined();
       if (!entry) {
         throw new Error("Expected short-term recall entry");
       }
