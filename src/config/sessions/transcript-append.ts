@@ -1,3 +1,4 @@
+import { redactSecrets } from "../../logging/redact.js";
 import { appendSqliteSessionTranscriptMessage as appendSqliteSessionTranscriptMessageAtomically } from "./transcript-store.sqlite.js";
 
 async function loadCurrentSessionVersion(): Promise<number> {
@@ -38,7 +39,7 @@ export async function appendSessionTranscriptMessage(params: {
     sessionId: scope.sessionId,
     sessionVersion,
     cwd: params.cwd,
-    message: params.message,
+    message: redactSecrets(params.message),
     now: () => params.now ?? Date.now(),
   });
 }
