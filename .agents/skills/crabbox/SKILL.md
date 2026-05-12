@@ -150,19 +150,6 @@ Use these on debugging runs before inventing ad hoc logging:
   providers and prints `set len=N secret=true` style summaries. On
   `blacksmith-testbox`, env forwarding is unsupported; put secrets in the
   Testbox workflow instead.
-- `--env-from-profile <file>` plus `--allow-env NAME`: loads simple
-  `export NAME=value` / `NAME=value` lines from a local profile without
-  executing it, then forwards only allowlisted names. `--allow-env` is
-  repeatable and comma-separated. Profile values override ambient allowlisted
-  env values for that run.
-- `--script <file>` / `--script-stdin`: upload a local script into
-  `.crabbox/scripts/` and execute it on the remote box. Shebang scripts execute
-  directly; scripts without a shebang run through `bash`. Arguments after `--`
-  become script args.
-- `--fresh-pr owner/repo#123|URL|number`: skip dirty local sync and create a
-  fresh remote checkout of the GitHub PR. Bare numbers use the current repo's
-  GitHub origin. Add `--apply-local-patch` only when the current local
-  `git diff --binary HEAD` should be applied on top of that PR checkout.
 - `--capture-stdout <path>` / `--capture-stderr <path>`: write remote streams to
   local files and keep binary/noisy output out of retained logs. Parent
   directories must already exist. These are direct-provider only.
@@ -178,10 +165,9 @@ Live-provider debug template for direct AWS/Hetzner leases:
 
 ```sh
 mkdir -p .crabbox/logs
-pnpm crabbox:run -- --provider aws \
+CRABBOX_ENV_ALLOW=OPENAI_API_KEY,OPENAI_BASE_URL \
+  pnpm crabbox:run -- --provider aws \
   --preflight \
-  --env-from-profile ~/.profile \
-  --allow-env OPENAI_API_KEY,OPENAI_BASE_URL \
   --timing-json \
   --capture-stdout .crabbox/logs/live-provider.stdout.log \
   --capture-stderr .crabbox/logs/live-provider.stderr.log \
@@ -191,9 +177,8 @@ pnpm crabbox:run -- --provider aws \
 ```
 
 Do not pass `--capture-*`, `--download`, `--checksum`, `--force-sync-large`, or
-`--sync-only` to delegated providers. Also do not pass `--script*` or
-`--fresh-pr` there. Crabbox rejects these because the provider owns sync or
-command transport.
+`--sync-only` to delegated providers. Crabbox rejects them because the provider
+owns sync or command transport.
 
 ## Efficient Bug E2E Verification
 
