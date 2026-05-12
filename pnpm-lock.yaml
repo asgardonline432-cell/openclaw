@@ -3354,7 +3354,7 @@ packages:
     engines: {node: '>=20.11'}
 
   '@openclaw/proxyline@0.1.1':
-    resolution: {integrity: sha512-u1DcfTXZ3XRHkLBx5cqB8CFwJErzbAAifD+7SE1OW3ymQ+L6PfRQHJkYpsVRWtLP82r5Eg5VCDlPIoHn67CJnw==}
+    resolution: {integrity: sha512-ZGqAvQlw3HE+wV26ZlV+EIL6XovpWK4TvmFeb6RucxwYbGbwmS/h2out03s0NtFuF30gz7uRt45Dbfn9UDvnpA==}
     engines: {node: '>=20.18.1'}
 
   '@opentelemetry/api-logs@0.217.0':
