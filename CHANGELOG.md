@@ -30,6 +30,12 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- CI: add a non-blocking `plugin-inspector-advisory` artifact to Plugin Prerelease so release runs capture bundled plugin compatibility triage without changing the blocking gate.
+- Providers/fal: route GPT Image 2 and Nano Banana 2 reference-image edit requests to `/edit` with `image_urls` array, enforce NB2 edit geometry using `aspect_ratio` and `resolution` params, lift Fal edit mode input-image caps to 10 for GPT Image 2 and 14 for Nano Banana 2, and allow aspect-ratio hints in edit mode. (#77295) Thanks @leoge007.
+
+- Build: enable additional low-churn oxlint rules for promise, TypeScript, and runtime footgun checks.
+- Build: enable stricter Vitest lint rules for focused, disabled, conditional, hook, matcher, and expectation hazards.
+- Build: pin explicit oxfmt defaults in the shared formatter config to keep formatting behavior stable across upgrades.
 - TypeScript: enable stricter compiler checks for implicit returns, side-effect imports, overrides, and unused production code.
 - Logging: add targeted model transport, payload, SSE, and code-mode diagnostics with redacted URL handling.
 - Agents: allow `session.agentToAgent.maxPingPongTurns` up to 20 while keeping the default at 5 for longer agent-to-agent reply chains. Fixes #52382. (#52400) Thanks @thirumaleshp.
