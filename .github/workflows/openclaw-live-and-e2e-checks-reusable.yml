@@ -433,6 +433,10 @@ jobs:
               add_profile_suite native-live-extensions-media-music-google "full"
               add_profile_suite native-live-extensions-media-music-minimax "full"
               add_profile_suite native-live-extensions-media-video "full"
+              add_profile_suite native-live-extensions-media-video-a "full"
+              add_profile_suite native-live-extensions-media-video-b "full"
+              add_profile_suite native-live-extensions-media-video-c "full"
+              add_profile_suite native-live-extensions-media-video-d "full"
             fi
           fi
 

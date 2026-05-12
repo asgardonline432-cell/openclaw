@@ -466,6 +466,7 @@ describe("package artifact reuse", () => {
     expect(workflow).toContain("suite_id: native-live-extensions-media-music-minimax");
     expect(workflow).toContain("suite_id: native-live-extensions-media-video");
     expect(workflow).toContain("suite_group: native-live-extensions-media-video");
+    expect(workflow).toContain("add_profile_suite native-live-extensions-media-video-c");
     expect(workflow).toContain("OPENCLAW_LIVE_VIDEO_GENERATION_PROVIDERS=google,minimax");
     expect(workflow).toContain("OPENCLAW_LIVE_VIDEO_GENERATION_PROVIDERS=openai,openrouter,xai");
     expect(workflow).toContain("suite_group: native-live-src-gateway-profiles-opencode-go");
