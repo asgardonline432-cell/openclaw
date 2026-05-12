@@ -116,14 +116,15 @@ ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm_config_verify_deps_before_run=false pnpm ui:build
 RUN pnpm_config_verify_deps_before_run=false pnpm qa:lab:build
 
-# Prune dev dependencies and strip build-only metadata before copying
+# Reinstall production dependencies and strip build-only metadata before copying
 # runtime assets into the final image.
 FROM build AS runtime-assets
 ARG OPENCLAW_EXTENSIONS
 ARG OPENCLAW_BUNDLED_PLUGIN_DIR
-RUN --mount=type=cache,id=openclaw-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    echo "==> runtime-assets: prune prod dependencies" && \
-    CI=true pnpm prune --prod --ignore-scripts \
+RUN --mount=type=cache,id=openclaw-pnpm-runtime-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    echo "==> runtime-assets: install prod dependencies" && \
+    rm -rf node_modules && \
+    NODE_OPTIONS=--max-old-space-size=2048 pnpm install --prod --frozen-lockfile --ignore-scripts \
       --config.supportedArchitectures.os=linux \
       --config.supportedArchitectures.cpu="$(node -p 'process.arch')" \
       --config.supportedArchitectures.libc=glibc && \
