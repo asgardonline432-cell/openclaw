@@ -16,6 +16,8 @@ minimumReleaseAgeExclude:
   - "openclaw"
   - "protobufjs"
   - "vite"
+  - "vitest"
+  - "@vitest/*"
   - "@cloudflare/workers-types"
   - "@hono/node-server"
   - "@mariozechner/*"
