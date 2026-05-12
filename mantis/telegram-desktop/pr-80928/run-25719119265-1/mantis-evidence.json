@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "telegram-desktop-proof",
+  "title": "Mantis Telegram Desktop Proof",
+  "summary": "Mantis could not capture native Telegram Desktop before/after GIF evidence because the desktop/Telegram credential infrastructure was unavailable during this run.",
+  "scenario": "telegram-desktop-proof",
+  "comparison": {
+    "baseline": {
+      "sha": "00d0d4bd19162f9f0ace22c142f157f666f0772d",
+      "ref": "00d0d4bd19162f9f0ace22c142f157f666f0772d",
+      "expected": "baseline native Telegram Desktop proof captured",
+      "status": "fail",
+      "error": "AWS desktop provisioning failed; Hetzner retry could not acquire a telegram-user credential."
+    },
+    "candidate": {
+      "sha": "eb3bf1a0365c1c627987424184f151a6e96de1a1",
+      "ref": "eb3bf1a0365c1c627987424184f151a6e96de1a1",
+      "expected": "candidate native Telegram Desktop proof captured",
+      "status": "fail",
+      "fixed": false,
+      "error": "Candidate session was not run because no telegram-user credential was available after baseline setup retries."
+    },
+    "pass": false
+  },
+  "artifacts": [
+    {
+      "kind": "report",
+      "label": "Mantis Telegram Desktop proof blocker report",
+      "path": "blocker.md",
+      "targetPath": "blocker.md"
+    }
+  ]
+}
