@@ -106,6 +106,7 @@ Docs: https://docs.openclaw.ai
 - Agents: disable Pi's default filesystem resource discovery for embedded runs while keeping OpenClaw inline extension factories active, avoiding Windows event-loop stalls during first WhatsApp-triggered agent startup. Fixes #77443. Thanks @dataCenter430.
 - Providers/self-hosted: read model-scoped llama.cpp runtime context from `/props.default_generation_settings.n_ctx` while keeping top-level `n_ctx` as a fallback, so session budgeting reflects the loaded context window. Fixes #73664. (#74057) Thanks @brokemac79.
 - Memory: reject symlinked directory components in configured extra memory paths before reading Markdown files. (#80331) Thanks @samzong.
+- Browser/CDP: filter browser-internal targets from raw CDP and persistent Playwright tab selection so navigation opens real page tabs. Fixes #55734. Thanks @Demine4.
 - WhatsApp: apply hot-reloaded `dmPolicy` and `allowFrom` settings to the active Web listener before processing new inbound DMs. Fixes #80538. Thanks @Ampaskopi129.
 - Plugins: let `openclaw doctor --fix` repair managed plugin installs whose package entrypoints fail package-directory boundary validation after local state moves. Fixes #80592. Thanks @wei-wei-zhao.
 - Voice-call: resume voice-originated exec approval follow-ups as internal non-delivery turns instead of rejecting them as `unknown channel: voice`. Fixes #80540. Thanks @patrickmch.
