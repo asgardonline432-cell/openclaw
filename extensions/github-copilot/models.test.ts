@@ -35,7 +35,7 @@ import type { ProviderResolveDynamicModelContext } from "openclaw/plugin-sdk/cor
 import { fetchCopilotModelCatalog, resolveCopilotForwardCompatModel } from "./models.js";
 
 afterAll(() => {
-  vi.doUnmock("@mariozechner/pi-ai/oauth");
+  vi.doUnmock("@earendil-works/pi-ai/oauth");
   vi.doUnmock("openclaw/plugin-sdk/provider-model-shared");
   vi.doUnmock("openclaw/plugin-sdk/state-paths");
   vi.resetModules();
