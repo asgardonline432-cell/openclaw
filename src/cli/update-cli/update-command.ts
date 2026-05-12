@@ -1378,7 +1378,7 @@ export async function updatePluginsAfterCoreUpdate(params: {
       previousInstallRecords: pluginInstallRecords,
       nextInstallRecords,
       nextConfig,
-      baseHash: params.configSnapshot.hash,
+      baseHash: process.env[POST_CORE_UPDATE_ENV] === "1" ? undefined : params.configSnapshot.hash,
     });
     await refreshPluginRegistryAfterConfigMutation({
       config: nextConfig,
