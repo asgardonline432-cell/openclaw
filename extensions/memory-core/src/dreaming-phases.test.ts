@@ -6,14 +6,15 @@ import { RequestScopedSubagentRuntimeError } from "openclaw/plugin-sdk/error-run
 import {
   appendSqliteSessionTranscriptEvent,
   replaceSqliteSessionTranscriptEvents,
-  resolveSessionTranscriptsDirForAgent,
 } from "openclaw/plugin-sdk/memory-core-host-runtime-core";
 import {
+  readDreamingSessionIngestionText,
+  resolveDreamingSessionIngestionRelativePath,
   resolveMemoryCorePluginConfig,
   resolveMemoryLightDreamingConfig,
   resolveMemoryRemDreamingConfig,
 } from "openclaw/plugin-sdk/memory-core-host-status";
-import { afterAll, beforeAll, describe, expect, it, type MockInstance, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   __testing,
   filterRecallEntriesWithinLookback,
@@ -66,6 +67,18 @@ function requireCandidateByKey<T extends { key: string }>(candidates: T[], key: 
     throw new Error(`expected promotion candidate ${key}`);
   }
   return candidate;
+}
+
+async function readSessionIngestion(
+  workspaceDir: string,
+  day: string,
+  stateDir = path.join(workspaceDir, ".state"),
+): Promise<string> {
+  return readDreamingSessionIngestionText({
+    workspaceDir,
+    relativePath: resolveDreamingSessionIngestionRelativePath(day),
+    env: { ...process.env, OPENCLAW_STATE_DIR: stateDir, OPENCLAW_TEST_FAST: "1" },
+  });
 }
 
 function requireCandidateKeyByPath(
@@ -203,11 +216,10 @@ function timestampFromTranscriptEvent(event: unknown, fallback: number): number 
 async function writeSqliteTranscript(params: {
   workspaceDir: string;
   agentId?: string;
-  transcriptPath: string;
+  sessionId: string;
   raw: string;
   replace?: boolean;
 }): Promise<void> {
-  const sessionId = path.basename(params.transcriptPath).replace(/\.jsonl$/i, "");
   const fallbackNow = Date.parse("2026-04-05T00:00:00.000Z");
   const events = params.raw
     .split(/\r?\n/)
@@ -222,8 +234,7 @@ async function writeSqliteTranscript(params: {
     replaceSqliteSessionTranscriptEvents({
       env: { OPENCLAW_STATE_DIR: path.join(params.workspaceDir, ".state") },
       agentId: params.agentId ?? "main",
-      sessionId,
-      transcriptPath: params.transcriptPath,
+      sessionId: params.sessionId,
       events,
       now: () => createdAt,
     });
@@ -233,12 +244,31 @@ async function writeSqliteTranscript(params: {
     appendSqliteSessionTranscriptEvent({
       env: { OPENCLAW_STATE_DIR: path.join(params.workspaceDir, ".state") },
       agentId: params.agentId ?? "main",
-      sessionId,
-      transcriptPath: params.transcriptPath,
+      sessionId: params.sessionId,
       event,
       now: () => timestampFromTranscriptEvent(event, fallbackNow),
     });
   }
+}
+
+type TestTranscriptFixture = {
+  workspaceDir: string;
+  agentId: string;
+  sessionId: string;
+};
+
+async function writeTranscriptFixture(
+  transcriptFixture: TestTranscriptFixture,
+  raw: string,
+  params: { replace?: boolean } = {},
+): Promise<void> {
+  await writeSqliteTranscript({
+    workspaceDir: transcriptFixture.workspaceDir,
+    agentId: transcriptFixture.agentId,
+    sessionId: transcriptFixture.sessionId,
+    raw,
+    replace: params.replace ?? true,
+  });
 }
 
 async function withWorkspaceStateEnv<T>(workspaceDir: string, run: () => Promise<T>): Promise<T> {
@@ -291,84 +321,17 @@ async function readPhaseSignalStoreForTest(workspaceDir: string, nowMs: number) 
   );
 }
 
-function parseTestTranscriptPath(transcriptPath: string):
-  | {
-      workspaceDir: string;
-      agentId: string;
-    }
-  | undefined {
-  const parts = path.normalize(path.resolve(transcriptPath)).split(path.sep);
-  const stateIndex = parts.lastIndexOf(".state");
-  const agentsIndex = parts.lastIndexOf("agents");
-  const sessionsIndex = parts.lastIndexOf("sessions");
-  if (
-    stateIndex <= 0 ||
-    agentsIndex !== stateIndex + 1 ||
-    sessionsIndex !== agentsIndex + 2 ||
-    !parts[agentsIndex + 1]
-  ) {
-    return undefined;
-  }
+function createTestTranscriptFixture(
+  workspaceDir: string,
+  agentId: string,
+  sessionId: string,
+): TestTranscriptFixture {
   return {
-    workspaceDir: parts.slice(0, stateIndex).join(path.sep) || path.sep,
-    agentId: parts[agentsIndex + 1],
+    workspaceDir,
+    agentId,
+    sessionId,
   };
 }
-
-let writeFileSpy: MockInstance | undefined;
-let utimesSpy: MockInstance | undefined;
-
-function fsPathToString(file: unknown): string | null {
-  if (typeof file === "string") {
-    return file;
-  }
-  if (file instanceof URL) {
-    return file.pathname;
-  }
-  if (Buffer.isBuffer(file)) {
-    return file.toString("utf8");
-  }
-  return null;
-}
-
-beforeAll(() => {
-  const actualWriteFile = fs.writeFile.bind(fs);
-  const actualUtimes = fs.utimes.bind(fs);
-  writeFileSpy = vi.spyOn(fs, "writeFile").mockImplementation(async (file, data, options) => {
-    const transcriptPath = fsPathToString(file);
-    if (transcriptPath?.endsWith(".jsonl")) {
-      const parsed = parseTestTranscriptPath(transcriptPath);
-      if (parsed) {
-        await writeSqliteTranscript({
-          workspaceDir: parsed.workspaceDir,
-          agentId: parsed.agentId,
-          transcriptPath,
-          raw:
-            typeof data === "string"
-              ? data
-              : Buffer.from(data as unknown as ArrayBuffer).toString("utf8"),
-          replace: true,
-        });
-        return;
-      }
-    }
-    return await actualWriteFile(file, data, options);
-  });
-  utimesSpy = vi.spyOn(fs, "utimes").mockImplementation(async (file, atime, mtime) => {
-    const transcriptPath = fsPathToString(file);
-    if (transcriptPath?.endsWith(".jsonl") && parseTestTranscriptPath(transcriptPath)) {
-      void atime;
-      void mtime;
-      return;
-    }
-    return await actualUtimes(file, atime, mtime);
-  });
-});
-
-afterAll(() => {
-  writeFileSpy?.mockRestore();
-  utimesSpy?.mockRestore();
-});
 
 async function createDreamingWorkspace(): Promise<string> {
   const workspaceDir = await createTempWorkspace("openclaw-dreaming-phases-");
@@ -793,11 +756,9 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-main.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "dreaming-main");
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "session",
@@ -821,7 +782,6 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
 
     const { beforeAgentReply } = createHarness(
@@ -854,29 +814,19 @@ describe("memory-core dreaming phases", () => {
       workspaceDir,
     );
 
-    const readSpy = vi.spyOn(fs, "readFile");
-    let transcriptReadCount = 0;
     try {
       await withDreamingTestClock(async () => {
         await triggerLightDreaming(beforeAgentReply, workspaceDir, 5);
         await triggerLightDreaming(beforeAgentReply, workspaceDir, 6);
       });
     } finally {
-      transcriptReadCount = readSpy.mock.calls.filter(
-        ([target]) => typeof target === "string" && target === transcriptPath,
-      ).length;
-      readSpy.mockRestore();
       vi.unstubAllEnvs();
     }
-
-    expect(transcriptReadCount).toBeLessThanOrEqual(1);
 
     expect(
       Object.keys((await readSessionIngestionStateForTest(workspaceDir)).files).length,
     ).toBeGreaterThan(0);
-    await expect(
-      fs.access(path.join(workspaceDir, "memory", ".dreams", "session-corpus", "2026-04-05.txt")),
-    ).resolves.toBeUndefined();
+    await expect(readSessionIngestion(workspaceDir, "2026-04-05")).resolves.not.toBe("");
 
     const ranked = await rankShortTermPromotionCandidates({
       workspaceDir,
@@ -886,7 +836,7 @@ describe("memory-core dreaming phases", () => {
       nowMs: Date.parse("2026-04-05T19:00:00.000Z"),
     });
     expect(ranked.map((candidate) => candidate.path)).toContain(
-      "memory/.dreams/session-corpus/2026-04-05.txt",
+      "memory/session-ingestion/2026-04-05.txt",
     );
     expect(ranked.map((candidate) => candidate.snippet)).toEqual(
       expect.arrayContaining([
@@ -902,12 +852,8 @@ describe("memory-core dreaming phases", () => {
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
 
-    const mainSessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    const subagentSessionsDir = resolveSessionTranscriptsDirForAgent("agi-ceo");
-    await fs.mkdir(mainSessionsDir, { recursive: true });
-    await fs.mkdir(subagentSessionsDir, { recursive: true });
-    await fs.writeFile(
-      path.join(mainSessionsDir, "main-session.jsonl"),
+    await writeTranscriptFixture(
+      createTestTranscriptFixture(workspaceDir, "main", "main-session"),
       [
         JSON.stringify({
           type: "message",
@@ -918,10 +864,9 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    await fs.writeFile(
-      path.join(subagentSessionsDir, "subagent-session.jsonl"),
+    await writeTranscriptFixture(
+      createTestTranscriptFixture(workspaceDir, "agi-ceo", "subagent-session"),
       [
         JSON.stringify({
           type: "message",
@@ -932,7 +877,6 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
 
     const { beforeAgentReply } = createHarness(
@@ -973,14 +917,9 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    const mainCorpus = await fs.readFile(
-      path.join(workspaceDir, "memory", ".dreams", "session-corpus", "2026-04-05.txt"),
-      "utf-8",
-    );
-    const subagentCorpus = await fs.readFile(
-      path.join(subagentWorkspaceDir, "memory", ".dreams", "session-corpus", "2026-04-05.txt"),
-      "utf-8",
-    );
+    const stateDir = path.join(workspaceDir, ".state");
+    const mainCorpus = await readSessionIngestion(workspaceDir, "2026-04-05", stateDir);
+    const subagentCorpus = await readSessionIngestion(subagentWorkspaceDir, "2026-04-05", stateDir);
     expect(mainCorpus).toContain("Main workspace should stay in main dreams.");
     expect(mainCorpus).not.toContain("CEO workspace should stay in CEO dreams.");
     expect(subagentCorpus).toContain("CEO workspace should stay in CEO dreams.");
@@ -991,11 +930,9 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-main.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "dreaming-main");
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "message",
@@ -1006,11 +943,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const mtime = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, mtime, mtime);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -1049,14 +982,7 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    const corpusPath = path.join(
-      workspaceDir,
-      "memory",
-      ".dreams",
-      "session-corpus",
-      "2026-04-05.txt",
-    );
-    const corpus = await fs.readFile(corpusPath, "utf-8");
+    const corpus = await readSessionIngestion(workspaceDir, "2026-04-05");
     expect(corpus).not.toContain("OPENAI_API_KEY=sk-1234567890abcdef");
     expect(corpus).toContain("OPENAI_API_KEY=sk-123…cdef");
   });
@@ -1065,11 +991,13 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-narrative.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(
+      workspaceDir,
+      "main",
+      "dreaming-narrative",
+    );
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "custom",
@@ -1098,11 +1026,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const mtime = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, mtime, mtime);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -1142,9 +1066,7 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    await expect(
-      fs.access(path.join(workspaceDir, "memory", ".dreams", "session-corpus", "2026-04-05.txt")),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readSessionIngestion(workspaceDir, "2026-04-05")).resolves.toBe("");
 
     const sessionIngestion = await readSessionIngestionStateForTest(workspaceDir);
     expect(Object.keys(sessionIngestion.files)).toHaveLength(1);
@@ -1161,11 +1083,13 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-narrative.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(
+      workspaceDir,
+      "main",
+      "dreaming-narrative",
+    );
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           sessionKey: "dreaming-narrative-light-1775894400455",
@@ -1187,11 +1111,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const mtime = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, mtime, mtime);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -1231,9 +1151,7 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    await expect(
-      fs.access(path.join(workspaceDir, "memory", ".dreams", "session-corpus", "2026-04-05.txt")),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readSessionIngestion(workspaceDir, "2026-04-05")).resolves.toBe("");
 
     const sessionIngestion = await readSessionIngestionStateForTest(workspaceDir);
     expect(Object.keys(sessionIngestion.files)).toHaveLength(1);
@@ -1250,11 +1168,9 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "cron-run.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "cron-run");
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           sessionKey: "agent:main:cron:job-1:run:run-1",
@@ -1275,7 +1191,6 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
 
     const { beforeAgentReply } = createHarness(
@@ -1317,9 +1232,7 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    await expect(
-      fs.access(path.join(workspaceDir, "memory", ".dreams", "session-corpus", "2026-04-05.txt")),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readSessionIngestion(workspaceDir, "2026-04-05")).resolves.toBe("");
 
     const sessionIngestion = await readSessionIngestionStateForTest(workspaceDir);
     expect(Object.values(sessionIngestion.files)).toEqual([
@@ -1335,11 +1248,9 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "ordinary-session.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "ordinary-session");
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "message",
@@ -1375,7 +1286,6 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
 
     const { beforeAgentReply } = createHarness(
@@ -1420,146 +1330,11 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    const corpus = await fs.readFile(
-      path.join(workspaceDir, "memory", ".dreams", "session-corpus", "2026-04-16.txt"),
-      "utf-8",
-    );
+    const corpus = await readSessionIngestion(workspaceDir, "2026-04-16");
     expect(corpus).toContain("User: What changed in the sync?");
     expect(corpus).toContain("Assistant: One new session was converted.");
     expect(corpus).not.toContain("System (untrusted):");
     expect(corpus).toContain("Assistant: Handled internally.");
-  });
-
-  it("drops checkpoint, cron, and heartbeat chatter from fresh session corpus output", async () => {
-    const workspaceDir = await createDreamingWorkspace();
-    vi.stubEnv("OPENCLAW_TEST_FAST", "1");
-    vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-
-    await fs.writeFile(
-      path.join(sessionsDir, "ordinary.checkpoint.11111111-1111-4111-8111-111111111111.jsonl"),
-      JSON.stringify({
-        type: "message",
-        message: {
-          role: "user",
-          timestamp: "2026-04-16T18:03:00.000Z",
-          content: "Checkpoint chatter should stay out.",
-        },
-      }) + "\n",
-      "utf-8",
-    );
-    await fs.writeFile(
-      path.join(sessionsDir, "ordinary.jsonl"),
-      [
-        JSON.stringify({
-          type: "message",
-          message: {
-            role: "user",
-            timestamp: "2026-04-16T18:04:00.000Z",
-            content:
-              "Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.",
-          },
-        }),
-        JSON.stringify({
-          type: "message",
-          message: {
-            role: "assistant",
-            timestamp: "2026-04-16T18:05:00.000Z",
-            content: "HEARTBEAT_OK",
-          },
-        }),
-        JSON.stringify({
-          type: "message",
-          message: {
-            role: "user",
-            timestamp: "2026-04-16T18:06:00.000Z",
-            content: "[cron:job-2 Example] Run the qmd sync",
-          },
-        }),
-        JSON.stringify({
-          type: "message",
-          message: {
-            role: "assistant",
-            timestamp: "2026-04-16T18:07:00.000Z",
-            content: "Running the qmd sync now.",
-          },
-        }),
-        JSON.stringify({
-          type: "message",
-          message: {
-            role: "user",
-            timestamp: "2026-04-16T18:08:00.000Z",
-            content: "Document the Ollama provider setup.",
-          },
-        }),
-        JSON.stringify({
-          type: "message",
-          message: {
-            role: "assistant",
-            timestamp: "2026-04-16T18:09:00.000Z",
-            content: "I documented the Ollama provider setup in the workspace notes.",
-          },
-        }),
-      ].join("\n") + "\n",
-      "utf-8",
-    );
-
-    const { beforeAgentReply } = createHarness(
-      {
-        agents: {
-          defaults: {
-            workspace: workspaceDir,
-          },
-          list: [{ id: "main", workspace: workspaceDir }],
-        },
-        plugins: {
-          entries: {
-            "memory-core": {
-              config: {
-                dreaming: {
-                  enabled: true,
-                  phases: {
-                    light: {
-                      enabled: true,
-                      limit: 20,
-                      lookbackDays: 7,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      workspaceDir,
-    );
-
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-16T19:00:00.000Z"));
-    try {
-      await beforeAgentReply(
-        { cleanedBody: "__openclaw_memory_core_light_sleep__" },
-        { trigger: "heartbeat", workspaceDir },
-      );
-    } finally {
-      vi.useRealTimers();
-      vi.unstubAllEnvs();
-    }
-
-    const corpus = await fs.readFile(
-      path.join(workspaceDir, "memory", ".dreams", "session-corpus", "2026-04-16.txt"),
-      "utf-8",
-    );
-    expect(corpus).toContain("User: Document the Ollama provider setup.");
-    expect(corpus).toContain(
-      "Assistant: I documented the Ollama provider setup in the workspace notes.",
-    );
-    expect(corpus).not.toContain("Run the nightly sync");
-    expect(corpus).not.toContain("Checkpoint chatter should stay out.");
-    expect(corpus).not.toContain("Read HEARTBEAT.md");
-    expect(corpus).not.toContain("HEARTBEAT_OK");
-    expect(corpus).not.toContain("Run the qmd sync");
   });
 
   it("ignores chat scaffolding tags when building rem reflections", () => {
@@ -1567,7 +1342,7 @@ describe("memory-core dreaming phases", () => {
       entries: [
         {
           key: "memory:1",
-          path: "memory/.dreams/session-corpus/2026-04-16.txt",
+          path: "memory/session-ingestion/2026-04-16.txt",
           startLine: 1,
           endLine: 1,
           source: "memory",
@@ -1598,11 +1373,13 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-narrative.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(
+      workspaceDir,
+      "main",
+      "dreaming-narrative",
+    );
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "custom",
@@ -1623,11 +1400,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const mtime = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, mtime, mtime);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -1663,19 +1436,10 @@ describe("memory-core dreaming phases", () => {
         { cleanedBody: "__openclaw_memory_core_light_sleep__" },
         { trigger: "heartbeat", workspaceDir },
       );
-
-      const readFileSpy = vi.spyOn(fs, "readFile");
       await beforeAgentReply(
         { cleanedBody: "__openclaw_memory_core_light_sleep__" },
         { trigger: "heartbeat", workspaceDir },
       );
-
-      expect(
-        readFileSpy.mock.calls.some(
-          ([target]) => typeof target === "string" && target === transcriptPath,
-        ),
-      ).toBe(false);
-      readFileSpy.mockRestore();
     } finally {
       vi.unstubAllEnvs();
     }
@@ -1685,12 +1449,10 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-main.jsonl");
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "dreaming-main");
     const oldMessage = "Move backups to S3 Glacier.";
-    await fs.writeFile(
-      transcriptPath,
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "message",
@@ -1701,11 +1463,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const dayOne = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, dayOne, dayOne);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -1741,8 +1499,8 @@ describe("memory-core dreaming phases", () => {
       });
 
       const newMessage = "Keep retention at 365 days.";
-      await fs.writeFile(
-        transcriptPath,
+      await writeTranscriptFixture(
+        transcriptFixture,
         [
           JSON.stringify({
             type: "message",
@@ -1761,11 +1519,7 @@ describe("memory-core dreaming phases", () => {
             },
           }),
         ].join("\n") + "\n",
-        "utf-8",
       );
-      const dayTwo = new Date("2026-04-06T01:05:00.000Z");
-      await fs.utimes(transcriptPath, dayTwo, dayTwo);
-
       await withDreamingTestClock(async () => {
         await triggerLightDreaming(beforeAgentReply, workspaceDir, 910);
       });
@@ -1785,14 +1539,10 @@ describe("memory-core dreaming phases", () => {
     expect(oldCandidate?.dailyCount).toBe(1);
     expect(newCandidate?.dailyCount).toBe(1);
 
-    const sessionCorpusDir = path.join(workspaceDir, "memory", ".dreams", "session-corpus");
-    const corpusFiles = (await fs.readdir(sessionCorpusDir)).filter((name) =>
-      name.endsWith(".txt"),
-    );
-    let combinedCorpus = "";
-    for (const fileName of corpusFiles) {
-      combinedCorpus += `${await fs.readFile(path.join(sessionCorpusDir, fileName), "utf-8")}\n`;
-    }
+    const combinedCorpus = [
+      await readSessionIngestion(workspaceDir, "2026-04-05"),
+      await readSessionIngestion(workspaceDir, "2026-04-06"),
+    ].join("\n");
     const oldOccurrences = combinedCorpus.match(/Move backups to S3 Glacier\./g)?.length ?? 0;
     const newOccurrences = combinedCorpus.match(/Keep retention at 365 days\./g)?.length ?? 0;
     expect(oldOccurrences).toBe(1);
@@ -1803,11 +1553,9 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-main.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "dreaming-main");
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "message",
@@ -1828,11 +1576,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const freshMtime = new Date("2026-04-06T01:05:00.000Z");
-    await fs.utimes(transcriptPath, freshMtime, freshMtime);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -1870,12 +1614,9 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    const corpusDir = path.join(workspaceDir, "memory", ".dreams", "session-corpus");
-    const corpusFiles = (await fs.readdir(corpusDir))
-      .filter((name) => name.endsWith(".txt"))
-      .toSorted();
-    expect(corpusFiles).toEqual(["2026-04-05.txt"]);
-    const dayCorpus = await fs.readFile(path.join(corpusDir, "2026-04-05.txt"), "utf-8");
+    await expect(readSessionIngestion(workspaceDir, "2026-04-01")).resolves.toBe("");
+    const dayCorpus = await readSessionIngestion(workspaceDir, "2026-04-05");
+    expect(dayCorpus).not.toBe("");
     expect(dayCorpus).toContain("Current reminder that should be in today corpus.");
     expect(dayCorpus).not.toContain("Old planning note that should stay out of lookback.");
   });
@@ -1884,9 +1625,7 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-main.jsonl");
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "dreaming-main");
     const lines: string[] = [];
     for (let index = 0; index < 160; index += 1) {
       lines.push(
@@ -1900,10 +1639,7 @@ describe("memory-core dreaming phases", () => {
         }),
       );
     }
-    await fs.writeFile(transcriptPath, `${lines.join("\n")}\n`, "utf-8");
-    const mtime = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, mtime, mtime);
-
+    await writeTranscriptFixture(transcriptFixture, `${lines.join("\n")}\n`);
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -1943,14 +1679,7 @@ describe("memory-core dreaming phases", () => {
       vi.unstubAllEnvs();
     }
 
-    const corpusPath = path.join(
-      workspaceDir,
-      "memory",
-      ".dreams",
-      "session-corpus",
-      "2026-04-05.txt",
-    );
-    const corpus = await fs.readFile(corpusPath, "utf-8");
+    const corpus = await readSessionIngestion(workspaceDir, "2026-04-05");
     const persistedLines = corpus
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -1960,16 +1689,14 @@ describe("memory-core dreaming phases", () => {
     expect(corpus).toContain("bulk-line-159");
   });
 
-  it("re-ingests rewritten session transcripts after truncate/reset", async () => {
+  it("re-ingests replaced SQLite transcript rows after reset", async () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-main.jsonl");
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "dreaming-main");
 
-    await fs.writeFile(
-      transcriptPath,
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "message",
@@ -1980,11 +1707,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const dayOne = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, dayOne, dayOne);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -2019,8 +1742,8 @@ describe("memory-core dreaming phases", () => {
         await triggerLightDreaming(beforeAgentReply, workspaceDir, 5);
       });
 
-      await fs.writeFile(
-        transcriptPath,
+      await writeTranscriptFixture(
+        transcriptFixture,
         [
           JSON.stringify({
             type: "message",
@@ -2031,11 +1754,7 @@ describe("memory-core dreaming phases", () => {
             },
           }),
         ].join("\n") + "\n",
-        "utf-8",
       );
-      const dayTwo = new Date("2026-04-06T01:05:00.000Z");
-      await fs.utimes(transcriptPath, dayTwo, dayTwo);
-
       await withDreamingTestClock(async () => {
         await triggerLightDreaming(beforeAgentReply, workspaceDir, 910);
       });
@@ -2062,11 +1781,9 @@ describe("memory-core dreaming phases", () => {
     const workspaceDir = await createDreamingWorkspace();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
     vi.stubEnv("OPENCLAW_STATE_DIR", path.join(workspaceDir, ".state"));
-    const sessionsDir = resolveSessionTranscriptsDirForAgent("main");
-    await fs.mkdir(sessionsDir, { recursive: true });
-    const transcriptPath = path.join(sessionsDir, "dreaming-main.jsonl");
-    await fs.writeFile(
-      transcriptPath,
+    const transcriptFixture = createTestTranscriptFixture(workspaceDir, "main", "dreaming-main");
+    await writeTranscriptFixture(
+      transcriptFixture,
       [
         JSON.stringify({
           type: "message",
@@ -2077,11 +1794,7 @@ describe("memory-core dreaming phases", () => {
           },
         }),
       ].join("\n") + "\n",
-      "utf-8",
     );
-    const mtime = new Date("2026-04-05T18:05:00.000Z");
-    await fs.utimes(transcriptPath, mtime, mtime);
-
     const { beforeAgentReply } = createHarness(
       {
         agents: {
@@ -2467,7 +2180,7 @@ describe("memory-core dreaming phases", () => {
       nowMs,
       results: [
         {
-          path: "memory/.dreams/session-corpus/2026-04-16.txt",
+          path: "memory/session-ingestion/2026-04-16.txt",
           startLine: 2,
           endLine: 2,
           score: 0.88,
@@ -2490,8 +2203,8 @@ describe("memory-core dreaming phases", () => {
     );
     const staleKey = requireCandidateKeyByPath(
       baseline,
-      (candidatePath) => candidatePath.includes("session-corpus/2026-04-16.txt"),
-      "stale session corpus",
+      (candidatePath) => candidatePath.includes("session-ingestion/2026-04-16.txt"),
+      "stale session ingestion",
     );
 
     await withDreamingTestClock(async () => {
@@ -2517,8 +2230,8 @@ describe("memory-core dreaming phases", () => {
     });
 
     const phaseSignalStore = await readPhaseSignalStoreForTest(workspaceDir, nowMs);
-    expect(phaseSignalStore.entries[liveKey!]).toMatchObject({ remHits: 1 });
-    expect(phaseSignalStore.entries[staleKey!]).toBeUndefined();
+    expect(phaseSignalStore.entries[liveKey]).toMatchObject({ remHits: 1 });
+    expect(phaseSignalStore.entries[staleKey]).toBeUndefined();
 
     const remOutput = await fs.readFile(
       path.join(workspaceDir, "memory", `${DREAMING_TEST_DAY}.md`),
