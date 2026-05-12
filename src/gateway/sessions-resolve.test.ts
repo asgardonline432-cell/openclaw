@@ -111,9 +111,7 @@ describe("resolveSessionKeyFromResolveParams", () => {
       },
     });
 
-    expect(hoisted.listSessionsFromStoreMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ store }),
-    );
+    expect(hoisted.listSessionsFromStoreMock).not.toHaveBeenCalled();
   });
 
   it("rejects sessions belonging to a deleted agent (key-based lookup)", async () => {
@@ -208,7 +206,7 @@ describe("resolveSessionKeyFromResolveParams", () => {
     });
 
     expect(result).toEqual({ ok: true, key: "agent:main:target" });
-    expect(hoisted.loadCombinedSessionStoreForGatewayMock).toHaveBeenCalledWith(cfg, {
+    expect(hoisted.loadCombinedSessionEntriesForGatewayMock).toHaveBeenCalledWith(cfg, {
       agentId: "main",
     });
     expect(hoisted.listSessionsFromStoreMock).not.toHaveBeenCalled();
@@ -233,7 +231,7 @@ describe("resolveSessionKeyFromResolveParams", () => {
       p: { label: "my-label", agentId: "main" },
     });
 
-    expect(hoisted.loadCombinedSessionStoreForGatewayMock).toHaveBeenCalledWith(cfg, {
+    expect(hoisted.loadCombinedSessionEntriesForGatewayMock).toHaveBeenCalledWith(cfg, {
       agentId: "main",
     });
     expect(result).toEqual({
