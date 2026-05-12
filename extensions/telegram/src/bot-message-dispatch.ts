@@ -337,16 +337,27 @@ async function mirrorTelegramAssistantReplyToTranscript(params: {
     stopReason: "stop" as const,
     timestamp: Date.now(),
   };
-  const { messageId } = await appendSessionTranscriptMessage({
+  const appendResult = (await appendSessionTranscriptMessage({
     transcriptPath: sessionFile,
     message,
     config: params.cfg,
-  });
+  })) as {
+    messageId: string;
+    message?: typeof message;
+  };
+  if (appendResult.message) {
+    emitSessionTranscriptUpdate({
+      sessionFile,
+      sessionKey: params.sessionKey,
+      message: appendResult.message,
+      messageId: appendResult.messageId,
+    });
+    return;
+  }
   emitSessionTranscriptUpdate({
     sessionFile,
     sessionKey: params.sessionKey,
-    message,
-    messageId,
+    messageId: appendResult.messageId,
   });
 }
 

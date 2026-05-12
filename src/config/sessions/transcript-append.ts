@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   acquireSessionWriteLock,
   type SessionWriteLockAcquireTimeoutConfig,
   resolveSessionWriteLockAcquireTimeoutMs,
 } from "../../agents/session-write-lock.js";
-import { redactSecrets } from "../../logging/redact.js";
+import { redactTranscriptMessage } from "../../agents/transcript-redact.js";
 
 const TRANSCRIPT_APPEND_SCAN_CHUNK_BYTES = 64 * 1024;
 const SESSION_MANAGER_APPEND_MAX_BYTES = 8 * 1024 * 1024;
@@ -230,7 +231,7 @@ async function withTranscriptAppendQueue<T>(
   }
 }
 
-export async function appendSessionTranscriptMessage(params: {
+type AppendSessionTranscriptMessageParams = {
   transcriptPath: string;
   message: unknown;
   now?: number;
@@ -238,21 +239,28 @@ export async function appendSessionTranscriptMessage(params: {
   cwd?: string;
   useRawWhenLinear?: boolean;
   config?: SessionWriteLockAcquireTimeoutConfig;
-}): Promise<{ messageId: string }> {
+};
+
+function isTranscriptAgentMessage(value: unknown): value is AgentMessage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as { role?: unknown }).role === "string"
+  );
+}
+
+export async function appendSessionTranscriptMessage(
+  params: AppendSessionTranscriptMessageParams,
+): Promise<{ messageId: string }> {
   return await withTranscriptAppendQueue(params.transcriptPath, () =>
     appendSessionTranscriptMessageLocked(params),
   );
 }
 
-async function appendSessionTranscriptMessageLocked(params: {
-  transcriptPath: string;
-  message: unknown;
-  now?: number;
-  sessionId?: string;
-  cwd?: string;
-  useRawWhenLinear?: boolean;
-  config?: SessionWriteLockAcquireTimeoutConfig;
-}): Promise<{ messageId: string }> {
+async function appendSessionTranscriptMessageLocked(
+  params: AppendSessionTranscriptMessageParams,
+): Promise<{ messageId: string }> {
   const lock = await acquireSessionWriteLock({
     sessionFile: params.transcriptPath,
     timeoutMs: resolveSessionWriteLockAcquireTimeoutMs(params.config),
@@ -286,15 +294,18 @@ async function appendSessionTranscriptMessageLocked(params: {
         nonSessionEntryCount: leafInfo.nonSessionEntryCount,
       };
     }
+    const finalMessage = isTranscriptAgentMessage(params.message)
+      ? redactTranscriptMessage(params.message, params.config)
+      : params.message;
     const entry = {
       type: "message",
       id: messageId,
       ...(shouldRawAppend ? {} : { parentId: leafInfo.leafId ?? null }),
       timestamp: new Date(now).toISOString(),
-      message: redactSecrets(params.message),
+      message: finalMessage,
     };
     await fs.appendFile(params.transcriptPath, `${JSON.stringify(entry)}\n`, "utf-8");
-    return { messageId };
+    return { messageId, message: finalMessage } as { messageId: string };
   } finally {
     await lock.release();
   }

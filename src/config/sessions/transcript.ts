@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { SessionWriteLockAcquireTimeoutConfig } from "../../agents/session-write-lock.js";
+import { redactTranscriptMessage } from "../../agents/transcript-redact.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { emitSessionTranscriptUpdate } from "../../sessions/transcript-events.js";
 import { extractAssistantVisibleText } from "../../shared/chat-message-content.js";
+import type { OpenClawConfig } from "../types.openclaw.js";
 import {
   resolveDefaultSessionStorePath,
   resolveSessionFilePath,
@@ -186,7 +187,7 @@ export async function appendAssistantMessageToSessionTranscript(params: {
   /** Optional override for store path (mostly for tests). */
   storePath?: string;
   updateMode?: SessionTranscriptUpdateMode;
-  config?: SessionWriteLockAcquireTimeoutConfig;
+  config?: OpenClawConfig;
 }): Promise<SessionTranscriptAppendResult> {
   const sessionKey = params.sessionKey.trim();
   if (!sessionKey) {
@@ -241,7 +242,7 @@ export async function appendExactAssistantMessageToSessionTranscript(params: {
   idempotencyKey?: string;
   storePath?: string;
   updateMode?: SessionTranscriptUpdateMode;
-  config?: SessionWriteLockAcquireTimeoutConfig;
+  config?: OpenClawConfig;
 }): Promise<SessionTranscriptAppendResult> {
   const sessionKey = params.sessionKey.trim();
   if (!sessionKey) {
@@ -295,7 +296,7 @@ export async function appendExactAssistantMessageToSessionTranscript(params: {
   }
 
   const latestEquivalentAssistantId = isRedundantDeliveryMirror(params.message)
-    ? await findLatestEquivalentAssistantMessageId(sessionFile, params.message)
+    ? await findLatestEquivalentAssistantMessageId(sessionFile, params.message, params.config)
     : undefined;
   if (latestEquivalentAssistantId) {
     return { ok: true, sessionFile, messageId: latestEquivalentAssistantId };
@@ -305,15 +306,29 @@ export async function appendExactAssistantMessageToSessionTranscript(params: {
     ...params.message,
     ...(explicitIdempotencyKey ? { idempotencyKey: explicitIdempotencyKey } : {}),
   } as Parameters<SessionManager["appendMessage"]>[0];
-  const { messageId } = await appendSessionTranscriptMessage({
+  const appendedMessage = redactTranscriptMessage(
+    message as unknown as AgentMessage,
+    params.config,
+  ) as unknown as SessionTranscriptAssistantMessage;
+  const appendResult = (await appendSessionTranscriptMessage({
     transcriptPath: sessionFile,
     message,
     config: params.config,
-  });
+  })) as {
+    messageId: string;
+    message?: SessionTranscriptAssistantMessage;
+  };
+  const { messageId } = appendResult;
+  const persistedMessage = appendResult.message ?? appendedMessage;
 
   switch (params.updateMode ?? "inline") {
     case "inline":
-      emitSessionTranscriptUpdate({ sessionFile, sessionKey, message, messageId });
+      emitSessionTranscriptUpdate({
+        sessionFile,
+        sessionKey,
+        message: persistedMessage,
+        messageId,
+      });
       break;
     case "file-only":
       emitSessionTranscriptUpdate({ sessionFile, sessionKey });
@@ -381,8 +396,11 @@ function extractAssistantMessageText(message: SessionTranscriptAssistantMessage)
 async function findLatestEquivalentAssistantMessageId(
   transcriptPath: string,
   message: SessionTranscriptAssistantMessage,
+  config?: OpenClawConfig,
 ): Promise<string | undefined> {
-  const expectedText = extractAssistantMessageText(message);
+  const expectedText = extractAssistantMessageText(
+    redactTranscriptMessage(message, config) as unknown as SessionTranscriptAssistantMessage,
+  );
   if (!expectedText) {
     return undefined;
   }
@@ -397,7 +415,12 @@ async function findLatestEquivalentAssistantMessageId(
       if (!candidate || candidate.role !== "assistant") {
         continue;
       }
-      const candidateText = extractAssistantMessageText(candidate);
+      const candidateText = extractAssistantMessageText(
+        redactTranscriptMessage(
+          candidate as AgentMessage,
+          config,
+        ) as unknown as SessionTranscriptAssistantMessage,
+      );
       if (candidateText !== expectedText) {
         return undefined;
       }
