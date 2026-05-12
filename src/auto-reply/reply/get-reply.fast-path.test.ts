@@ -313,7 +313,6 @@ describe("getReplyFromConfig fast test bootstrap", () => {
           },
         ],
       },
-      session: { store: path.join(home, "sessions.json") },
     } as OpenClawConfig);
     vi.mocked(resolveDefaultModelMock).mockReturnValueOnce({
       defaultProvider: "openai",
@@ -350,19 +349,17 @@ describe("getReplyFromConfig fast test bootstrap", () => {
 
   it("uses the target session thinking override for native /status", async () => {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-native-status-think-"));
-    const storePath = path.join(home, "sessions.json");
+    vi.stubEnv("OPENCLAW_STATE_DIR", home);
     const targetSessionKey = "agent:main:telegram:123";
-    await fs.writeFile(
-      storePath,
-      JSON.stringify({
-        [targetSessionKey]: {
-          sessionId: "existing-telegram-session",
-          thinkingLevel: "xhigh",
-          updatedAt: 1,
-        },
-      }),
-      "utf8",
-    );
+    upsertSessionEntry({
+      agentId: "main",
+      sessionKey: targetSessionKey,
+      entry: {
+        sessionId: "existing-telegram-session",
+        thinkingLevel: "xhigh",
+        updatedAt: 1,
+      },
+    });
     const cfg = markCompleteReplyConfig({
       agents: {
         defaults: {
@@ -370,7 +367,6 @@ describe("getReplyFromConfig fast test bootstrap", () => {
           workspace: path.join(home, "workspace"),
         },
       },
-      session: { store: storePath },
     } as OpenClawConfig);
     vi.mocked(resolveDefaultModelMock).mockReturnValueOnce({
       defaultProvider: "openai",
