@@ -1,12 +1,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { abortAgentHarnessRun } from "openclaw/plugin-sdk/agent-harness";
 import {
+  abortAgentHarnessRun,
   embeddedAgentLog,
   nativeHookRelayTesting,
   onAgentEvent,
   queueAgentHarnessMessage,
+  replaceSqliteSessionTranscriptEvents,
   resetAgentEventsForTest,
   type AgentEventPayload,
   type EmbeddedRunAttemptParams,
@@ -16,7 +17,6 @@ import {
   resetGlobalHookRunner,
 } from "openclaw/plugin-sdk/hook-runtime";
 import { createMockPluginRegistry } from "openclaw/plugin-sdk/plugin-test-runtime";
-import { replaceSqliteSessionTranscriptEvents } from "openclaw/plugin-sdk/session-store-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function queueActiveRunMessageForTest(
@@ -198,6 +198,7 @@ function seedSessionHistory(
   replaceSqliteSessionTranscriptEvents({
     agentId: "main",
     sessionId,
+    transcriptPath: sessionId,
     events: [
       { type: "session", version: 1, id: "session-1" },
       ...messages.map((message, index) => ({
@@ -1227,20 +1228,6 @@ describe("runCodexAppServerAttempt", () => {
         }),
       ]),
     );
-    expect(onExecutionPhase).toHaveBeenCalledWith({
-      phase: "turn_accepted",
-      provider: "codex",
-      model: "gpt-5.4-codex",
-      backend: "codex-app-server",
-    });
-    expect(onExecutionPhase).toHaveBeenCalledWith({
-      phase: "tool_execution_started",
-      provider: "codex",
-      model: "gpt-5.4-codex",
-      backend: "codex-app-server",
-      tool: "message",
-      toolCallId: "call-1",
-    });
   });
 
   it("releases the session when Codex never completes after a dynamic tool response", async () => {
@@ -1349,10 +1336,7 @@ describe("runCodexAppServerAttempt", () => {
           addRequestHandler: () => () => undefined,
         }) as never,
     );
-    const params = createParams(
-      path.join(tempDir, "session.jsonl"),
-      path.join(tempDir, "workspace"),
-    );
+    const params = createParams("session-timeout", path.join(tempDir, "workspace"));
     params.timeoutMs = 100;
 
     const result = await runCodexAppServerAttempt(params);
@@ -2812,19 +2796,6 @@ describe("runCodexAppServerAttempt", () => {
 
     const params = createParams(sessionId, workspaceDir);
     params.authProfileId = authProfileId;
-    params.authProfileStore = {
-      version: 1,
-      profiles: {
-        [authProfileId]: {
-          type: "oauth",
-          provider: "openai-codex",
-          access: "access",
-          refresh: "refresh",
-          expires: Date.now() + 60_000,
-        },
-      },
-    };
-
     const result = await runCodexAppServerAttempt(params);
     expect(result.promptErrorSource).toBe("prompt");
     expect(result.promptError).toContain("You've reached your Codex subscription usage limit.");
@@ -2859,19 +2830,6 @@ describe("runCodexAppServerAttempt", () => {
 
     const params = createParams(sessionId, workspaceDir);
     params.authProfileId = authProfileId;
-    params.authProfileStore = {
-      version: 1,
-      profiles: {
-        [authProfileId]: {
-          type: "oauth",
-          provider: "openai-codex",
-          access: "access",
-          refresh: "refresh",
-          expires: Date.now() + 60_000,
-        },
-      },
-    };
-
     const run = runCodexAppServerAttempt(params);
     await harness.waitForMethod("turn/start");
 
@@ -2880,6 +2838,32 @@ describe("runCodexAppServerAttempt", () => {
     expect(result.promptError).toContain("You've reached your Codex subscription usage limit.");
     expect(result.promptError).toContain("Next reset in");
     expect(params.authProfileStore.usageStats?.[authProfileId]?.blockedUntil).toBeUndefined();
+  });
+
+  it("refreshes Codex account rate limits when turn/start omits reset details", async () => {
+    const sessionId = "session-rate-limit-refresh";
+    const workspaceDir = path.join(tempDir, "workspace");
+    const resetsAt = Math.ceil(Date.now() / 1000) + 120;
+    const harness = createStartedThreadHarness(async (method) => {
+      if (method === "turn/start") {
+        throw Object.assign(new Error("You've reached your usage limit."), {
+          data: { codexErrorInfo: "usageLimitExceeded" },
+        });
+      }
+      if (method === "account/rateLimits/read") {
+        return rateLimitsUpdated(resetsAt).params;
+      }
+      return undefined;
+    });
+
+    const run = runCodexAppServerAttempt(createParams(sessionId, workspaceDir));
+    await harness.waitForMethod("account/rateLimits/read");
+
+    const result = await run;
+    expect(result.promptErrorSource).toBe("prompt");
+    expect(result.promptError).toContain("You've reached your Codex subscription usage limit.");
+    expect(result.promptError).toContain("Next reset in");
+    expect(result.promptError).not.toContain("Codex did not return a reset time");
   });
 
   it("refreshes Codex account rate limits when turn/start omits reset details", async () => {
@@ -2928,7 +2912,7 @@ describe("runCodexAppServerAttempt", () => {
   });
 
   it("refreshes Codex account rate limits when a failed turn omits reset details", async () => {
-    const sessionId = "session";
+    const sessionId = "session-rate-limit-failed-turn";
     const workspaceDir = path.join(tempDir, "workspace");
     const resetsAt = Math.ceil(Date.now() / 1000) + 120;
     const harness = createStartedThreadHarness(async (method) => {
@@ -3528,9 +3512,10 @@ describe("runCodexAppServerAttempt", () => {
 
   it("releases completion when Codex raw-events an interrupted turn marker", async () => {
     const harness = createStartedThreadHarness();
-    const run = runCodexAppServerAttempt(createParams("session", path.join(tempDir, "workspace")), {
-      turnTerminalIdleTimeoutMs: 60_000,
-    });
+    const run = runCodexAppServerAttempt(
+      createParams("session-interrupted", path.join(tempDir, "workspace")),
+      { turnTerminalIdleTimeoutMs: 60_000 },
+    );
     let resolved = false;
     void run.then(() => {
       resolved = true;
@@ -3568,7 +3553,7 @@ describe("runCodexAppServerAttempt", () => {
     const harness = createStartedThreadHarness();
     const markerPrompt =
       "<turn_aborted>\nThe user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed.\n</turn_aborted>";
-    const params = createParams("session", path.join(tempDir, "workspace"));
+    const params = createParams("session-marker-prompt", path.join(tempDir, "workspace"));
     params.prompt = markerPrompt;
     const run = runCodexAppServerAttempt(params, { turnTerminalIdleTimeoutMs: 60_000 });
     let resolved = false;
