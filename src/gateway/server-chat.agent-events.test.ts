@@ -180,7 +180,7 @@ describe("agent event handler", () => {
     payloadIndex: number,
     label: string,
   ) {
-    const call = mock.mock.calls.at(index);
+    const call = mock.mock.calls[index];
     if (!call) {
       throw new Error(`missing ${label} call ${index + 1}`);
     }

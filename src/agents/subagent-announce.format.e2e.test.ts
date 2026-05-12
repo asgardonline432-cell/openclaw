@@ -89,7 +89,7 @@ function expectInputProvenance(
 }
 
 function getAgentCall(index = 0): AgentCallRequest {
-  const call = agentSpy.mock.calls.at(index)?.[0];
+  const call = agentSpy.mock.calls[index]?.[0];
   if (!call) {
     throw new Error(`Expected agent call at index ${index}`);
   }
