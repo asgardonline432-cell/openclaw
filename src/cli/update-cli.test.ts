@@ -917,6 +917,7 @@ describe("update-cli", () => {
 
   it("keeps downgrade post-update work in the current process", async () => {
     const downgradedRoot = createCaseDir("openclaw-downgraded-root");
+    mockPackageInstallStatus(downgradedRoot);
     setupUpdatedRootRefresh({
       gatewayUpdateImpl: async () =>
         makeOkUpdateResult({
@@ -956,6 +957,68 @@ describe("update-cli", () => {
     expect(runDaemonInstall).not.toHaveBeenCalled();
     expect(probeGateway).not.toHaveBeenCalled();
     expect(defaultRuntime.exit).not.toHaveBeenCalledWith(1);
+  });
+
+  it("same-process package updates avoid stale base hashes for plugin config writes", async () => {
+    const downgradedRoot = createCaseDir("openclaw-downgraded-root");
+    mockPackageInstallStatus(downgradedRoot);
+    setupUpdatedRootRefresh({
+      gatewayUpdateImpl: async () =>
+        makeOkUpdateResult({
+          mode: "npm",
+          root: downgradedRoot,
+          before: { version: "2026.4.14" },
+          after: { version: "2026.4.10" },
+        }),
+    });
+    vi.mocked(readConfigFileSnapshot).mockResolvedValue({
+      ...baseSnapshot,
+      parsed: { plugins: { entries: {} } },
+      resolved: { plugins: { entries: {} } } as OpenClawConfig,
+      sourceConfig: { plugins: { entries: {} } } as OpenClawConfig,
+      runtimeConfig: { plugins: { entries: {} } } as OpenClawConfig,
+      config: { plugins: { entries: {} } } as OpenClawConfig,
+      hash: "pre-update-hash",
+    });
+    readPackageVersion.mockResolvedValue("2026.4.14");
+    syncPluginsForUpdateChannel.mockImplementationOnce(async ({ config }) => ({
+      changed: true,
+      config: {
+        ...config,
+        plugins: {
+          ...config.plugins,
+          entries: {
+            demo: { enabled: true },
+          },
+        },
+      } as OpenClawConfig,
+      summary: {
+        switchedToBundled: [],
+        switchedToNpm: [],
+        warnings: [],
+        errors: [],
+      },
+    }));
+    updateNpmInstalledPlugins.mockImplementationOnce(async ({ config }) => ({
+      changed: false,
+      config,
+      outcomes: [],
+    }));
+
+    await updateCommand({ yes: true, tag: "2026.4.10", restart: false });
+
+    expect(spawn).not.toHaveBeenCalled();
+    const pluginWrite = vi.mocked(replaceConfigFile).mock.calls.at(-1)?.[0];
+    expect(pluginWrite).toMatchObject({
+      nextConfig: {
+        plugins: {
+          entries: {
+            demo: { enabled: true },
+          },
+        },
+      },
+    });
+    expect(pluginWrite).not.toHaveProperty("baseHash");
   });
 
   it("fails the update when the fresh process exits non-zero", async () => {

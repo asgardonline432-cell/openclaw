@@ -1156,6 +1156,7 @@ export async function updatePluginsAfterCoreUpdate(params: {
   root: string;
   channel: "stable" | "beta" | "dev";
   configSnapshot: Awaited<ReturnType<typeof readConfigFileSnapshot>>;
+  updateMode?: UpdateRunResult["mode"];
   opts: UpdateCommandOptions;
   timeoutMs: number;
   pluginInstallRecords?: Record<string, PluginInstallRecord>;
@@ -1378,7 +1379,11 @@ export async function updatePluginsAfterCoreUpdate(params: {
       previousInstallRecords: pluginInstallRecords,
       nextInstallRecords,
       nextConfig,
-      baseHash: process.env[POST_CORE_UPDATE_ENV] === "1" ? undefined : params.configSnapshot.hash,
+      baseHash:
+        process.env[POST_CORE_UPDATE_ENV] === "1" ||
+        (params.updateMode ? isPackageManagerUpdateMode(params.updateMode) : false)
+          ? undefined
+          : params.configSnapshot.hash,
     });
     await refreshPluginRegistryAfterConfigMutation({
       config: nextConfig,
@@ -1738,6 +1743,7 @@ async function runPostCorePluginUpdate(params: {
   root: string;
   channel: "stable" | "beta" | "dev";
   configSnapshot: Awaited<ReturnType<typeof readConfigFileSnapshot>>;
+  updateMode?: UpdateRunResult["mode"];
   opts: UpdateCommandOptions;
   timeoutMs: number;
   pluginInstallRecords?: Record<string, PluginInstallRecord>;
@@ -1746,6 +1752,7 @@ async function runPostCorePluginUpdate(params: {
     root: params.root,
     channel: params.channel,
     configSnapshot: params.configSnapshot,
+    updateMode: params.updateMode,
     opts: params.opts,
     timeoutMs: params.timeoutMs,
     pluginInstallRecords: params.pluginInstallRecords,
@@ -2533,6 +2540,7 @@ export async function updateCommand(opts: UpdateCommandOptions): Promise<void> {
       root: postUpdateRoot,
       channel,
       configSnapshot: postUpdateConfigSnapshot,
+      updateMode: result.mode,
       opts,
       timeoutMs: updateStepTimeoutMs,
       pluginInstallRecords: preUpdatePluginInstallRecords,
