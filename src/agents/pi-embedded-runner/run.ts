@@ -2663,7 +2663,7 @@ export async function runEmbeddedPiAgent(
             });
             return {
               payloads: [
-                ...(payloadsWithToolMedia || []),
+                ...(hasPartialAssistantTextAfterPromptTimeout ? [] : payloadsWithToolMedia || []),
                 {
                   text: timeoutText,
                   isError: true,
