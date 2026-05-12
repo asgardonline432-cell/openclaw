@@ -85,6 +85,18 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Bonjour/Gateway: treat active ciao probing and fresh name-conflict renames as in-progress so the mDNS watchdog waits for probe settlement before retrying, preventing rapid re-advertise loops on Windows, WSL, and other multicast-hostile hosts. (#74778) Refs #74242. Thanks @fuller-stack-dev.
+- Cron: keep long manual cron runs active in the task registry until completion, preventing transient `lost` markers before durable recovery reconciles. Fixes #78233. (#78243) Thanks @Feelw00.
+- Doctor/GitHub CLI: surface a `GH_CONFIG_DIR` hint when the GitHub skill is usable but `gh` auth lives under a different operator HOME than the agent process, without warning for disabled or filtered skills. Fixes #78063. (#78095) Thanks @tmimmanuel.
+- Gateway: dedupe concurrent `send`, `poll`, and `message.action` requests while delivery is still in flight, preventing duplicate outbound work for the same idempotency key. (#68341) Thanks @thesomewhatyou.
+- Cron: keep main-session `systemEvent` heartbeat wakes on their bound session route for both direct and queued wake paths by dropping inherited explicit heartbeat destinations when forcing `target: "last"`. Fixes #73900. Thanks @richardmqq.
+- Gateway: clear speculative node wake state when APNs registration is missing, preventing unregistered or mistyped node IDs from retaining wake throttle entries. Fixes #68847. (#68848) Thanks @Feelw00.
+- Auto-reply: keep late follow-up queue drain finalizers from deleting a replacement queue registered after `/stop`, preventing immediate follow-up messages from being orphaned. Fixes #68838. (#68839) Thanks @Feelw00.
+- Feishu: make manual App ID/App Secret setup the default channel-binding path while keeping QR scan-to-create as an optional best-effort flow, and document the manual fallback for domestic Feishu mobile clients that do not react to the QR code. Fixes #80591. Thanks @wei-wei-zhao.
+- Memory: cap dreaming promotion writes to `MEMORY.md` by compacting oldest auto-promoted sections while preserving user-authored notes, keeping active memory below the bootstrap budget. Fixes #73691. (#74088) Thanks @YB0y.
+- Telegram: show resolved thinking defaults in native `/status` and `/think` menus while preserving explicit session overrides. (#80341) Thanks @VACInc.
+- Channels: cache selected channel registry lookups against the active fallback snapshot so pinned-empty registries refresh native command and alias routing after active registry swaps. (#80333) Thanks @samzong.
+- Codex app-server: reuse native Codex CLI OAuth for isolated app-server harness login, refresh, and app inventory cache keys so ChatGPT-authenticated Codex runs no longer fall back to unauthenticated OpenAI API calls. (#79877) Thanks @jeffjhunter.
 - Gateway: scope `sessions.resolve` sessionId and label store loads to the requested agent so large unrelated agent stores are not parsed for scoped lookups. Fixes #51264. (#79474) Thanks @samzong.
 - Browser: report Chrome MCP existing-session page readiness in browser status without letting status probes exceed the client timeout. Fixes #80268. (#80280) Thanks @ai-hpc.
 - WhatsApp: route opening-phase Baileys 428 connectionClosed through the WhatsApp reconnect policy and keep post-open 428 closes retryable, so transient setup socket closes retry with WhatsApp diagnostics instead of escaping as a bare `channel exited` error. Fixes #75736; mitigates #77443. Thanks @dataCenter430.
