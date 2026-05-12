@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "id": "telegram-desktop-proof",
+  "title": "Mantis Telegram Desktop Proof",
+  "summary": "Mantis captured native Telegram Desktop before/after GIF evidence with Convex-leased Telegram credentials.",
+  "scenario": "telegram-desktop-proof",
+  "comparison": {
+    "baseline": {
+      "sha": "417024f9ad5766df635fce530a281891a2998d99",
+      "ref": "417024f9ad5766df635fce530a281891a2998d99",
+      "expected": "baseline visual proof captured",
+      "status": "pass"
+    },
+    "candidate": {
+      "sha": "63a157ad91d50d58fa9c70d784a3fc7d78e2fd77",
+      "ref": "63a157ad91d50d58fa9c70d784a3fc7d78e2fd77",
+      "expected": "candidate visual proof captured",
+      "status": "pass",
+      "fixed": true
+    },
+    "pass": true
+  },
+  "artifacts": [
+    {
+      "alt": "Baseline native Telegram Desktop proof GIF",
+      "inline": true,
+      "kind": "motionPreview",
+      "label": "Main",
+      "lane": "baseline",
+      "path": "baseline/telegram-desktop-proof.gif",
+      "targetPath": "baseline/telegram-desktop-proof.gif",
+      "width": 420
+    },
+    {
+      "kind": "motionClip",
+      "label": "Main MP4",
+      "lane": "baseline",
+      "path": "baseline/telegram-desktop-proof.mp4",
+      "required": false,
+      "targetPath": "baseline/telegram-desktop-proof.mp4"
+    },
+    {
+      "alt": "Baseline native Telegram Desktop screenshot",
+      "inline": false,
+      "kind": "desktopScreenshot",
+      "label": "Main screenshot",
+      "lane": "baseline",
+      "path": "baseline/telegram-desktop-proof.png",
+      "required": false,
+      "targetPath": "baseline/telegram-desktop-proof.png"
+    },
+    {
+      "kind": "metadata",
+      "label": "Main session summary",
+      "lane": "baseline",
+      "path": "baseline/summary.json",
+      "targetPath": "baseline/summary.json"
+    },
+    {
+      "kind": "report",
+      "label": "Main session report",
+      "lane": "baseline",
+      "path": "baseline/report.md",
+      "required": false,
+      "targetPath": "baseline/report.md"
+    },
+    {
+      "alt": "Candidate native Telegram Desktop proof GIF",
+      "inline": true,
+      "kind": "motionPreview",
+      "label": "This PR",
+      "lane": "candidate",
+      "path": "candidate/telegram-desktop-proof.gif",
+      "targetPath": "candidate/telegram-desktop-proof.gif",
+      "width": 420
+    },
+    {
+      "kind": "motionClip",
+      "label": "This PR MP4",
+      "lane": "candidate",
+      "path": "candidate/telegram-desktop-proof.mp4",
+      "required": false,
+      "targetPath": "candidate/telegram-desktop-proof.mp4"
+    },
+    {
+      "alt": "Candidate native Telegram Desktop screenshot",
+      "inline": false,
+      "kind": "desktopScreenshot",
+      "label": "This PR screenshot",
+      "lane": "candidate",
+      "path": "candidate/telegram-desktop-proof.png",
+      "required": false,
+      "targetPath": "candidate/telegram-desktop-proof.png"
+    },
+    {
+      "kind": "metadata",
+      "label": "This PR session summary",
+      "lane": "candidate",
+      "path": "candidate/summary.json",
+      "targetPath": "candidate/summary.json"
+    },
+    {
+      "kind": "report",
+      "label": "This PR session report",
+      "lane": "candidate",
+      "path": "candidate/report.md",
+      "required": false,
+      "targetPath": "candidate/report.md"
+    }
+  ]
+}
