@@ -116,7 +116,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
     MessageThreadId?: number;
     Body?: string;
   } => {
-    const ctx = replySpy.mock.calls.at(0)?.at(0);
+    const ctx = replySpy.mock.calls[0]?.[0];
     if (!ctx || typeof ctx !== "object") {
       throw new Error("expected heartbeat reply context");
     }
