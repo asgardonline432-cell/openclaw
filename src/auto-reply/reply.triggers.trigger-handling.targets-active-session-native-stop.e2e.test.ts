@@ -15,7 +15,6 @@ import {
 } from "../../test/helpers/auto-reply/trigger-handling-test-harness.js";
 import { savePersistedAuthProfileSecretsStore } from "../agents/auth-profiles/persisted.js";
 import { savePersistedAuthProfileState } from "../agents/auth-profiles/state.js";
-import type { AuthProfileSecretsStore } from "../agents/auth-profiles/types.js";
 import { resolveSessionKey } from "../config/sessions.js";
 import {
   deleteSessionEntry,
@@ -163,7 +162,7 @@ async function writeDailyMemoryNotes(
   }
 }
 
-async function replaceSessionRows(
+async function replaceSessionStore(
   agentId: string,
   store: Record<string, SessionEntry>,
 ): Promise<void> {
@@ -175,14 +174,14 @@ async function replaceSessionRows(
   }
 }
 
-function readSessionRows(agentId: string): Record<string, SessionEntry> {
+function readSessionStore(agentId: string): Record<string, SessionEntry> {
   return Object.fromEntries(
     listSessionEntries({ agentId }).map(({ sessionKey, entry }) => [sessionKey, entry]),
   );
 }
 
 async function seedTargetSession(agentId: string, targetSessionKey: string) {
-  await replaceSessionRows(agentId, {
+  await replaceSessionStore(agentId, {
     [targetSessionKey]: {
       sessionId: "session-target",
       updatedAt: Date.now(),
@@ -266,7 +265,7 @@ async function expectNextRunUsesTargetSession(
 }
 
 async function writeStoredModelOverride(): Promise<void> {
-  await replaceSessionRows("main", {
+  await replaceSessionStore("main", {
     [MAIN_SESSION_KEY]: {
       sessionId: "main",
       updatedAt: Date.now(),
@@ -556,13 +555,13 @@ describe("trigger handling", () => {
       const text = maybeReplyText(res);
       expect(text?.startsWith("⚙️ Compacted")).toBe(true);
       expect(getCompactEmbeddedPiSessionMock()).toHaveBeenCalledOnce();
-      const store = readSessionRows("main");
+      const store = readSessionStore("main");
       const sessionKey = resolveSessionKey("per-sender", request);
       expect(store[sessionKey]?.compactionCount).toBe(1);
     });
   });
 
-  it("compacts worker sessions via the agent session identity", async () => {
+  it("compacts worker sessions via the agent transcript scope", async () => {
     await withTempHome(async (home) => {
       getCompactEmbeddedPiSessionMock().mockReset();
       mockSuccessfulCompaction();
@@ -594,7 +593,7 @@ describe("trigger handling", () => {
       getAbortEmbeddedPiRunMock().mockReset().mockReturnValue(false);
       const targetSessionKey = "agent:main:telegram:group:123";
       const targetSessionId = "session-target";
-      await replaceSessionRows("main", {
+      await replaceSessionStore("main", {
         [targetSessionKey]: {
           sessionId: targetSessionId,
           updatedAt: Date.now(),
@@ -646,7 +645,7 @@ describe("trigger handling", () => {
       const text = Array.isArray(res) ? res[0]?.text : res?.text;
       expect(text).toBe("⚙️ Agent was aborted.");
       expect(getAbortEmbeddedPiRunMock()).toHaveBeenCalledWith(targetSessionId);
-      const store = readSessionRows("main");
+      const store = readSessionStore("main");
       expect(store[targetSessionKey]?.abortedLastRun).toBe(true);
       expect(getFollowupQueueDepth(targetSessionKey)).toBe(0);
     });
@@ -674,7 +673,7 @@ describe("trigger handling", () => {
 
       expect(maybeReplyText(res)).toContain("Model set to openai/gpt-4.1-mini");
 
-      const store = readSessionRows("main");
+      const store = readSessionStore("main");
       expect(store[targetSessionKey]?.providerOverride).toBe("openai");
       expect(store[targetSessionKey]?.modelOverride).toBe("gpt-4.1-mini");
       expect(store[slashSessionKey]).toBeUndefined();
@@ -707,7 +706,7 @@ describe("trigger handling", () => {
       const slashSessionKey = "agent:main:telegram:slash:7595562691";
       const targetSessionKey = "agent:main:main:thread:7595562691:12812";
 
-      await replaceSessionRows("main", {
+      await replaceSessionStore("main", {
         [targetSessionKey]: {
           sessionId: "session-target",
           updatedAt: Date.now(),
@@ -728,7 +727,7 @@ describe("trigger handling", () => {
 
       expect(maybeReplyText(res)).toContain("Model set to deepseek/deepseek-v4-pro");
 
-      const store = readSessionRows("main");
+      const store = readSessionStore("main");
       expect(store[targetSessionKey]?.providerOverride).toBe("deepseek");
       expect(store[targetSessionKey]?.modelOverride).toBe("deepseek-v4-pro");
       expect(store[slashSessionKey]).toBeUndefined();
@@ -768,7 +767,7 @@ describe("trigger handling", () => {
               expires: Date.now() + 60_000,
             },
           },
-        } as AuthProfileSecretsStore,
+        },
         authDir,
         { env: { ...process.env, OPENCLAW_STATE_DIR: join(home, ".openclaw") } },
       );
@@ -798,7 +797,7 @@ describe("trigger handling", () => {
 
       expect(maybeReplyText(res)).toContain(`Auth profile set to ${TEST_SECONDARY_PROFILE_ID}`);
 
-      const store = readSessionRows("main");
+      const store = readSessionStore("main");
       expect(store[targetSessionKey]?.authProfileOverride).toBe(TEST_SECONDARY_PROFILE_ID);
       expect(store[targetSessionKey]?.authProfileOverrideSource).toBe("user");
       expect(store[slashSessionKey]).toBeUndefined();
